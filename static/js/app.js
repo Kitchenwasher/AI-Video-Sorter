@@ -41,7 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'gender_threshold', displayId: 'val-gender_threshold', precision: 2, suffix: '' },
         { id: 'cluster_epsilon', displayId: 'val-cluster_epsilon', precision: 2, suffix: '' },
         { id: 'min_eye_dist_ratio', displayId: 'val-min_eye_dist_ratio', precision: 2, suffix: '' },
-        { id: 'extraction_percent', displayId: 'val-extraction_percent', precision: 0, suffix: '%' }
+        { id: 'extraction_percent', displayId: 'val-extraction_percent', precision: 0, suffix: '%' },
+        { id: 'name_confidence_threshold', displayId: 'val-name_confidence_threshold', precision: 2, suffix: '' }
     ];
 
     rangeSliders.forEach(sliderInfo => {
@@ -91,6 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('extraction_percent').value = data.extraction_percent || 100;
             document.getElementById('val-extraction_percent').textContent = parseInt(data.extraction_percent || 100) + '%';
             
+            document.getElementById('auto_name_folders').checked = data.auto_name_folders === true;
+            document.getElementById('merge_on_name_conflict').checked = data.merge_on_name_conflict === true;
+            
+            document.getElementById('name_confidence_threshold').value = data.name_confidence_threshold !== undefined ? data.name_confidence_threshold : 0.5;
+            document.getElementById('val-name_confidence_threshold').textContent = parseFloat(data.name_confidence_threshold !== undefined ? data.name_confidence_threshold : 0.5).toFixed(2);
+            
+            document.getElementById('name_search_delay').value = data.name_search_delay !== undefined ? data.name_search_delay : 4.0;
+            
             appendLog('info', 'Loaded current configuration settings.');
         } catch (err) {
             appendLog('error', `Failed to load configuration: ${err.message}`);
@@ -120,7 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
             cluster_epsilon: parseFloat(document.getElementById('cluster_epsilon').value),
             min_cluster_size: parseInt(document.getElementById('min_cluster_size').value),
             min_face_size: parseInt(document.getElementById('min_face_size').value),
-            extraction_percent: parseInt(document.getElementById('extraction_percent').value)
+            extraction_percent: parseInt(document.getElementById('extraction_percent').value),
+            auto_name_folders: document.getElementById('auto_name_folders').checked,
+            merge_on_name_conflict: document.getElementById('merge_on_name_conflict').checked,
+            name_confidence_threshold: parseFloat(document.getElementById('name_confidence_threshold').value),
+            name_search_delay: parseFloat(document.getElementById('name_search_delay').value)
         };
 
         try {
@@ -216,14 +229,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Running state colors
+            const manualAutoNameBtn = document.getElementById('btn-manual-auto-name');
             if (data.running) {
                 startBtn.disabled = true;
                 clearCacheBtn.disabled = true;
+                if (manualAutoNameBtn) manualAutoNameBtn.disabled = true;
                 systemDot.className = 'status-indicator-dot active';
                 systemStatusText.textContent = 'Processing Media';
             } else {
                 startBtn.disabled = false;
                 clearCacheBtn.disabled = false;
+                if (manualAutoNameBtn) manualAutoNameBtn.disabled = false;
                 
                 if (data.stage === 'completed') {
                     systemDot.className = 'status-indicator-dot';
@@ -288,6 +304,30 @@ document.addEventListener('DOMContentLoaded', () => {
             appendLog('error', `Cache HTTP Error: ${err.message}`);
         }
     });
+
+    // Manual Auto-Name Button
+    const manualAutoNameBtn = document.getElementById('btn-manual-auto-name');
+    if (manualAutoNameBtn) {
+        manualAutoNameBtn.addEventListener('click', async () => {
+            try {
+                appendLog('info', 'Triggering manual folder auto-naming process...');
+                manualAutoNameBtn.disabled = true;
+                const res = await fetch('/api/auto-name', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    appendLog('info', 'Folder auto-naming process launched in background.');
+                    connectSSE();
+                } else {
+                    appendLog('error', `Failed to start auto-naming: ${data.message}`);
+                    manualAutoNameBtn.disabled = false;
+                }
+            } catch (err) {
+                appendLog('error', `Manual Auto-Name HTTP Error: ${err.message}`);
+                manualAutoNameBtn.disabled = false;
+            }
+        });
+    }
 
     // Render sorting results card grid
     const renderResults = (report) => {

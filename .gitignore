@@ -22,3 +22,11 @@ test_output_sync_temp/
 settings.json
 *.db
 *.log
+
+# Debug search results files
+lens_real_result.html
+lens_results.html
+lens_search_page.html
+lens_search_page2.html
+yandex_parsed.txt
+yandex_results.html

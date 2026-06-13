@@ -10,6 +10,7 @@ from modules.face_analyzer import FaceAnalyzer
 from modules.clustering import FaceClusterer
 from modules.screen_time import ScreenTimeCalculator
 from modules.sorter import VideoSorter
+from modules.name_resolver import NameResolver
 
 class SortingPipeline:
     def __init__(self, config: Config, workspace_dir: str, progress_cb=None):
@@ -459,6 +460,15 @@ class SortingPipeline:
             self._update_progress("sorting", 90.0, "Sorting videos and images into folders...")
             report = self.sorter.sort_files(assignments, medoids_info, all_faces, cluster_to_folder, cluster_to_profile_id, self.cache)
             
+            # 7. AUTO-NAMING
+            if self.config.auto_name_folders:
+                try:
+                    naming_report = self.run_auto_naming()
+                    if report:
+                        report['auto_naming'] = naming_report
+                except Exception as e:
+                    logger.error(f"Auto-naming failed: {e}")
+            
             # Clean up all remaining temp keyframe directories
             self.extractor.clean_temp_dir()
             
@@ -476,3 +486,19 @@ class SortingPipeline:
             except Exception:
                 pass
             return None
+
+    def run_auto_naming(self) -> dict:
+        """
+        Executes folder identification and renaming without running full sorting.
+        """
+        self._update_progress("auto_naming", 92.0, "Identifying folder names by parsing filenames and reverse image search...")
+        resolver = NameResolver(self.config)
+        
+        def naming_progress(current, total, msg):
+            pct = 92.0 + (current / total) * 7.0
+            self._update_progress("auto_naming", pct, msg)
+            
+        results = resolver.resolve_all_folders(self.config.output_dir, naming_progress)
+        logger.info(f"Auto-naming completed. Results: {results}")
+        self._update_progress("auto_naming", 99.0, f"Auto-naming finished. Processed {len(results)} folders.")
+        return results

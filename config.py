@@ -28,5 +28,11 @@ class Config:
     prefer_popular_identities: bool = False # Prefer globally popular identities in multi-face videos
     extraction_percent: int = 100       # Only analyze the first X% of the video duration
     
+    # Auto-naming
+    auto_name_folders: bool = False     # Auto-name folders after sorting
+    name_confidence_threshold: float = 0.5 # Confidence threshold for renaming
+    name_search_delay: float = 4.0      # Seconds to wait between search queries
+    merge_on_name_conflict: bool = False # Merge folders if they resolve to the same name
+    
     # UI status communications
     socket_updates: bool = True

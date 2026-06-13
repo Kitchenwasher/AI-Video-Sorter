@@ -54,7 +54,11 @@ def load_settings():
                     use_cache=data.get('use_cache', True),
                     keep_keyframes=data.get('keep_keyframes', False),
                     prefer_popular_identities=data.get('prefer_popular_identities', False),
-                    extraction_percent=data.get('extraction_percent', 100)
+                    extraction_percent=data.get('extraction_percent', 100),
+                    auto_name_folders=data.get('auto_name_folders', False),
+                    name_confidence_threshold=data.get('name_confidence_threshold', 0.5),
+                    name_search_delay=data.get('name_search_delay', 4.0),
+                    merge_on_name_conflict=data.get('merge_on_name_conflict', False)
                 )
         except Exception as e:
             logger.error(f"Failed to load settings.json: {e}")
@@ -78,7 +82,11 @@ def save_settings(config_obj):
             'use_cache': config_obj.use_cache,
             'keep_keyframes': config_obj.keep_keyframes,
             'prefer_popular_identities': config_obj.prefer_popular_identities,
-            'extraction_percent': config_obj.extraction_percent
+            'extraction_percent': config_obj.extraction_percent,
+            'auto_name_folders': config_obj.auto_name_folders,
+            'name_confidence_threshold': config_obj.name_confidence_threshold,
+            'name_search_delay': config_obj.name_search_delay,
+            'merge_on_name_conflict': config_obj.merge_on_name_conflict
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(data, f, indent=4)
@@ -119,6 +127,36 @@ def run_pipeline_thread(config_obj):
         with state_lock:
             pipeline_state['running'] = False
 
+def run_auto_naming_thread(config_obj):
+    global pipeline_state
+    
+    def progress_callback(stage, percent, message, detail=None):
+        with state_lock:
+            pipeline_state['stage'] = stage
+            pipeline_state['percent'] = percent
+            pipeline_state['message'] = message
+            pipeline_state['detail'] = detail
+
+    try:
+        pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback)
+        results = pipeline.run_auto_naming()
+        
+        with state_lock:
+            pipeline_state['report'] = {'auto_naming': results}
+            if pipeline_state['stage'] != 'error':
+                pipeline_state['stage'] = 'completed'
+                pipeline_state['percent'] = 100.0
+                pipeline_state['message'] = 'Auto-naming completed successfully!'
+    except Exception as e:
+        logger.error(f"Error running auto-naming: {e}")
+        with state_lock:
+            pipeline_state['stage'] = 'error'
+            pipeline_state['percent'] = 100.0
+            pipeline_state['message'] = f"Fatal auto-naming error: {str(e)}"
+    finally:
+        with state_lock:
+            pipeline_state['running'] = False
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -144,6 +182,10 @@ def handle_config():
         current_config.keep_keyframes = bool(data.get('keep_keyframes', current_config.keep_keyframes))
         current_config.prefer_popular_identities = bool(data.get('prefer_popular_identities', current_config.prefer_popular_identities))
         current_config.extraction_percent = int(data.get('extraction_percent', current_config.extraction_percent))
+        current_config.auto_name_folders = bool(data.get('auto_name_folders', current_config.auto_name_folders))
+        current_config.name_confidence_threshold = float(data.get('name_confidence_threshold', current_config.name_confidence_threshold))
+        current_config.name_search_delay = float(data.get('name_search_delay', current_config.name_search_delay))
+        current_config.merge_on_name_conflict = bool(data.get('merge_on_name_conflict', current_config.merge_on_name_conflict))
         
         logger.info("Configuration updated.")
         save_settings(current_config)
@@ -165,7 +207,11 @@ def handle_config():
             'use_cache': current_config.use_cache,
             'keep_keyframes': current_config.keep_keyframes,
             'prefer_popular_identities': current_config.prefer_popular_identities,
-            'extraction_percent': current_config.extraction_percent
+            'extraction_percent': current_config.extraction_percent,
+            'auto_name_folders': current_config.auto_name_folders,
+            'name_confidence_threshold': current_config.name_confidence_threshold,
+            'name_search_delay': current_config.name_search_delay,
+            'merge_on_name_conflict': current_config.merge_on_name_conflict
         })
 
 @app.route('/api/start', methods=['POST'])
@@ -196,6 +242,35 @@ def start_pipeline():
         pipeline_thread.start()
         
     return jsonify({'status': 'success', 'message': 'Pipeline started.'})
+
+@app.route('/api/auto-name', methods=['POST'])
+def start_auto_name():
+    global pipeline_thread, pipeline_state
+    
+    with state_lock:
+        if pipeline_state['running']:
+            return jsonify({'status': 'error', 'message': 'Pipeline is already running.'}), 400
+            
+        # Reset state
+        pipeline_state['running'] = True
+        pipeline_state['stage'] = 'starting'
+        pipeline_state['percent'] = 0.0
+        pipeline_state['message'] = 'Starting folder auto-naming...'
+        pipeline_state['detail'] = None
+        pipeline_state['report'] = None
+        
+        # Clear log history so UI starts fresh
+        ui_log_handler.logs.clear()
+        
+        # Start thread
+        pipeline_thread = threading.Thread(
+            target=run_auto_naming_thread,
+            args=(current_config,),
+            daemon=True
+        )
+        pipeline_thread.start()
+        
+    return jsonify({'status': 'success', 'message': 'Auto-naming process started.'})
 
 @app.route('/api/status')
 def get_status():
