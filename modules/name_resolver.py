@@ -9,14 +9,39 @@ from bs4 import BeautifulSoup
 from utils.logger import logger
 from utils.cache import EmbeddingCache
 
-# Blocklist of common non-name terms in filenames
+# Blocklist of common non-name terms in filenames and search results
 NON_NAME_WORDS = {
+    # File formats & Quality tags
     'scene', 'part', 'vol', 'volume', 'compilation', 'video', 'clip', 'hd', 'sd', '4k', 
     '1080p', '720p', '2160p', 'fullhd', 'unrated', 'director', 'cut', 'trailer', 'teaser',
     'mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'best', 'top', 'classic', 'hot', 'sexy',
     'girl', 'girls', 'woman', 'women', 'female', 'male', 'man', 'men', 'couple', 'solo',
     'movie', 'film', 'shoot', 'photoshoot', 'model', 'famous', 'xxx', 'porn', 'adult',
-    'studio', 'site', 'production', 'club', 'network', 'entertainment'
+    'studio', 'site', 'production', 'club', 'network', 'entertainment',
+    
+    # Newly added common words and site names
+    'atk', 'galleria', 'atkgalleria', 'taboo', 'heat', 'tabooheat', 'evil', 'angel', 'evilangel', 
+    'momxxx', 'public', 'agent', 'publicagent', 'hussie', 'pass', 'hussiepass', 'backdoor', 
+    'chanel', 'backdoorchanel', 'brazzers', 'chaturbate', 'nakedbakerss', 'nakedbaker', 'nakedbakers', 
+    'bang', 'yngr', 'bangyngr', 'filester', 'me', 'pixeldrain', 'gofile', 'cloud', 'storage', 
+    'download', 'upload', 'link', 'free', 'premium', 'amateri', 'amateur', 'file', 'viewer', 
+    'fileviewer', 'ready', 'assist', 'birthday', 'orgy', 'party', 'cns', 'atkg', 'sz', 'got', 
+    'dap', 'ed', 'dp', 'by', 'cocks', 'the', 'and', 'with', 'for', 'from', 'gets', 'her', 
+    'first', 'real', 'fuck', 'tries', 'big', 'black', 'dick', 'dicks', 'anal', 'sex', 
+    'interracial', 'penetration', 'tight', 'holes', 'stretched', 'new', 'zealand', 'all', 
+    'maps', 'yandex', 'google', 'search', 'image', 'images', 'appears', 'contain', 'to', 
+    'original', 'size', 'kb', 'mb', 'gb', 'resolution', 'photo', 'photos', 'wallpapers', 
+    'wallpaper', 'pics', 'pic', 'actress', 'model', 'star', 'pornstar', 'channel', 'playlist',
+    'youtube', 'tiktok', 'instagram', 'twitter', 'facebook', 'social', 'media', 'profile',
+    
+    # Common English prepositions, pronouns and small junk words
+    'in', 'on', 'at', 'of', 'to', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 
+    'have', 'has', 'had', 'do', 'does', 'did', 'a', 'an', 'this', 'that', 'these', 'those', 
+    'my', 'your', 'his', 'its', 'our', 'their', 'me', 'you', 'him', 'us', 'them', 'who', 
+    'whom', 'which', 'what', 'whose', 'why', 'how', 'if', 'or', 'but', 'as', 'until', 
+    'while', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 
+    'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 
+    'then', 'once', 'st', 'nd', 'rd', 'th', 's'
 }
 
 class FilenameParser:
@@ -44,7 +69,8 @@ class FilenameParser:
         cleaned_tokens = []
         for t in tokens:
             cleaned = cls.clean_token(t)
-            if cleaned and cleaned.lower() not in NON_NAME_WORDS:
+            # Filter out single letter/character tokens and words on the blocklist
+            if cleaned and len(cleaned) > 1 and cleaned.lower() not in NON_NAME_WORDS:
                 cleaned_tokens.append(cleaned)
                 
         # Look for 2 or 3 capitalized tokens
@@ -95,10 +121,16 @@ class FilenameParser:
         match_count = freq[best_candidate]
         total_files = len(candidates)
         
-        # Confidence based on consistency
-        confidence = 0.4 if match_count == 1 else 0.6
-        if total_files > 2 and match_count / total_files >= 0.7:
-            confidence = 0.65
+        # Confidence based on consistency and volume of evidence
+        ratio = match_count / total_files if total_files > 0 else 0
+        if match_count == 1:
+            confidence = 0.45
+        elif match_count == 2:
+            confidence = 0.65 if ratio >= 0.7 else 0.55
+        elif match_count >= 5:
+            confidence = 0.85 if ratio >= 0.8 else 0.75
+        else:  # match_count is 3 or 4
+            confidence = 0.75 if ratio >= 0.7 else 0.65
             
         return best_candidate, confidence
 
@@ -159,13 +191,14 @@ class ReverseImageSearcher:
         tag_section = soup.find(class_=lambda x: x and 'CbirTags' in x)
         if tag_section:
             for item in tag_section.find_all(class_=lambda x: x and ('button' in x.lower() or 'link' in x.lower() or 'tag' in x.lower())):
-                txt = item.get_text().strip()
-                if txt:
-                    candidates.append(txt)
-            if not candidates:
-                txt = tag_section.get_text().strip()
-                # Split by newlines/spaces
-                candidates.extend([t.strip() for t in txt.replace("Image appears to contain", "").split("\n") if t.strip()])
+                if not item.find():  # Only take leaf elements to avoid matching parent container wrappers
+                    txt = item.get_text().strip()
+                    if txt:
+                        candidates.append(txt)
+            # Always append the full text separated by spaces to ensure tags are not joined together
+            txt_full = tag_section.get_text(separator=' ').strip()
+            if txt_full:
+                candidates.append(txt_full.replace("Image appears to contain", "").strip())
                 
         # 2. Look in CbirSites-ItemTitle (similar page titles)
         for title_el in soup.find_all(class_=lambda x: x and 'CbirSites-ItemTitle' in x):
@@ -248,15 +281,22 @@ class ReverseImageSearcher:
             
         name_counts = {}
         for c in candidates:
-            # Extract 2-3 word capitalized name sequences
-            # Matches words like "Hazel Moore", "Mia Malkova", ignores lowercase or numbers
-            matches = re.findall(r'\b[A-Z][a-zA-Z]+\b\s+\b[A-Z][a-zA-Z]+\b(?:\s+\b[A-Z][a-zA-Z]+\b)?', c)
+            # Replace non-Latin characters with spaces to handle mixed Cyrillic/English text
+            cleaned = re.sub(r'[^a-zA-Z\s]', ' ', c)
+            cleaned = " ".join(cleaned.split())
+            
+            # Extract sequences of 2 or 3 Latin words (length >= 2 each) case-insensitively, allowing only 1-2 spaces between words
+            matches = re.findall(r'\b[a-zA-Z]{2,}\b\s{1,2}\b[a-zA-Z]{2,}\b(?:\s{1,2}\b[a-zA-Z]{2,}\b)?', cleaned)
             for name in matches:
-                # Filter out names containing blocklisted words
-                words = name.lower().split()
-                if any(w in NON_NAME_WORDS for w in words):
+                # Normalize: title case each word in the name candidate
+                words = [w.capitalize() for w in name.split()]
+                
+                # Filter out candidates containing any blocklisted words
+                if any(w.lower() in NON_NAME_WORDS for w in words):
                     continue
-                name_counts[name] = name_counts.get(name, 0) + 1
+                    
+                norm_name = " ".join(words)
+                name_counts[norm_name] = name_counts.get(norm_name, 0) + 1
                 
         if not name_counts:
             return None, 0.0
@@ -319,8 +359,8 @@ class NameResolver:
                 # Highest confidence when both agree
                 return search_name, 0.95, f"Cross-Referenced ({search_source} & Filename)"
             else:
-                # Disagreement: prefer search name if confidence is high, else filename
-                if search_conf >= 0.7:
+                # Disagreement: prefer the one with higher confidence
+                if search_conf > file_conf:
                     return search_name, search_conf - 0.1, f"{search_source} (Filename disagreed: {file_name})"
                 else:
                     return file_name, file_conf - 0.1, f"Filename (Search disagreed: {search_name})"
