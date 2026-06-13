@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraSort — Premium AI Face Sorter</title>
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="background-glows">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+        <div class="glow glow-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-wand-magic-sparkles logo-icon"></i>
+                <span class="logo-text">AURA<span>SORT</span></span>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" id="btn-nav-dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#configuration" class="nav-item" id="btn-nav-config">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Settings</span>
+                </a>
+                <a href="#results" class="nav-item" id="btn-nav-results">
+                    <i class="fa-solid fa-folder-tree"></i>
+                    <span>Sorted Library</span>
+                </a>
+            </nav>
+
+            <div class="system-status-card">
+                <div class="status-header">
+                    <span class="status-indicator-dot" id="system-dot"></span>
+                    <span class="status-label" id="system-status-text">System Idle</span>
+                </div>
+                <div class="gpu-badge">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>AMD Radeon 890M iGPU</span>
+                </div>
+                <div class="gpu-acceleration-label">
+                    <span class="dml-pill">DirectML Accelerated</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1 id="page-heading">Dashboard</h1>
+                    <p id="page-subheading">Orchestrate face recognition, gender classification, and clustering pipeline</p>
+                </div>
+            </header>
+
+            <!-- SECTION 1: DASHBOARD -->
+            <section id="sec-dashboard" class="content-section active">
+                <div class="dashboard-grid">
+                    <!-- Progress Card -->
+                    <div class="dashboard-card main-progress-card glass">
+                        <div class="card-header">
+                            <h3>Pipeline Progress</h3>
+                            <span class="stage-badge" id="current-stage">IDLE</span>
+                        </div>
+                        
+                        <div class="progress-details">
+                            <div class="progress-meta">
+                                <span class="current-file" id="progress-message">Ready to sort your folder.</span>
+                                <span class="percentage" id="progress-percent">0%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="progress-bar"></div>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" id="btn-start">
+                                <i class="fa-solid fa-play"></i> Start Sorting Process
+                            </button>
+                            <button class="btn btn-secondary" id="btn-clear-cache-db">
+                                <i class="fa-solid fa-trash-can"></i> Clear Cache
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="stats-row">
+                        <div class="stat-card glass">
+                            <div class="stat-icon pink"><i class="fa-solid fa-venus"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-val" id="stat-females">-</span>
+                                <span class="stat-lbl">Unique Females</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon blue"><i class="fa-solid fa-video"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-val" id="stat-videos">-</span>
+                                <span class="stat-lbl">Sorted Files</span>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon yellow"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-val" id="stat-unsorted">-</span>
+                                <span class="stat-lbl">Unsorted Files</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Realtime Console Log -->
+                    <div class="dashboard-card console-card glass">
+                        <div class="card-header">
+                            <h3>Real-time System Logs</h3>
+                            <button class="btn btn-icon-only" id="btn-clear-console" title="Clear console view">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="console-output" id="console-logs">
+                            <div class="log-line info">System initialized. Awaiting user commands...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: CONFIGURATION -->
+            <section id="sec-configuration" class="content-section">
+                <div class="config-grid">
+                    <form id="config-form" class="config-form">
+                        <!-- Path Configuration Card -->
+                        <div class="dashboard-card glass">
+                            <div class="card-header">
+                                <h3>Directory Paths</h3>
+                            </div>
+                            <div class="input-group">
+                                <label for="input_dir">Input Folder (Videos & Photos)</label>
+                                <div class="input-with-icon">
+                                    <i class="fa-solid fa-folder-open"></i>
+                                    <input type="text" id="input_dir" placeholder="C:\path\to\raw\media" required>
+                                </div>
+                                <p class="input-desc">Folder containing files to sort. Subdirectories will be scanned recursively.</p>
+                            </div>
+                            <div class="input-group">
+                                <label for="output_dir">Output Folder (Sorted Results)</label>
+                                <div class="input-with-icon">
+                                    <i class="fa-solid fa-folder-tree"></i>
+                                    <input type="text" id="output_dir" placeholder="C:\path\to\sorted\output" required>
+                                </div>
+                                <p class="input-desc">Where identity folders (female_001, etc.) will be created.</p>
+                            </div>
+                        </div>
+
+                        <!-- Processing Parameters Card -->
+                        <div class="dashboard-card glass">
+                            <div class="card-header">
+                                <h3>Processing Settings</h3>
+                            </div>
+                            <div class="config-row">
+                                <div class="input-group half">
+                                    <label for="mode">Sorting Mode</label>
+                                    <select id="mode">
+                                        <option value="move">Move Files (Saves Disk Space)</option>
+                                        <option value="copy">Copy Files (Keeps Originals)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group half">
+                                    <label for="model_pack">InsightFace Model Pack</label>
+                                    <select id="model_pack">
+                                        <option value="buffalo_l">buffalo_l (Recommended — High Accuracy)</option>
+                                        <option value="buffalo_s">buffalo_s (Fast — Low Resource)</option>
+                                        <option value="antelopev2">antelopev2 (Maximum Accuracy — Slowest)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="config-row">
+                                <div class="input-group half">
+                                    <label for="keyframe_interval">Keyframe Sampling Interval</label>
+                                    <select id="keyframe_interval">
+                                        <option value="0">0 (Extract I-frames only — Fastest)</option>
+                                        <option value="1">1 second (Extract 1 frame per second)</option>
+                                        <option value="2">2 seconds (Extract 1 frame every 2s)</option>
+                                        <option value="5">5 seconds (Extract 1 frame every 5s)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group half">
+                                    <label for="max_keyframes">Max Keyframes Per Video</label>
+                                    <input type="number" id="max_keyframes" min="10" max="1000" value="100">
+                                    <p class="input-desc">Cap to prevent processing bottlenecks on long clips.</p>
+                                </div>
+                            </div>
+
+                            <div class="config-row">
+                                <div class="input-group">
+                                    <label for="extraction_percent">Limit Analysis to % of Video Duration</label>
+                                    <input type="range" id="extraction_percent" min="5" max="100" step="5" value="100">
+                                    <span class="range-value" id="val-extraction_percent">100%</span>
+                                    <p class="input-desc">Only extract keyframes from the first X% of the video duration. Great for 30+ min videos where faces appear early.</p>
+                                </div>
+                            </div>
+
+                            <div class="config-row">
+                                <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
+                                    <label class="switch-label" for="use_cache">
+                                        <span>Use SQLite Embedding Cache</span>
+                                        <p class="input-desc">Skips already-processed videos to make re-runs extremely fast.</p>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="use_cache" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                                <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
+                                    <label class="switch-label" for="keep_keyframes">
+                                        <span>Keep Extracted Keyframes (Debug)</span>
+                                        <p class="input-desc">Preserves keyframe images on disk to skip extraction entirely on re-run.</p>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="keep_keyframes">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="config-row">
+                                <div class="input-group toggle-group">
+                                    <label class="switch-label" for="prefer_popular_identities">
+                                        <span>Prefer Popular Faces in Multi-Face Videos</span>
+                                        <p class="input-desc">If a video has multiple female faces, prefer the woman who appears in more videos overall across the library.</p>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="prefer_popular_identities">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+
+
+                        <!-- Fine Tuning Parameters Card -->
+                        <div class="dashboard-card glass">
+                            <div class="card-header">
+                                <h3>Threshold & Fine-Tuning</h3>
+                            </div>
+                            <div class="config-row">
+                                <div class="input-group half">
+                                    <label for="face_det_threshold">Face Detection Confidence</label>
+                                    <input type="range" id="face_det_threshold" min="0.3" max="0.9" step="0.05" value="0.5">
+                                    <span class="range-value" id="val-face_det_threshold">0.50</span>
+                                </div>
+                                <div class="input-group half">
+                                    <label for="gender_threshold">Gender Filter Confidence</label>
+                                    <input type="range" id="gender_threshold" min="0.5" max="0.95" step="0.05" value="0.65">
+                                    <span class="range-value" id="val-gender_threshold">0.65</span>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <div class="input-group half">
+                                    <label for="cluster_epsilon">Cluster Similarity Distance (Epsilon)</label>
+                                    <input type="range" id="cluster_epsilon" min="0.3" max="1.2" step="0.05" value="0.85">
+                                    <span class="range-value" id="val-cluster_epsilon">0.85</span>
+                                    <p class="input-desc">Smaller = strict (more folders), Larger = loose (fewer folders / merges varied angles/expressions).</p>
+
+                                </div>
+                                <div class="input-group half">
+                                    <label for="min_cluster_size">Min Detections for Cluster</label>
+                                    <input type="number" id="min_cluster_size" min="1" max="10" value="2">
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <div class="input-group half">
+                                    <label for="min_eye_dist_ratio">Kissing & Profile Filter (Eye Distance Ratio)</label>
+                                    <input type="range" id="min_eye_dist_ratio" min="0.0" max="0.3" step="0.02" value="0.20">
+                                    <span class="range-value" id="val-min_eye_dist_ratio">0.20</span>
+                                    <p class="input-desc">0.0 (off) to 0.3 (strict). Filters side-profiles and overlapping faces during kissing scenes.</p>
+                                </div>
+                                <div class="input-group half">
+                                    <label for="min_face_size">Minimum Face Size (Pixels)</label>
+                                    <input type="number" id="min_face_size" min="20" max="250" value="60">
+                                    <p class="input-desc">Ignores tiny background faces.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="btn-save-config">
+                                <i class="fa-solid fa-floppy-disk"></i> Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- SECTION 3: RESULTS -->
+            <section id="sec-results" class="content-section">
+                <div class="results-container">
+                    <div class="results-meta-header">
+                        <h3 id="library-count-title">No library processed yet</h3>
+                        <p class="results-info-text">Folders contain reference crops. Check them below.</p>
+                    </div>
+
+                    <div class="library-grid" id="library-grid">
+                        <div class="no-results-placeholder">
+                            <i class="fa-solid fa-folder-open placeholder-icon"></i>
+                            <p>No sorted directories found. Start sorting from the Dashboard tab.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

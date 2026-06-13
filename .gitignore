@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local environment
+.venv/
+venv/
+env/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Video Sorter specific
+.cache/
+.temp_keyframes/
+input/
+output/
+test_output_sync_temp/
+settings.json
+*.db
+*.log
