@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Plyr custom video player stylesheet -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
     <!-- Custom stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.2">
 </head>
@@ -251,6 +253,17 @@
                             </div>
 
                             <div class="config-row">
+                                <div class="input-group">
+                                    <label for="default_video_player">Default Video Player</label>
+                                    <select id="default_video_player">
+                                        <option value="browser">In-App Player (Custom Plyr Player)</option>
+                                        <option value="vlc">Desktop Player (VLC / System Default)</option>
+                                    </select>
+                                    <p class="input-desc">Choose whether clicking playable videos opens them in the custom in-app player or launches your local desktop media player (VLC, MPC-HC, etc.). Non-native web formats like MKV always open in the desktop player.</p>
+                                </div>
+                            </div>
+
+                            <div class="config-row">
                                 <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
                                     <label class="switch-label" for="auto_name_folders">
                                         <span>Auto-Name Folders after Sorting</span>
@@ -454,6 +467,8 @@
         </div>
     </div>
 
+    <!-- Plyr custom video player JS -->
+    <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

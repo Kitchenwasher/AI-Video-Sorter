@@ -36,3 +36,6 @@ class Config:
     
     # UI status communications
     socket_updates: bool = True
+    
+    # Video player preference
+    default_video_player: str = "browser"  # "browser" or "vlc"

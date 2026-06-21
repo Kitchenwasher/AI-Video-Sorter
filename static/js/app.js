@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('val-name_confidence_threshold').textContent = parseFloat(data.name_confidence_threshold !== undefined ? data.name_confidence_threshold : 0.5).toFixed(2);
             
             document.getElementById('name_search_delay').value = data.name_search_delay !== undefined ? data.name_search_delay : 4.0;
+            document.getElementById('default_video_player').value = data.default_video_player || 'browser';
             
             appendLog('info', 'Loaded current configuration settings.');
         } catch (err) {
@@ -137,7 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
             auto_name_folders: document.getElementById('auto_name_folders').checked,
             merge_on_name_conflict: document.getElementById('merge_on_name_conflict').checked,
             name_confidence_threshold: parseFloat(document.getElementById('name_confidence_threshold').value),
-            name_search_delay: parseFloat(document.getElementById('name_search_delay').value)
+            name_search_delay: parseFloat(document.getElementById('name_search_delay').value),
+            default_video_player: document.getElementById('default_video_player').value
         };
 
         try {
@@ -372,11 +374,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.className = 'library-card';
                 card.style.cursor = 'pointer'; // Ensure cursor shows it is clickable
                 
-                const imgUrl = `/api/thumbnail/${folder.name}?t=${Date.now()}`;
+                const imgUrl = `/api/thumbnail/${encodeURIComponent(folder.name)}?t=${Date.now()}`;
                 
                 const isUnsorted = folder.name === '_unsorted';
                 const thumbHtml = folder.has_thumbnail
-                    ? `<img src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${folder.name}"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
+                    ? `<img src="${imgUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${imgUrl}&retry=' + Date.now(); }, 1000); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${folder.name}"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
                     : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
                 
                 card.innerHTML = `
@@ -480,9 +482,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.className = 'merge-folder-card';
                 card.dataset.folderName = folder.name;
 
-                const imgUrl = `/api/thumbnail/${folder.name}?t=${Date.now()}`;
+                const imgUrl = `/api/thumbnail/${encodeURIComponent(folder.name)}?t=${Date.now()}`;
                 const thumbHtml = folder.has_thumbnail
-                    ? `<img src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${folder.name}"><div class="merge-no-img" style="display:none;"><i class="fa-solid fa-user"></i></div>`
+                    ? `<img src="${imgUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${imgUrl}&retry=' + Date.now(); }, 1000); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${folder.name}"><div class="merge-no-img" style="display:none;"><i class="fa-solid fa-user"></i></div>`
                     : `<div class="merge-no-img"><i class="fa-solid fa-user"></i></div>`;
 
                 card.innerHTML = `
@@ -656,6 +658,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightboxClose = document.getElementById('lightbox-close');
     const lightboxImg = document.getElementById('lightbox-img');
     const lightboxVideo = document.getElementById('lightbox-video');
+    let plyrPlayer = null;
+
+    if (typeof Plyr !== 'undefined') {
+        plyrPlayer = new Plyr('#lightbox-video', {
+            controls: [
+                'play-large', 'play', 'progress', 'current-time', 'duration',
+                'mute', 'volume', 'settings', 'pip', 'fullscreen'
+            ],
+            settings: ['speed', 'loop']
+        });
+    }
 
     let currentGalleryFolder = null;
 
@@ -668,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
         galleryModal.classList.add('active');
 
         try {
-            const res = await fetch(`/api/list-media/${folderName}`);
+            const res = await fetch(`/api/list-media/${encodeURIComponent(folderName)}`);
             const data = await res.json();
             
             galleryMediaGrid.innerHTML = '';
@@ -685,33 +698,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = document.createElement('div');
                 item.className = 'gallery-item';
                 
-                const fileUrl = `/media/${folderName}/${file.name}`;
+                const fileUrl = `/media/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`;
                 
                 if (file.is_video) {
                     const isNative = file.ext === '.mp4' || file.ext === '.webm';
-                    const videoThumbUrl = `/api/video-thumbnail/${folderName}/${file.name}`;
+                    const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}?t=${Date.now()}`;
+                    
+                    // Check user preference from DOM
+                    const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
+                    const useVLC = !isNative || defaultPlayer === 'vlc';
+                    const metaLabel = useVLC ? 'Play Natively (VLC)' : 'Play in App';
+                    const btnLabel = useVLC ? 'Play in VLC' : 'Play in Browser';
+                    const btnIcon = useVLC ? 'fa-laptop' : 'fa-circle-play';
+                    const btnClass = useVLC ? 'play-native-btn' : 'play-browser-btn';
+                    
                     item.innerHTML = `
-                        <img src="${videoThumbUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${file.name}">
+                        <img src="${videoThumbUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${videoThumbUrl}&retry=' + Date.now(); }, 1500); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${file.name}">
                         <div class="video-placeholder" style="display:none; width:100%; height:100%;">
                             <i class="fa-solid fa-circle-play"></i>
                             <span>${file.name}</span>
                         </div>
-                        <div class="play-badge"><i class="fa-solid fa-play"></i></div>
-                        <div class="item-meta">${isNative ? 'Play in App' : 'Play Natively (VLC)'}</div>
+                        <div class="gallery-item-hover-overlay">
+                            <button class="hover-btn play-video-btn ${btnClass}"><i class="fa-solid ${btnIcon}"></i> ${btnLabel}</button>
+                        </div>
+                        <div class="item-meta">${metaLabel}</div>
                     `;
                     
-                    item.addEventListener('click', () => {
-                        if (isNative) {
-                            playVideoInLightbox(fileUrl);
-                        } else {
+                    const playBtn = item.querySelector('.play-video-btn');
+                    const handlePlay = (e) => {
+                        if (e) e.stopPropagation();
+                        if (useVLC) {
                             playFileNatively(folderName, file.name);
+                        } else {
+                            playVideoInLightbox(fileUrl);
                         }
-                    });
+                    };
+                    
+                    if (playBtn) {
+                        playBtn.addEventListener('click', handlePlay);
+                    }
+                    item.addEventListener('click', handlePlay);
                 } else {
                     item.innerHTML = `
-                        <img src="${fileUrl}" alt="${file.name}">
+                        <img src="${fileUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${fileUrl}&retry=' + Date.now(); }, 1000); }" alt="${file.name}">
+                        <div class="gallery-item-hover-overlay">
+                            <button class="hover-btn view-img-btn"><i class="fa-solid fa-eye"></i> View Image</button>
+                        </div>
                         <div class="item-meta">${file.name}</div>
                     `;
+                    
+                    const viewBtn = item.querySelector('.view-img-btn');
+                    if (viewBtn) {
+                        viewBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            showImageInLightbox(fileUrl);
+                        });
+                    }
                     
                     item.addEventListener('click', () => {
                         showImageInLightbox(fileUrl);
@@ -728,8 +770,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showImageInLightbox = (imgUrl) => {
+        const plyrContainer = document.querySelector('.plyr');
+        if (plyrContainer) {
+            plyrContainer.style.display = 'none';
+        }
         lightboxVideo.style.display = 'none';
-        lightboxVideo.pause();
+        if (plyrPlayer) {
+            plyrPlayer.pause();
+        } else {
+            lightboxVideo.pause();
+        }
         lightboxVideo.src = '';
         
         lightboxImg.src = imgUrl;
@@ -741,10 +791,30 @@ document.addEventListener('DOMContentLoaded', () => {
         lightboxImg.style.display = 'none';
         lightboxImg.src = '';
         
-        lightboxVideo.src = videoUrl;
-        lightboxVideo.style.display = 'block';
+        const plyrContainer = document.querySelector('.plyr');
+        if (plyrContainer) {
+            plyrContainer.style.display = 'block';
+        } else {
+            lightboxVideo.style.display = 'block';
+        }
+        
         lightboxModal.classList.add('active');
-        lightboxVideo.play().catch(e => console.log('Video play failed:', e));
+        
+        if (plyrPlayer) {
+            plyrPlayer.source = {
+                type: 'video',
+                sources: [
+                    {
+                        src: videoUrl,
+                        type: 'video/mp4'
+                    }
+                ]
+            };
+            plyrPlayer.play().catch(e => console.log('Video play failed:', e));
+        } else {
+            lightboxVideo.src = videoUrl;
+            lightboxVideo.play().catch(e => console.log('Video play failed:', e));
+        }
     };
 
     const playFileNatively = async (folderName, filename) => {
@@ -769,7 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnOpenExplorer.addEventListener('click', async () => {
         if (!currentGalleryFolder) return;
         try {
-            const res = await fetch(`/api/open-folder/${currentGalleryFolder}`, { method: 'POST' });
+            const res = await fetch(`/api/open-folder/${encodeURIComponent(currentGalleryFolder)}`, { method: 'POST' });
             const data = await res.json();
             if (data.status === 'success') {
                 appendLog('info', `Opened output folder "${currentGalleryFolder}" in Windows File Explorer.`);
@@ -789,14 +859,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === galleryModal) galleryModal.classList.remove('active');
     });
 
+    const stopLightboxMedia = () => {
+        if (plyrPlayer) {
+            plyrPlayer.pause();
+        } else {
+            lightboxVideo.pause();
+        }
+    };
+
     lightboxClose.addEventListener('click', () => {
         lightboxModal.classList.remove('active');
-        lightboxVideo.pause();
+        stopLightboxMedia();
     });
     lightboxModal.addEventListener('click', (e) => {
         if (e.target === lightboxModal || e.target === document.querySelector('.lightbox-content')) {
             lightboxModal.classList.remove('active');
-            lightboxVideo.pause();
+            stopLightboxMedia();
         }
     });
 });

@@ -59,7 +59,8 @@ def load_settings():
                     auto_name_folders=data.get('auto_name_folders', False),
                     name_confidence_threshold=data.get('name_confidence_threshold', 0.5),
                     name_search_delay=data.get('name_search_delay', 4.0),
-                    merge_on_name_conflict=data.get('merge_on_name_conflict', False)
+                    merge_on_name_conflict=data.get('merge_on_name_conflict', False),
+                    default_video_player=data.get('default_video_player', 'browser')
                 )
         except Exception as e:
             logger.error(f"Failed to load settings.json: {e}")
@@ -87,7 +88,8 @@ def save_settings(config_obj):
             'auto_name_folders': config_obj.auto_name_folders,
             'name_confidence_threshold': config_obj.name_confidence_threshold,
             'name_search_delay': config_obj.name_search_delay,
-            'merge_on_name_conflict': config_obj.merge_on_name_conflict
+            'merge_on_name_conflict': config_obj.merge_on_name_conflict,
+            'default_video_player': config_obj.default_video_player
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(data, f, indent=4)
@@ -187,6 +189,7 @@ def handle_config():
         current_config.name_confidence_threshold = float(data.get('name_confidence_threshold', current_config.name_confidence_threshold))
         current_config.name_search_delay = float(data.get('name_search_delay', current_config.name_search_delay))
         current_config.merge_on_name_conflict = bool(data.get('merge_on_name_conflict', current_config.merge_on_name_conflict))
+        current_config.default_video_player = data.get('default_video_player', current_config.default_video_player)
         
         logger.info("Configuration updated.")
         save_settings(current_config)
@@ -212,7 +215,8 @@ def handle_config():
             'auto_name_folders': current_config.auto_name_folders,
             'name_confidence_threshold': current_config.name_confidence_threshold,
             'name_search_delay': current_config.name_search_delay,
-            'merge_on_name_conflict': current_config.merge_on_name_conflict
+            'merge_on_name_conflict': current_config.merge_on_name_conflict,
+            'default_video_player': current_config.default_video_player
         })
 
 @app.route('/api/start', methods=['POST'])
@@ -334,6 +338,59 @@ def merge_folders():
     except Exception as e:
         logger.error(f"Merge error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/video-thumbnail/<folder_name>/<filename>')
+def get_video_thumbnail(folder_name, filename):
+    """Generates or retrieves a cached video thumbnail frame using FFmpeg."""
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name or '..' in filename or '/' in filename or '\\' in filename:
+        return "Invalid path", 400
+        
+    video_path = os.path.abspath(os.path.join(current_config.output_dir, folder_name, filename))
+    if not os.path.exists(video_path):
+        return "Video not found", 404
+        
+    cache_dir = os.path.join(WORKSPACE_DIR, ".cache", "video_thumbnails")
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    cache_filename = f"{folder_name}_{filename}.jpg".replace(" ", "_").replace(":", "_")
+    cache_path = os.path.join(cache_dir, cache_filename)
+    
+    if os.path.exists(cache_path):
+        return send_from_directory(cache_dir, cache_filename)
+        
+    try:
+        import subprocess
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        cmd = [
+            'ffmpeg',
+            '-ss', '00:00:01',
+            '-i', video_path,
+            '-vframes', '1',
+            '-q:v', '4',
+            '-update', '1',
+            cache_path,
+            '-y'
+        ]
+        
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, timeout=8)
+        if res.returncode == 0 and os.path.exists(cache_path):
+            return send_from_directory(cache_dir, cache_filename)
+        else:
+            # Fallback: try seeking to 00:00:00 if 1 second seek fails
+            cmd[2] = '00:00:00'
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, timeout=8)
+            if res.returncode == 0 and os.path.exists(cache_path):
+                return send_from_directory(cache_dir, cache_filename)
+            else:
+                logger.warning(f"FFmpeg failed to generate thumbnail for {video_path}: {res.stderr.decode('utf-8', errors='ignore')}")
+    except Exception as e:
+        logger.error(f"Error generating video thumbnail: {e}")
+        
+    return "Could not generate thumbnail", 404
 
 @app.route('/media/<path:filename>')
 def serve_media(filename):
