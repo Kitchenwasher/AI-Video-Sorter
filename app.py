@@ -374,7 +374,7 @@ def open_folder(folder_name):
         try:
             os.startfile(path)
             return jsonify({'status': 'success'})
-         except Exception as e:
+        except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 500
     return jsonify({'status': 'error', 'message': 'Folder not found'}), 404
 
