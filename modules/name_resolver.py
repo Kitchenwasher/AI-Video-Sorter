@@ -583,6 +583,7 @@ class NameResolver:
 def merge_folders_manual(output_dir: str, folder_names: list, target_name: str = None) -> dict:
     """
     Manually merge multiple sorted folders into one.
+    Averages face embeddings from all merged folders to create a more representative profile.
     
     Args:
         output_dir: The base output directory containing all sorted folders.
@@ -593,6 +594,7 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
         dict with merge results.
     """
     import shutil
+    import numpy as np
     
     if len(folder_names) < 2:
         return {'status': 'error', 'message': 'Need at least 2 folders to merge.'}
@@ -617,14 +619,49 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
     
     dest_path = os.path.join(output_dir, dest_name)
     
-    # If target_name is new and doesn't exist, rename the first source folder to it
+    # Resolve cache directory
+    cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
+    if not os.path.isdir(cache_dir):
+        cache_dir = os.path.abspath(os.path.join(output_dir, '..', '.cache'))
+    
+    # Step 1: Collect all embeddings from all folders being merged
+    all_embeddings = []
+    all_profile_ids = []
+    target_profile_id = None
+    
+    for folder_name in valid_folders:
+        folder_path = os.path.join(output_dir, folder_name)
+        profile_json_path = os.path.join(folder_path, '_profile_embedding.json')
+        if os.path.exists(profile_json_path):
+            try:
+                with open(profile_json_path, 'r') as f:
+                    data = json.load(f)
+                embedding = data.get('embedding')
+                profile_id = data.get('profile_id')
+                if embedding:
+                    all_embeddings.append(np.array(embedding, dtype=np.float32))
+                if profile_id is not None:
+                    all_profile_ids.append(int(profile_id))
+            except Exception as e:
+                logger.warning(f"Failed to read embedding from {folder_name}: {e}")
+    
+    # Step 2: Compute the averaged (merged) embedding
+    merged_embedding = None
+    if all_embeddings:
+        merged_embedding = np.mean(all_embeddings, axis=0)
+        # Normalize the averaged embedding (L2 normalize for cosine similarity)
+        norm = np.linalg.norm(merged_embedding)
+        if norm > 0:
+            merged_embedding = merged_embedding / norm
+        logger.info(f"Averaged {len(all_embeddings)} embeddings for merged profile")
+    
+    # Step 3: If target_name is new and doesn't exist, rename the first source folder to it
     first_src = os.path.join(output_dir, valid_folders[0])
     if target_name and not os.path.exists(dest_path):
         shutil.move(first_src, dest_path)
         logger.info(f"Renamed {valid_folders[0]} -> {dest_name}")
         sources_to_merge = valid_folders[1:]
     elif target_name and os.path.exists(dest_path) and dest_name not in valid_folders:
-        # Target already exists but wasn't in our merge list, merge everything into it
         sources_to_merge = valid_folders
     else:
         sources_to_merge = [f for f in valid_folders if f != dest_name]
@@ -633,6 +670,7 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
     moved_files = []
     deleted_folders = []
     
+    # Step 4: Move files and clean up source folders
     for src_name in sources_to_merge:
         src_path = os.path.join(output_dir, src_name)
         if not os.path.exists(src_path):
@@ -665,9 +703,6 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
                     data = json.load(f)
                 profile_id = data.get('profile_id')
                 if profile_id is not None:
-                    cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
-                    if not os.path.isdir(cache_dir):
-                        cache_dir = os.path.join(output_dir, '..', '.cache')
                     cache = EmbeddingCache(cache_dir)
                     cache.delete_persistent_profile(int(profile_id))
                     logger.info(f"Deleted persistent profile ID {profile_id} for merged folder {src_name}")
@@ -679,29 +714,42 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
         deleted_folders.append(src_name)
         logger.info(f"Merged {src_name} into {dest_name} ({merged_count} files moved so far)")
     
-    # Update the target folder's profile JSON
+    # Step 5: Update the target folder's profile JSON and SQLite DB with merged embedding
     target_profile_json = os.path.join(dest_path, '_profile_embedding.json')
-    if os.path.exists(target_profile_json) and target_name and target_name != valid_folders[0]:
+    if os.path.exists(target_profile_json):
         try:
             with open(target_profile_json, 'r') as f:
                 data = json.load(f)
+            
+            # Update folder name
             data['folder_name'] = dest_name
-            profile_id = data.get('profile_id')
+            target_profile_id = data.get('profile_id')
+            
+            # Update embedding with the averaged one
+            if merged_embedding is not None:
+                data['embedding'] = merged_embedding.tolist()
+                logger.info(f"Updated target profile embedding with average of {len(all_embeddings)} sources")
+            
             with open(target_profile_json, 'w') as f:
                 json.dump(data, f, indent=4)
-            if profile_id is not None:
-                cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
-                if not os.path.isdir(cache_dir):
-                    cache_dir = os.path.join(output_dir, '..', '.cache')
+            
+            # Update SQLite: folder name + merged embedding
+            if target_profile_id is not None:
                 cache = EmbeddingCache(cache_dir)
-                cache.update_profile_folder_name(int(profile_id), dest_name)
+                if merged_embedding is not None:
+                    cache.add_persistent_profile_with_id(int(target_profile_id), dest_name, merged_embedding)
+                    logger.info(f"Updated SQLite profile ID {target_profile_id} with merged embedding and name '{dest_name}'")
+                else:
+                    cache.update_profile_folder_name(int(target_profile_id), dest_name)
         except Exception as e:
-            logger.error(f"Failed to update target profile JSON: {e}")
+            logger.error(f"Failed to update target profile JSON/DB: {e}")
     
     return {
         'status': 'success',
         'target_folder': dest_name,
         'merged_folders': deleted_folders,
         'files_moved': merged_count,
-        'moved_files': moved_files
+        'moved_files': moved_files,
+        'embeddings_merged': len(all_embeddings)
     }
+
