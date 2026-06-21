@@ -32,6 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 pageHeading.textContent = headings[targetId].title;
                 pageSubheading.textContent = headings[targetId].sub;
             }
+            
+            if (targetId === 'sec-results') {
+                loadLibrary();
+            }
         });
     });
 
@@ -246,9 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     systemStatusText.textContent = 'System Idle';
                     
                     // Render report results
-                    if (data.report) {
-                        renderResults(data.report);
-                    }
+                    loadLibrary();
                     eventSource.close();
                 } else if (data.stage === 'error') {
                     systemDot.className = 'status-indicator-dot error';
@@ -329,90 +331,75 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Render sorting results card grid
-    const renderResults = (report) => {
-        if (!report) return;
-        
-        const sortedCount = Object.keys(report.sorted_files || {}).length;
-        const unsortedCount = (report.unsorted_files || []).length;
-        const folders = report.cluster_folders || {};
-        const numClusters = Object.keys(folders).length;
-
-        // Update top summary cards
-        statFemales.textContent = numClusters;
-        statVideos.textContent = sortedCount;
-        statUnsorted.textContent = unsortedCount;
-
-        libraryCountTitle.textContent = `${numClusters} Distinct Identities Grouped`;
-
-        // Clear grid
-        libraryGrid.innerHTML = '';
-
-        if (numClusters === 0 && unsortedCount === 0) {
-            libraryGrid.innerHTML = `
-                <div class="no-results-placeholder">
-                    <i class="fa-solid fa-face-sad-tear placeholder-icon"></i>
-                    <p>No faces could be recognized or clustered. Verify source media has clear female faces.</p>
-                </div>
-            `;
-            return;
-        }
-
-        // 1. Render identity folders
-        // To get item count per cluster:
-        const folderCounts = {};
-        Object.values(report.sorted_files).forEach(fileObj => {
-            const clName = fileObj.cluster;
-            folderCounts[clName] = (folderCounts[clName] || 0) + 1;
-        });
-
-        // Add sorting
-        const sortedFolderKeys = Object.keys(folders).sort((a, b) => parseInt(a) - parseInt(b));
-
-        sortedFolderKeys.forEach(clusterId => {
-            const folderName = folders[clusterId];
-            const fileCount = folderCounts[folderName] || 0;
+    // Load dynamic library from filesystem (replaces static renderResults)
+    const loadLibrary = async () => {
+        try {
+            const res = await fetch('/api/list-folders');
+            const data = await res.json();
             
-            const card = document.createElement('div');
-            card.className = 'library-card';
+            libraryGrid.innerHTML = '';
             
-            // Set up dynamic reference image source
-            const imgUrl = `/api/thumbnail/${folderName}?t=${new Date().getTime()}`; // Cache bust
-            
-            card.innerHTML = `
-                <div class="thumbnail-container">
-                    <img src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${folderName}">
-                    <div class="no-image-placeholder" style="display:none;">
-                        <i class="fa-solid fa-user-astronaut"></i>
-                        <span>Thumbnail unavailable</span>
+            if (!data.folders || data.folders.length === 0) {
+                libraryGrid.innerHTML = `
+                    <div class="no-results-placeholder">
+                        <i class="fa-solid fa-folder-open placeholder-icon"></i>
+                        <p>No sorted directories found. Start sorting from the Dashboard tab.</p>
                     </div>
-                </div>
-                <div class="card-details">
-                    <span class="cluster-name">${folderName.replace('_', ' ')}</span>
-                    <span class="cluster-count">${fileCount} media items</span>
-                </div>
-            `;
-            
-            libraryGrid.appendChild(card);
-        });
+                `;
+                libraryCountTitle.textContent = 'No library processed yet';
+                statFemales.textContent = '-';
+                statVideos.textContent = '-';
+                statUnsorted.textContent = '-';
+                return;
+            }
 
-        // 2. Render Unsorted folder if present
-        if (unsortedCount > 0) {
-            const card = document.createElement('div');
-            card.className = 'library-card';
-            card.innerHTML = `
-                <div class="thumbnail-container">
-                    <div class="no-image-placeholder">
-                        <i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i>
-                        <span>Unknown Profile</span>
+            let totalFiles = 0;
+            let unsortedCount = 0;
+            const validFolders = data.folders.filter(f => f.name !== '_unsorted');
+            const numClusters = validFolders.length;
+            
+            const unsortedFolder = data.folders.find(f => f.name === '_unsorted');
+            if (unsortedFolder) {
+                unsortedCount = unsortedFolder.file_count;
+            }
+
+            data.folders.forEach(folder => {
+                if (folder.name !== '_unsorted') {
+                    totalFiles += folder.file_count;
+                }
+                
+                const card = document.createElement('div');
+                card.className = 'library-card';
+                
+                const imgUrl = `/api/thumbnail/${folder.name}?t=${Date.now()}`;
+                
+                const isUnsorted = folder.name === '_unsorted';
+                const thumbHtml = folder.has_thumbnail
+                    ? `<img src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${folder.name}"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
+                    : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
+                
+                card.innerHTML = `
+                    <div class="thumbnail-container">
+                        ${thumbHtml}
                     </div>
-                </div>
-                <div class="card-details">
-                    <span class="cluster-name">_unsorted</span>
-                    <span class="cluster-count">${unsortedCount} media items</span>
-                </div>
-            `;
-            libraryGrid.appendChild(card);
+                    <div class="card-details">
+                        <span class="cluster-name">${folder.name.replace(/_/g, ' ')}</span>
+                        <span class="cluster-count">${folder.file_count} media items</span>
+                    </div>
+                `;
+                
+                libraryGrid.appendChild(card);
+            });
+
+            // Update stats
+            statFemales.textContent = numClusters;
+            statVideos.textContent = totalFiles;
+            statUnsorted.textContent = unsortedCount;
+            libraryCountTitle.textContent = `${numClusters} Distinct Identities Grouped`;
+            
+        } catch (err) {
+            console.error('Failed to load library:', err);
+            appendLog('error', `Failed to load library: ${err.message}`);
         }
     };
     
@@ -425,11 +412,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.running) {
                 appendLog('info', 'Reconnected to running pipeline...');
                 connectSSE();
-            } else if (data.stage === 'completed' && data.report) {
-                renderResults(data.report);
+            } else {
+                loadLibrary();
             }
         } catch (e) {
             console.error('Failed to retrieve initial status', e);
+            loadLibrary();
         }
     };
     
@@ -551,6 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert(`Merge complete! ${data.files_moved} files moved to "${data.target_folder}". Deleted folders: ${data.merged_folders.join(', ')}`);
                 mergeModal.classList.remove('active');
                 appendLog('info', `Merged ${data.merged_folders.length} folders into "${data.target_folder}" (${data.files_moved} files moved)`);
+                loadLibrary();
             } else {
                 alert(`Merge failed: ${data.message}`);
                 appendLog('error', `Merge failed: ${data.message}`);
@@ -638,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 jsonMergeModal.classList.remove('active');
                 jsonMergeInput.value = '';
                 appendLog('info', `JSON Merge: ${data.merged_folders.length} folders into "${data.target_folder}" (${data.files_moved} files)`);
+                loadLibrary();
             } else {
                 alert(`Merge failed: ${data.message}`);
             }
