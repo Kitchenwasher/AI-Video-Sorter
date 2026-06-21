@@ -335,6 +335,68 @@ def merge_folders():
         logger.error(f"Merge error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/media/<path:filename>')
+def serve_media(filename):
+    """Serves media files (images and videos) from output directory."""
+    return send_from_directory(current_config.output_dir, filename)
+
+@app.route('/api/list-media/<folder_name>')
+def list_media(folder_name):
+    """Lists all media files inside a specific identity folder."""
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+    folder_path = os.path.join(current_config.output_dir, folder_name)
+    if not os.path.exists(folder_path):
+        return jsonify({'status': 'error', 'message': 'Folder not found'}), 404
+    
+    files = []
+    for name in sorted(os.listdir(folder_path)):
+        if name.startswith('_'):
+            continue
+        file_path = os.path.join(folder_path, name)
+        if os.path.isfile(file_path):
+            ext = os.path.splitext(name)[1].lower()
+            is_video = ext in {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v', '.mpg', '.mpeg'}
+            files.append({
+                'name': name,
+                'is_video': is_video,
+                'ext': ext
+            })
+    return jsonify({'files': files})
+
+@app.route('/api/open-folder/<folder_name>', methods=['POST'])
+def open_folder(folder_name):
+    """Launches Windows Explorer pointing directly to the selected folder."""
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+    path = os.path.abspath(os.path.join(current_config.output_dir, folder_name))
+    if os.path.exists(path):
+        try:
+            os.startfile(path)
+            return jsonify({'status': 'success'})
+         except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify({'status': 'error', 'message': 'Folder not found'}), 404
+
+@app.route('/api/play-file', methods=['POST'])
+def play_file():
+    """Launches the default player on the OS (e.g. VLC) for non-native web formats (like MKV)."""
+    data = request.json
+    folder_name = data.get('folder_name')
+    filename = data.get('filename')
+    if not folder_name or not filename:
+        return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name or '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'status': 'error', 'message': 'Invalid file path'}), 400
+    path = os.path.abspath(os.path.join(current_config.output_dir, folder_name, filename))
+    if os.path.exists(path):
+        try:
+            os.startfile(path)
+            return jsonify({'status': 'success'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
 @app.route('/api/thumbnail/<cluster_folder>')
 def get_thumbnail(cluster_folder):
     """

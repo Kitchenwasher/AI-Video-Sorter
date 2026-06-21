@@ -370,6 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const card = document.createElement('div');
                 card.className = 'library-card';
+                card.style.cursor = 'pointer'; // Ensure cursor shows it is clickable
                 
                 const imgUrl = `/api/thumbnail/${folder.name}?t=${Date.now()}`;
                 
@@ -387,6 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="cluster-count">${folder.file_count} media items</span>
                     </div>
                 `;
+                
+                card.addEventListener('click', () => {
+                    openGallery(folder.name);
+                });
                 
                 libraryGrid.appendChild(card);
             });
@@ -636,6 +641,160 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             btnJsonMergeExec.disabled = false;
             btnJsonMergeExec.innerHTML = '<i class="fa-solid fa-play"></i> Execute Merge';
+        }
+    });
+
+    // ===== DYNAMIC GALLERY & LIGHTBOX CONTROLLERS =====
+    const galleryModal = document.getElementById('gallery-modal');
+    const galleryModalClose = document.getElementById('gallery-modal-close');
+    const galleryTitle = document.getElementById('gallery-title');
+    const galleryCountBadge = document.getElementById('gallery-count-badge');
+    const galleryMediaGrid = document.getElementById('gallery-media-grid');
+    const btnOpenExplorer = document.getElementById('btn-open-explorer');
+
+    const lightboxModal = document.getElementById('lightbox-modal');
+    const lightboxClose = document.getElementById('lightbox-close');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxVideo = document.getElementById('lightbox-video');
+
+    let currentGalleryFolder = null;
+
+    const openGallery = async (folderName) => {
+        currentGalleryFolder = folderName;
+        galleryTitle.textContent = folderName.replace(/_/g, ' ');
+        galleryMediaGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folder contents...</p>';
+        galleryCountBadge.textContent = '0 items';
+        
+        galleryModal.classList.add('active');
+
+        try {
+            const res = await fetch(`/api/list-media/${folderName}`);
+            const data = await res.json();
+            
+            galleryMediaGrid.innerHTML = '';
+            
+            if (!data.files || data.files.length === 0) {
+                galleryMediaGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">No media files inside this folder.</p>';
+                galleryCountBadge.textContent = '0 items';
+                return;
+            }
+
+            galleryCountBadge.textContent = `${data.files.length} items`;
+
+            data.files.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                
+                const fileUrl = `/media/${folderName}/${file.name}`;
+                
+                if (file.is_video) {
+                    const isNative = file.ext === '.mp4' || file.ext === '.webm';
+                    item.innerHTML = `
+                        <div class="video-placeholder">
+                            <i class="fa-solid fa-circle-play"></i>
+                            <span>${file.name}</span>
+                        </div>
+                        <div class="play-badge"><i class="fa-solid fa-play"></i></div>
+                        <div class="item-meta">${isNative ? 'Play in App' : 'Play Natively (VLC)'}</div>
+                    `;
+                    
+                    item.addEventListener('click', () => {
+                        if (isNative) {
+                            playVideoInLightbox(fileUrl);
+                        } else {
+                            playFileNatively(folderName, file.name);
+                        }
+                    });
+                } else {
+                    item.innerHTML = `
+                        <img src="${fileUrl}" alt="${file.name}">
+                        <div class="item-meta">${file.name}</div>
+                    `;
+                    
+                    item.addEventListener('click', () => {
+                        showImageInLightbox(fileUrl);
+                    });
+                }
+                
+                galleryMediaGrid.appendChild(item);
+            });
+            
+        } catch (err) {
+            console.error('Failed to load gallery files:', err);
+            galleryMediaGrid.innerHTML = `<p style="color: #ff6b6b; grid-column: 1/-1; text-align: center;">Error loading gallery: ${err.message}</p>`;
+        }
+    };
+
+    const showImageInLightbox = (imgUrl) => {
+        lightboxVideo.style.display = 'none';
+        lightboxVideo.pause();
+        lightboxVideo.src = '';
+        
+        lightboxImg.src = imgUrl;
+        lightboxImg.style.display = 'block';
+        lightboxModal.classList.add('active');
+    };
+
+    const playVideoInLightbox = (videoUrl) => {
+        lightboxImg.style.display = 'none';
+        lightboxImg.src = '';
+        
+        lightboxVideo.src = videoUrl;
+        lightboxVideo.style.display = 'block';
+        lightboxModal.classList.add('active');
+        lightboxVideo.play().catch(e => console.log('Video play failed:', e));
+    };
+
+    const playFileNatively = async (folderName, filename) => {
+        try {
+            appendLog('info', `Requesting native OS playback for: ${filename}...`);
+            const res = await fetch('/api/play-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder_name: folderName, filename })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                appendLog('info', `Successfully launched native player for ${filename}`);
+            } else {
+                alert(`Failed to play natively: ${data.message}`);
+            }
+        } catch (e) {
+            alert(`Error opening file: ${e.message}`);
+        }
+    };
+
+    btnOpenExplorer.addEventListener('click', async () => {
+        if (!currentGalleryFolder) return;
+        try {
+            const res = await fetch(`/api/open-folder/${currentGalleryFolder}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                appendLog('info', `Opened output folder "${currentGalleryFolder}" in Windows File Explorer.`);
+            } else {
+                alert(`Failed to open folder: ${data.message}`);
+            }
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    });
+
+    // Close Modals events
+    galleryModalClose.addEventListener('click', () => {
+        galleryModal.classList.remove('active');
+    });
+    galleryModal.addEventListener('click', (e) => {
+        if (e.target === galleryModal) galleryModal.classList.remove('active');
+    });
+
+    lightboxClose.addEventListener('click', () => {
+        lightboxModal.classList.remove('active');
+        lightboxVideo.pause();
+    });
+    lightboxModal.addEventListener('click', (e) => {
+        if (e.target === lightboxModal || e.target === document.querySelector('.lightbox-content')) {
+            lightboxModal.classList.remove('active');
+            lightboxVideo.pause();
         }
     });
 });
