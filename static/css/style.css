@@ -1661,6 +1661,7 @@ body.modal-open {
     flex-direction: column;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 180px;
 }
 
 .search-result-card:hover {
@@ -1673,7 +1674,7 @@ body.modal-open {
 .search-result-card .thumbnail-container {
     position: relative;
     width: 100%;
-    aspect-ratio: 16/10;
+    flex: 1;
     background: #111;
     overflow: hidden;
     display: flex;
