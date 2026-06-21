@@ -689,8 +689,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (file.is_video) {
                     const isNative = file.ext === '.mp4' || file.ext === '.webm';
+                    const videoThumbUrl = `/api/video-thumbnail/${folderName}/${file.name}`;
                     item.innerHTML = `
-                        <div class="video-placeholder">
+                        <img src="${videoThumbUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${file.name}">
+                        <div class="video-placeholder" style="display:none; width:100%; height:100%;">
                             <i class="fa-solid fa-circle-play"></i>
                             <span>${file.name}</span>
                         </div>
