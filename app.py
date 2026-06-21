@@ -302,7 +302,7 @@ def list_folders():
         return jsonify({'folders': []})
     
     folders = []
-    for name in sorted(os.listdir(output_dir)):
+    for name in sorted(os.listdir(output_dir), key=lambda s: s.lower()):
         folder_path = os.path.join(output_dir, name)
         if os.path.isdir(folder_path) and not name.startswith('.'):
             file_count = len([f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')])
