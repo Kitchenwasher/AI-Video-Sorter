@@ -32,6 +32,17 @@ with app.app_context():
     try:
         db.create_all()
         logger.info("PostgreSQL database tables verified/created successfully.")
+        
+        # Check if rating column exists in watch_history, if not add it
+        engine = db.engine
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        columns = [c['name'] for c in inspector.get_columns('watch_history')]
+        if 'rating' not in columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE watch_history ADD COLUMN rating INTEGER"))
+                conn.commit()
+            logger.info("Added 'rating' column to 'watch_history' table.")
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")
 
@@ -650,6 +661,12 @@ def get_file_info(folder_name, filename):
         metadata = get_media_metadata(file_path, is_video)
         metadata['folder_name'] = folder_name
         
+        # Query rating from WatchHistory
+        from utils.models import WatchHistory
+        rel_path = f"{folder_name}/{filename}"
+        history = WatchHistory.query.filter_by(file_path=rel_path).first()
+        metadata['rating'] = history.rating if history else None
+
         # Pull face detection statistics from database
         from utils.models import ProcessedFile
         abs_path = os.path.abspath(file_path)
@@ -707,12 +724,14 @@ def list_media(folder_name):
                 'playback_position': 0.0,
                 'duration': 0.0,
                 'is_completed': False,
-                'progress_percent': 0
+                'progress_percent': 0,
+                'rating': None
             }
             if history:
                 watch_info['playback_position'] = history.playback_position
                 watch_info['duration'] = history.duration
                 watch_info['is_completed'] = history.is_completed
+                watch_info['rating'] = history.rating
                 if history.duration > 0:
                     watch_info['progress_percent'] = int((history.playback_position / history.duration) * 100)
             
@@ -785,6 +804,41 @@ def get_watch_progress(file_path):
         })
     except Exception as e:
         logger.error(f"Error getting watch progress: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/rate-file', methods=['POST'])
+def rate_file():
+    """Saves or updates rating for a media file."""
+    data = request.json
+    file_path = data.get('file_path')
+    rating = data.get('rating')
+    
+    if not file_path:
+        return jsonify({'status': 'error', 'message': 'Missing file_path'}), 400
+    if rating is not None and (rating < 1 or rating > 5):
+        return jsonify({'status': 'error', 'message': 'Rating must be between 1 and 5'}), 400
+        
+    try:
+        from utils.models import WatchHistory
+        
+        record = WatchHistory.query.filter_by(file_path=file_path).first()
+        if record:
+            record.rating = rating
+        else:
+            record = WatchHistory(
+                file_path=file_path,
+                playback_position=0.0,
+                duration=0.0,
+                is_completed=False,
+                rating=rating
+            )
+            db.session.add(record)
+            
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error saving file rating: {e}")
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/recently-watched', methods=['GET'])

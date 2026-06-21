@@ -38,4 +38,5 @@ class WatchHistory(db.Model):
     duration = db.Column(db.Float, default=0.0)                   # in seconds
     watched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     is_completed = db.Column(db.Boolean, default=False)
+    rating = db.Column(db.Integer, nullable=True)
 

@@ -848,6 +848,101 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const showToast = (message, isError = false) => {
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 8px; pointer-events: none;';
+            document.body.appendChild(container);
+        }
+        
+        const toast = document.createElement('div');
+        toast.className = 'glass-toast';
+        toast.style.cssText = `
+            background: ${isError ? 'rgba(239, 68, 68, 0.2)' : 'rgba(236, 72, 153, 0.15)'};
+            border: 1px solid ${isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(236, 72, 153, 0.4)'};
+            backdrop-filter: blur(12px);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        `;
+        toast.textContent = message;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        }, 10);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                toast.remove();
+            }, 350);
+        }, 2200);
+    };
+
+    const rateCurrentFile = async (rating) => {
+        if (!currentLightboxFile) return;
+        const relPath = currentGalleryFolder + '/' + currentLightboxFile;
+        try {
+            const res = await fetch('/api/rate-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_path: relPath,
+                    rating: rating
+                })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showToast(`Rated ${rating} ★`);
+                fetchAndDisplayMetadata(currentLightboxFile);
+            } else {
+                showToast(`Failed to save rating: ${data.message}`, true);
+            }
+        } catch (err) {
+            console.error('Error saving rating:', err);
+            showToast(`Error saving rating: ${err.message}`, true);
+        }
+    };
+
+    const seekVideo = (seconds) => {
+        if (plyrPlayer) {
+            plyrPlayer.currentTime = Math.max(0, Math.min(plyrPlayer.duration || 0, plyrPlayer.currentTime + seconds));
+        } else if (lightboxVideo) {
+            lightboxVideo.currentTime = Math.max(0, Math.min(lightboxVideo.duration || 0, lightboxVideo.currentTime + seconds));
+        }
+    };
+
+    const toggleFullscreen = () => {
+        if (plyrPlayer) {
+            plyrPlayer.fullscreen.toggle();
+        } else if (lightboxVideo) {
+            if (!document.fullscreenElement) {
+                lightboxVideo.requestFullscreen().catch(err => console.log(err));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+    };
+
+    const toggleMute = () => {
+        if (plyrPlayer) {
+            plyrPlayer.muted = !plyrPlayer.muted;
+        } else if (lightboxVideo) {
+            lightboxVideo.muted = !lightboxVideo.muted;
+        }
+    };
+
     // Playlist UI Listeners
     if (tabBtnInfo && tabBtnQueue) {
         tabBtnInfo.addEventListener('click', (e) => {
@@ -938,6 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let currentVideoPath = null;
+    let currentLightboxFile = null;
     let lastSavedTime = 0;
 
     const saveWatchProgress = async (force = false) => {
@@ -1026,6 +1122,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const getStarsHtml = (rating) => {
+        if (!rating) return '<span style="color: var(--text-muted, #9ca3af);">Unrated</span>';
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            if (i <= rating) {
+                html += '<i class="fa-solid fa-star" style="color: #fbbf24; font-size: 0.85rem;"></i>';
+            } else {
+                html += '<i class="fa-regular fa-star" style="color: rgba(255,255,255,0.15); font-size: 0.85rem;"></i>';
+            }
+        }
+        return html;
+    };
+
     const fetchAndDisplayMetadata = async (filename) => {
         const els = {
             filename: document.getElementById('meta-val-filename'),
@@ -1038,7 +1147,8 @@ document.addEventListener('DOMContentLoaded', () => {
             folder: document.getElementById('meta-val-folder-name'),
             faces: document.getElementById('meta-val-faces-count'),
             genders: document.getElementById('meta-val-genders'),
-            modified: document.getElementById('meta-val-modified')
+            modified: document.getElementById('meta-val-modified'),
+            rating: document.getElementById('meta-val-rating')
         };
         
         if (els.filename) els.filename.textContent = filename;
@@ -1052,6 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (els.faces) els.faces.textContent = 'Loading...';
         if (els.genders) els.genders.textContent = 'Loading...';
         if (els.modified) els.modified.textContent = 'Loading...';
+        if (els.rating) els.rating.innerHTML = 'Loading...';
         
         try {
             const folder = encodeURIComponent(currentGalleryFolder);
@@ -1070,6 +1181,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (els.faces) els.faces.textContent = meta.face_count !== undefined ? meta.face_count : '-';
                 if (els.genders) els.genders.textContent = meta.gender_breakdown || 'None';
                 if (els.modified) els.modified.textContent = meta.date_modified || '-';
+                if (els.rating) els.rating.innerHTML = getStarsHtml(meta.rating);
             }
         } catch (err) {
             console.error('Error fetching metadata:', err);
@@ -1574,6 +1686,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showImageInLightbox = (imgUrl, filename) => {
+        currentLightboxFile = filename;
         const plyrContainer = document.querySelector('.plyr');
         if (plyrContainer) {
             plyrContainer.style.display = 'none';
@@ -1603,6 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const playVideoInLightbox = async (videoUrl, filename) => {
+        currentLightboxFile = filename;
         lightboxImg.style.display = 'none';
         lightboxImg.src = '';
         
@@ -1738,6 +1852,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saveWatchProgress(true);
             currentVideoPath = null;
         }
+        currentLightboxFile = null;
         if (plyrPlayer) {
             plyrPlayer.pause();
         } else {
@@ -2090,12 +2205,42 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 lightboxClose.click();
+            } else if (e.key === ' ' && !isTyping) {
+                e.preventDefault();
+                if (plyrPlayer) {
+                    if (plyrPlayer.paused) plyrPlayer.play().catch(err => console.log(err));
+                    else plyrPlayer.pause();
+                } else if (lightboxVideo) {
+                    if (lightboxVideo.paused) lightboxVideo.play().catch(err => console.log(err));
+                    else lightboxVideo.pause();
+                }
             } else if (e.key === 'ArrowLeft' && !isTyping) {
                 e.preventDefault();
-                skipToPrev();
+                seekVideo(-5);
             } else if (e.key === 'ArrowRight' && !isTyping) {
                 e.preventDefault();
+                seekVideo(5);
+            } else if (e.key.toLowerCase() === 'j' && !isTyping) {
+                e.preventDefault();
+                seekVideo(-10);
+            } else if (e.key.toLowerCase() === 'l' && !isTyping) {
+                e.preventDefault();
+                seekVideo(10);
+            } else if (e.key.toLowerCase() === 'f' && !isTyping) {
+                e.preventDefault();
+                toggleFullscreen();
+            } else if (e.key.toLowerCase() === 'm' && !isTyping) {
+                e.preventDefault();
+                toggleMute();
+            } else if (e.key.toLowerCase() === 'n' && !isTyping) {
+                e.preventDefault();
                 skipToNext();
+            } else if (e.key.toLowerCase() === 'p' && !isTyping) {
+                e.preventDefault();
+                skipToPrev();
+            } else if (['1', '2', '3', '4', '5'].includes(e.key) && !isTyping) {
+                e.preventDefault();
+                rateCurrentFile(parseInt(e.key));
             }
             return;
         }
