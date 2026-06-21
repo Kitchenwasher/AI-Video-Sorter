@@ -147,9 +147,13 @@ class VideoSorter:
                 if self.config.mode == "move":
                     shutil.move(src_path, dest_path)
                     logger.info(f"Moved: {os.path.basename(src_path)} -> {os.path.relpath(dest_path, out_dir)}")
+                    if cache_ref is not None:
+                        cache_ref.update_file_path(src_path, dest_path)
                 else: # copy
                     shutil.copy2(src_path, dest_path)
                     logger.info(f"Copied: {os.path.basename(src_path)} -> {os.path.relpath(dest_path, out_dir)}")
+                    if cache_ref is not None:
+                        cache_ref.copy_file_cache(src_path, dest_path)
                     
                 # Update report
                 rel_dest = os.path.relpath(dest_path, out_dir)

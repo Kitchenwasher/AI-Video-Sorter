@@ -13,7 +13,7 @@ from modules.sorter import VideoSorter
 from modules.name_resolver import NameResolver
 
 class SortingPipeline:
-    def __init__(self, config: Config, workspace_dir: str, progress_cb=None):
+    def __init__(self, config: Config, workspace_dir: str, progress_cb=None, face_analysis_app=None):
         self.config = config
         self.workspace_dir = workspace_dir
         self.progress_cb = progress_cb or (lambda stage, pct, msg, detail=None: None)
@@ -21,6 +21,10 @@ class SortingPipeline:
         self.scanner = FileScanner(config.input_dir)
         self.extractor = KeyframeExtractor(workspace_dir, config)
         self.analyzer = FaceAnalyzer(config)
+        if face_analysis_app is not None:
+            self.analyzer.app = face_analysis_app
+            self.analyzer.initialized = True
+            
         self.clusterer = FaceClusterer(config)
         self.screen_time = ScreenTimeCalculator(config)
         self.sorter = VideoSorter(config)

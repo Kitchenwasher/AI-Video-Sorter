@@ -673,14 +673,260 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof Plyr !== 'undefined') {
         plyrPlayer = new Plyr('#lightbox-video', {
             controls: [
-                'play-large', 'play', 'progress', 'current-time', 'duration',
+                'play-large', 'rewind', 'play', 'fast-forward', 'progress', 'current-time', 'duration',
                 'mute', 'volume', 'settings', 'pip', 'fullscreen'
             ],
+            seekTime: 5,
             settings: ['speed', 'loop']
         });
     }
 
+    let currentVideoPath = null;
+    let lastSavedTime = 0;
+
+    const saveWatchProgress = async (force = false) => {
+        if (!currentVideoPath) return;
+        
+        let position = 0;
+        let duration = 0;
+        
+        if (plyrPlayer) {
+            position = plyrPlayer.currentTime;
+            duration = plyrPlayer.duration;
+        } else if (lightboxVideo) {
+            position = lightboxVideo.currentTime;
+            duration = lightboxVideo.duration;
+        }
+        
+        const now = Date.now();
+        if (!force && now - lastSavedTime < 4000) {
+            return;
+        }
+        
+        if (duration > 0) {
+            lastSavedTime = now;
+            try {
+                await fetch('/api/watch-progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: currentVideoPath,
+                        position: position,
+                        duration: duration
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to save watch progress:', err);
+            }
+        }
+    };
+
+    if (typeof Plyr !== 'undefined' && plyrPlayer) {
+        plyrPlayer.on('timeupdate', () => {
+            saveWatchProgress(false);
+        });
+        
+        plyrPlayer.on('pause', () => {
+            saveWatchProgress(true);
+        });
+        
+        plyrPlayer.on('ended', () => {
+            saveWatchProgress(true);
+        });
+    }
+
+    if (lightboxVideo) {
+        lightboxVideo.addEventListener('timeupdate', () => {
+            if (!plyrPlayer) saveWatchProgress(false);
+        });
+        lightboxVideo.addEventListener('pause', () => {
+            if (!plyrPlayer) saveWatchProgress(true);
+        });
+        lightboxVideo.addEventListener('ended', () => {
+            if (!plyrPlayer) saveWatchProgress(true);
+        });
+    }
+
+    let metadataPanelOpen = localStorage.getItem('metadataPanelOpen') === 'true';
+
+    const updateMetadataPanelUI = () => {
+        const panel = document.getElementById('lightbox-metadata-panel');
+        const container = document.querySelector('.lightbox-container');
+        const toggleBtn = document.getElementById('lightbox-info-toggle');
+        const modal = document.getElementById('lightbox-modal');
+        
+        if (panel) {
+            if (metadataPanelOpen) {
+                panel.classList.add('active');
+                if (container) container.classList.add('panel-open');
+                if (modal) modal.classList.add('panel-open');
+                if (toggleBtn) toggleBtn.style.color = 'var(--color-primary, #ec4899)';
+            } else {
+                panel.classList.remove('active');
+                if (container) container.classList.remove('panel-open');
+                if (modal) modal.classList.remove('panel-open');
+                if (toggleBtn) toggleBtn.style.color = 'white';
+            }
+        }
+    };
+
+    const fetchAndDisplayMetadata = async (filename) => {
+        const els = {
+            filename: document.getElementById('meta-val-filename'),
+            size: document.getElementById('meta-val-size'),
+            resolution: document.getElementById('meta-val-resolution'),
+            duration: document.getElementById('meta-val-duration'),
+            codec: document.getElementById('meta-val-codec'),
+            fps: document.getElementById('meta-val-fps'),
+            bitrate: document.getElementById('meta-val-bitrate'),
+            folder: document.getElementById('meta-val-folder-name'),
+            faces: document.getElementById('meta-val-faces-count'),
+            genders: document.getElementById('meta-val-genders'),
+            modified: document.getElementById('meta-val-modified')
+        };
+        
+        if (els.filename) els.filename.textContent = filename;
+        if (els.size) els.size.textContent = 'Loading...';
+        if (els.resolution) els.resolution.textContent = 'Loading...';
+        if (els.duration) els.duration.textContent = 'Loading...';
+        if (els.codec) els.codec.textContent = 'Loading...';
+        if (els.fps) els.fps.textContent = 'Loading...';
+        if (els.bitrate) els.bitrate.textContent = 'Loading...';
+        if (els.folder) els.folder.textContent = currentGalleryFolder || '-';
+        if (els.faces) els.faces.textContent = 'Loading...';
+        if (els.genders) els.genders.textContent = 'Loading...';
+        if (els.modified) els.modified.textContent = 'Loading...';
+        
+        try {
+            const folder = encodeURIComponent(currentGalleryFolder);
+            const file = encodeURIComponent(filename);
+            const res = await fetch(`/api/file-info/${folder}/${file}`);
+            const data = await res.json();
+            
+            if (data.status === 'success' && data.metadata) {
+                const meta = data.metadata;
+                if (els.size) els.size.textContent = meta.file_size || '-';
+                if (els.resolution) els.resolution.textContent = meta.resolution || '-';
+                if (els.duration) els.duration.textContent = meta.duration || 'N/A';
+                if (els.codec) els.codec.textContent = meta.codec || '-';
+                if (els.fps) els.fps.textContent = meta.fps || 'N/A';
+                if (els.bitrate) els.bitrate.textContent = meta.bitrate || 'N/A';
+                if (els.faces) els.faces.textContent = meta.face_count !== undefined ? meta.face_count : '-';
+                if (els.genders) els.genders.textContent = meta.gender_breakdown || 'None';
+                if (els.modified) els.modified.textContent = meta.date_modified || '-';
+            }
+        } catch (err) {
+            console.error('Error fetching metadata:', err);
+        }
+    };
+
     let currentGalleryFolder = null;
+    let selectedFilenames = new Set();
+    let lastSelectedIndex = -1;
+
+    const gallerySelectionBanner = document.getElementById('gallery-selection-banner');
+    const selectionCount = document.getElementById('selection-count');
+    const btnSelectAll = document.getElementById('btn-select-all');
+    const btnClearSelection = document.getElementById('btn-clear-selection');
+
+    const updateSelectionBanner = () => {
+        if (!gallerySelectionBanner || !selectionCount) return;
+        const count = selectedFilenames.size;
+        if (count > 0) {
+            selectionCount.textContent = `${count} items selected`;
+            gallerySelectionBanner.style.display = 'flex';
+        } else {
+            gallerySelectionBanner.style.display = 'none';
+        }
+    };
+
+    const clearAllSelections = () => {
+        selectedFilenames.clear();
+        lastSelectedIndex = -1;
+        const items = galleryMediaGrid.querySelectorAll('.gallery-item');
+        items.forEach(item => {
+            item.classList.remove('selected');
+            const checkbox = item.querySelector('.gallery-item-checkbox');
+            if (checkbox) checkbox.checked = false;
+        });
+        updateSelectionBanner();
+    };
+
+    const selectAllItems = () => {
+        const items = galleryMediaGrid.querySelectorAll('.gallery-item');
+        items.forEach(item => {
+            const checkbox = item.querySelector('.gallery-item-checkbox');
+            if (checkbox) {
+                const filename = checkbox.dataset.filename;
+                selectedFilenames.add(filename);
+                checkbox.checked = true;
+                item.classList.add('selected');
+            }
+        });
+        updateSelectionBanner();
+    };
+
+    const toggleItemSelection = (item) => {
+        const checkbox = item.querySelector('.gallery-item-checkbox');
+        if (!checkbox) return;
+        const filename = checkbox.dataset.filename;
+        if (selectedFilenames.has(filename)) {
+            selectedFilenames.delete(filename);
+            checkbox.checked = false;
+            item.classList.remove('selected');
+        } else {
+            selectedFilenames.add(filename);
+            checkbox.checked = true;
+            item.classList.add('selected');
+        }
+        updateSelectionBanner();
+        
+        // Update last selected index
+        const items = Array.from(galleryMediaGrid.querySelectorAll('.gallery-item'));
+        lastSelectedIndex = items.indexOf(item);
+    };
+
+    const selectRange = (endItem) => {
+        const items = Array.from(galleryMediaGrid.querySelectorAll('.gallery-item'));
+        if (lastSelectedIndex === -1) {
+            // No previous selection, just toggle current
+            toggleItemSelection(endItem);
+            return;
+        }
+        
+        const endIndex = items.indexOf(endItem);
+        const start = Math.min(lastSelectedIndex, endIndex);
+        const end = Math.max(lastSelectedIndex, endIndex);
+        
+        // Check if starting item is currently selected, range matches its state
+        const startItem = items[lastSelectedIndex];
+        const isStartSelected = startItem ? startItem.classList.contains('selected') : true;
+        
+        for (let i = start; i <= end; i++) {
+            const currentItem = items[i];
+            const checkbox = currentItem.querySelector('.gallery-item-checkbox');
+            if (checkbox) {
+                const filename = checkbox.dataset.filename;
+                if (isStartSelected) {
+                    selectedFilenames.add(filename);
+                    checkbox.checked = true;
+                    currentItem.classList.add('selected');
+                } else {
+                    selectedFilenames.delete(filename);
+                    checkbox.checked = false;
+                    currentItem.classList.remove('selected');
+                }
+            }
+        }
+        updateSelectionBanner();
+    };
+
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', selectAllItems);
+    }
+    if (btnClearSelection) {
+        btnClearSelection.addEventListener('click', clearAllSelections);
+    }
 
     // Filter folders in sidebar
     const filterSidebarFolders = () => {
@@ -775,8 +1021,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!dragDataRaw) return;
                             
                             const dragData = JSON.parse(dragDataRaw);
-                            const filename = dragData.filename;
-                            if (!filename) return;
+                            const filenames = dragData.filenames || (dragData.filename ? [dragData.filename] : null);
+                            if (!filenames || filenames.length === 0) return;
 
                             const moveRes = await fetch('/api/move-media', {
                                 method: 'POST',
@@ -784,20 +1030,23 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body: JSON.stringify({
                                     from_folder: currentGalleryFolder,
                                     to_folder: folder.name,
-                                    filename: filename
+                                    filenames: filenames
                                 })
                             });
                             const moveData = await moveRes.json();
 
                             if (moveData.status === 'success') {
                                 const targetDisplayName = folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim();
-                                appendLog('info', `Successfully moved ${filename} to ${targetDisplayName}`);
-                                // Refresh current gallery
-                                await openGallery(currentGalleryFolder);
+                                const fileCountStr = filenames.length === 1 ? filenames[0] : `${filenames.length} files`;
+                                appendLog('info', `Successfully moved ${fileCountStr} to ${targetDisplayName}`);
+                                
+                                // Reset selection
+                                clearAllSelections();
+                                
+                                // Refresh current gallery (preserving search query and re-filtering targets)
+                                await openGallery(currentGalleryFolder, true);
                                 // Refresh library page details & counts
                                 await loadLibrary();
-                                // Refresh sidebar folder items list
-                                await loadSidebarFolders();
                             } else {
                                 alert(`Failed to move: ${moveData.message}`);
                             }
@@ -817,29 +1066,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const openGallery = async (folderName) => {
+    const openGallery = async (folderName, isRefresh = false) => {
         currentGalleryFolder = folderName;
+        selectedFilenames.clear();
+        lastSelectedIndex = -1;
+        updateSelectionBanner();
+        
         galleryTitle.textContent = folderName === '_unsorted' ? 'Unsorted' : folderName.replace(/_/g, ' ').trim();
         galleryMediaGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folder contents...</p>';
         galleryCountBadge.textContent = '0 items';
         
         // Reset rename view to normal
-        if (galleryRenameContainer && galleryTitleContainer) {
-            galleryRenameContainer.style.display = 'none';
-            galleryTitleContainer.style.display = 'flex';
-        }
-        if (btnRenameGalleryFolder) {
-            btnRenameGalleryFolder.style.display = folderName === '_unsorted' ? 'none' : 'flex';
-        }
-        
-        if (gallerySidebarSearch) {
-            gallerySidebarSearch.value = '';
+        if (!isRefresh) {
+            if (galleryRenameContainer && galleryTitleContainer) {
+                galleryRenameContainer.style.display = 'none';
+                galleryTitleContainer.style.display = 'flex';
+            }
+            if (btnRenameGalleryFolder) {
+                btnRenameGalleryFolder.style.display = folderName === '_unsorted' ? 'none' : 'flex';
+            }
+            
+            if (gallerySidebarSearch) {
+                gallerySidebarSearch.value = '';
+            }
         }
         
         galleryModal.classList.add('active');
 
         // Load target folders in sidebar
-        loadSidebarFolders();
+        await loadSidebarFolders();
 
         try {
             const res = await fetch(`/api/list-media/${encodeURIComponent(folderName)}`);
@@ -856,8 +1111,9 @@ document.addEventListener('DOMContentLoaded', () => {
             galleryCountBadge.textContent = `${data.files.length} items`;
 
             data.files.forEach(file => {
+                const isSelected = selectedFilenames.has(file.name);
                 const item = document.createElement('div');
-                item.className = 'gallery-item';
+                item.className = `gallery-item${isSelected ? ' selected' : ''}`;
                 item.setAttribute('draggable', 'true');
                 
                 const fileUrl = `/media/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`;
@@ -865,12 +1121,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Drag and drop event listeners on gallery items
                 item.addEventListener('dragstart', (e) => {
                     item.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ filename: file.name }));
+                    
+                    let dragFiles = [];
+                    if (selectedFilenames.has(file.name)) {
+                        dragFiles = Array.from(selectedFilenames);
+                        // Add dragging class to all selected cards
+                        galleryMediaGrid.querySelectorAll('.gallery-item.selected').forEach(el => {
+                            el.classList.add('dragging');
+                        });
+                    } else {
+                        dragFiles = [file.name];
+                    }
+                    
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ filenames: dragFiles }));
                     e.dataTransfer.effectAllowed = 'move';
                 });
 
                 item.addEventListener('dragend', () => {
                     item.classList.remove('dragging');
+                    galleryMediaGrid.querySelectorAll('.gallery-item').forEach(el => {
+                        el.classList.remove('dragging');
+                    });
                 });
                 
                 if (file.is_video) {
@@ -885,7 +1156,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     const btnIcon = useVLC ? 'fa-laptop' : 'fa-circle-play';
                     const btnClass = useVLC ? 'play-native-btn' : 'play-browser-btn';
                     
+                    const progress = file.watch_progress || { playback_position: 0, duration: 0, is_completed: false, progress_percent: 0 };
+                    let badgeHtml = '';
+                    let progressHtml = '';
+                    
+                    if (progress.is_completed) {
+                        badgeHtml = `<span class="watch-badge watched" title="Watched"><i class="fa-solid fa-circle-check"></i> Watched</span>`;
+                    } else if (progress.progress_percent > 0) {
+                        badgeHtml = `<span class="watch-badge watching" title="Resume play"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>`;
+                        progressHtml = `
+                            <div class="gallery-item-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;">
+                                <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                            </div>
+                        `;
+                    } else {
+                        badgeHtml = `<span class="watch-badge unwatched"><i class="fa-solid fa-circle-play"></i> Unwatched</span>`;
+                    }
+
                     item.innerHTML = `
+                        <input type="checkbox" class="gallery-item-checkbox" data-filename="${file.name}" ${isSelected ? 'checked' : ''}>
+                        <button class="item-info-btn" data-filename="${file.name}" title="View Info"><i class="fa-solid fa-circle-info"></i></button>
+                        ${badgeHtml}
                         <img src="${videoThumbUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${videoThumbUrl}&retry=' + Date.now(); }, 1500); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${file.name}">
                         <div class="video-placeholder" style="display:none; width:100%; height:100%;">
                             <i class="fa-solid fa-circle-play"></i>
@@ -895,6 +1186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="hover-btn play-video-btn ${btnClass}"><i class="fa-solid ${btnIcon}"></i> ${btnLabel}</button>
                         </div>
                         <div class="item-meta">${metaLabel}</div>
+                        ${progressHtml}
                     `;
                     
                     const playBtn = item.querySelector('.play-video-btn');
@@ -903,16 +1195,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (useVLC) {
                             playFileNatively(folderName, file.name);
                         } else {
-                            playVideoInLightbox(fileUrl);
+                            playVideoInLightbox(fileUrl, file.name);
                         }
                     };
                     
                     if (playBtn) {
                         playBtn.addEventListener('click', handlePlay);
                     }
-                    item.addEventListener('click', handlePlay);
+                    
+                    item.addEventListener('click', (e) => {
+                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn')) {
+                            e.stopPropagation();
+                            return;
+                        }
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleItemSelection(item);
+                        } else if (e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selectRange(item);
+                        } else {
+                            handlePlay(e);
+                        }
+                    });
                 } else {
                     item.innerHTML = `
+                        <input type="checkbox" class="gallery-item-checkbox" data-filename="${file.name}" ${isSelected ? 'checked' : ''}>
+                        <button class="item-info-btn" data-filename="${file.name}" title="View Info"><i class="fa-solid fa-circle-info"></i></button>
                         <img src="${fileUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${fileUrl}&retry=' + Date.now(); }, 1000); }" alt="${file.name}">
                         <div class="gallery-item-hover-overlay">
                             <button class="hover-btn view-img-btn"><i class="fa-solid fa-eye"></i> View Image</button>
@@ -924,12 +1235,69 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (viewBtn) {
                         viewBtn.addEventListener('click', (e) => {
                             e.stopPropagation();
-                            showImageInLightbox(fileUrl);
+                            showImageInLightbox(fileUrl, file.name);
                         });
                     }
                     
-                    item.addEventListener('click', () => {
-                        showImageInLightbox(fileUrl);
+                    item.addEventListener('click', (e) => {
+                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn')) {
+                            e.stopPropagation();
+                            return;
+                        }
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleItemSelection(item);
+                        } else if (e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            selectRange(item);
+                        } else {
+                            showImageInLightbox(fileUrl, file.name);
+                        }
+                    });
+                }
+                
+                // Info button click listener
+                const infoBtn = item.querySelector('.item-info-btn');
+                if (infoBtn) {
+                    infoBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        metadataPanelOpen = true;
+                        localStorage.setItem('metadataPanelOpen', 'true');
+                        updateMetadataPanelUI();
+                        if (file.is_video) {
+                            const isNative = file.ext === '.mp4' || file.ext === '.webm';
+                            const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
+                            if (!isNative || defaultPlayer === 'vlc') {
+                                playFileNatively(folderName, file.name);
+                            } else {
+                                playVideoInLightbox(fileUrl, file.name);
+                            }
+                        } else {
+                            showImageInLightbox(fileUrl, file.name);
+                        }
+                    });
+                }
+                
+                // Checkbox change listener
+                const checkbox = item.querySelector('.gallery-item-checkbox');
+                if (checkbox) {
+                    checkbox.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        const isChecked = checkbox.checked;
+                        if (isChecked) {
+                            selectedFilenames.add(file.name);
+                            item.classList.add('selected');
+                        } else {
+                            selectedFilenames.delete(file.name);
+                            item.classList.remove('selected');
+                        }
+                        updateSelectionBanner();
+                        
+                        // Update lastSelectedIndex
+                        const items = Array.from(galleryMediaGrid.querySelectorAll('.gallery-item'));
+                        lastSelectedIndex = items.indexOf(item);
                     });
                 }
                 
@@ -942,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const showImageInLightbox = (imgUrl) => {
+    const showImageInLightbox = (imgUrl, filename) => {
         const plyrContainer = document.querySelector('.plyr');
         if (plyrContainer) {
             plyrContainer.style.display = 'none';
@@ -958,9 +1326,13 @@ document.addEventListener('DOMContentLoaded', () => {
         lightboxImg.src = imgUrl;
         lightboxImg.style.display = 'block';
         lightboxModal.classList.add('active');
+        
+        if (filename) {
+            fetchAndDisplayMetadata(filename);
+        }
     };
 
-    const playVideoInLightbox = (videoUrl) => {
+    const playVideoInLightbox = async (videoUrl, filename) => {
         lightboxImg.style.display = 'none';
         lightboxImg.src = '';
         
@@ -973,6 +1345,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         lightboxModal.classList.add('active');
         
+        currentVideoPath = currentGalleryFolder + '/' + filename;
+        let resumeTime = 0;
+        
+        try {
+            const folder = encodeURIComponent(currentGalleryFolder);
+            const file = encodeURIComponent(filename);
+            const progressRes = await fetch(`/api/watch-progress/${folder}/${file}`);
+            const progressData = await progressRes.json();
+            if (progressData.status === 'success' && !progressData.is_completed) {
+                resumeTime = progressData.playback_position || 0;
+            }
+        } catch (err) {
+            console.error('Error fetching resume position:', err);
+        }
+        
         if (plyrPlayer) {
             plyrPlayer.source = {
                 type: 'video',
@@ -983,16 +1370,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 ]
             };
+            
+            if (resumeTime > 0) {
+                plyrPlayer.once('ready', () => {
+                    plyrPlayer.currentTime = resumeTime;
+                });
+            }
+            
             plyrPlayer.play().catch(e => console.log('Video play failed:', e));
         } else {
             lightboxVideo.src = videoUrl;
+            if (resumeTime > 0) {
+                lightboxVideo.currentTime = resumeTime;
+            }
             lightboxVideo.play().catch(e => console.log('Video play failed:', e));
+        }
+        
+        if (filename) {
+            fetchAndDisplayMetadata(filename);
         }
     };
 
     const playFileNatively = async (folderName, filename) => {
         try {
             appendLog('info', `Requesting native OS playback for: ${filename}...`);
+            
+            const path = folderName + '/' + filename;
+            fetch('/api/watch-progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_path: path,
+                    position: 1.0,
+                    duration: 1.0
+                })
+            }).catch(e => console.error('Error saving progress for native play:', e));
+
             const res = await fetch('/api/play-file', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1001,6 +1414,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.status === 'success') {
                 appendLog('info', `Successfully launched native player for ${filename}`);
+                setTimeout(() => { openGallery(currentGalleryFolder, true); }, 1000);
             } else {
                 alert(`Failed to play natively: ${data.message}`);
             }
@@ -1008,6 +1422,52 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Error opening file: ${e.message}`);
         }
     };
+
+    const stopLightboxMedia = () => {
+        if (currentVideoPath) {
+            saveWatchProgress(true);
+            currentVideoPath = null;
+        }
+        if (plyrPlayer) {
+            plyrPlayer.pause();
+        } else {
+            lightboxVideo.pause();
+        }
+        
+        if (currentGalleryFolder) {
+            openGallery(currentGalleryFolder, true);
+        }
+        
+        loadRecentlyWatched();
+    };
+
+    lightboxClose.addEventListener('click', () => {
+        lightboxModal.classList.remove('active');
+        stopLightboxMedia();
+    });
+
+    const lightboxInfoToggle = document.getElementById('lightbox-info-toggle');
+    const metadataPanelClose = document.getElementById('metadata-panel-close');
+    
+    if (lightboxInfoToggle) {
+        lightboxInfoToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            metadataPanelOpen = !metadataPanelOpen;
+            localStorage.setItem('metadataPanelOpen', metadataPanelOpen);
+            updateMetadataPanelUI();
+        });
+    }
+    
+    if (metadataPanelClose) {
+        metadataPanelClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            metadataPanelOpen = false;
+            localStorage.setItem('metadataPanelOpen', 'false');
+            updateMetadataPanelUI();
+        });
+    }
+
+    updateMetadataPanelUI();
 
     btnOpenExplorer.addEventListener('click', async () => {
         if (!currentGalleryFolder) return;
@@ -1032,18 +1492,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === galleryModal) galleryModal.classList.remove('active');
     });
 
-    const stopLightboxMedia = () => {
-        if (plyrPlayer) {
-            plyrPlayer.pause();
-        } else {
-            lightboxVideo.pause();
-        }
-    };
-
-    lightboxClose.addEventListener('click', () => {
-        lightboxModal.classList.remove('active');
-        stopLightboxMedia();
-    });
     // Automatically manage body scroll lock when modals are opened/closed
     const modalObserver = new MutationObserver(() => {
         const anyModalActive = document.querySelector('.modal-overlay.active') !== null;
@@ -1151,6 +1599,110 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const loadRecentlyWatched = async () => {
+        const container = document.getElementById('recently-watched-card');
+        const list = document.getElementById('recently-watched-list');
+        if (!container || !list) return;
+        
+        try {
+            const res = await fetch('/api/recently-watched');
+            const data = await res.json();
+            
+            if (data.status === 'success' && data.items && data.items.length > 0) {
+                list.innerHTML = '';
+                
+                data.items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'recent-video-card';
+                    card.style.flex = '0 0 200px';
+                    card.style.position = 'relative';
+                    card.style.borderRadius = '12px';
+                    card.style.overflow = 'hidden';
+                    card.style.background = 'rgba(255,255,255,0.03)';
+                    card.style.border = '1px solid rgba(255,255,255,0.08)';
+                    card.style.cursor = 'pointer';
+                    card.style.transition = 'all 0.2s';
+                    
+                    const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(item.folder_name)}/${encodeURIComponent(item.filename)}`;
+                    
+                    let badgeHtml = '';
+                    if (item.is_completed) {
+                        badgeHtml = `<span class="watch-badge watched" style="bottom: auto; top: 10px; left: 10px; font-size: 0.6rem; padding: 0.15rem 0.35rem;"><i class="fa-solid fa-circle-check"></i> Watched</span>`;
+                    } else if (item.progress_percent > 0) {
+                        badgeHtml = `<span class="watch-badge watching" style="bottom: auto; top: 10px; left: 10px; font-size: 0.6rem; padding: 0.15rem 0.35rem;"><i class="fa-solid fa-spinner"></i> ${item.progress_percent}%</span>`;
+                    }
+                    
+                    card.innerHTML = `
+                        <div style="position: relative; aspect-ratio: 16/9; overflow: hidden; background: rgba(0,0,0,0.2);">
+                            ${badgeHtml}
+                            <img src="${videoThumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='/static/img/placeholder.jpg';">
+                            <div class="play-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;">
+                                <i class="fa-solid fa-play" style="color: white; font-size: 1.5rem;"></i>
+                            </div>
+                            <div class="progress-bar-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2);">
+                                <div class="progress-bar-fill" style="width: ${item.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                            </div>
+                        </div>
+                        <div style="padding: 0.5rem; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;">
+                            <span style="font-size: 0.8rem; font-weight: 500; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${item.filename}">${item.filename}</span>
+                            <span style="font-size: 0.65rem; color: var(--text-muted);"><i class="fa-solid fa-folder" style="color: #fbbf24; margin-right: 0.2rem;"></i> ${item.folder_name}</span>
+                        </div>
+                    `;
+                    
+                    const playOverlay = card.querySelector('.play-overlay');
+                    card.addEventListener('mouseenter', () => {
+                        card.style.transform = 'translateY(-2px)';
+                        card.style.borderColor = 'var(--color-primary, #ec4899)';
+                        if (playOverlay) playOverlay.style.opacity = '1';
+                    });
+                    card.addEventListener('mouseleave', () => {
+                        card.style.transform = 'translateY(0)';
+                        card.style.borderColor = 'rgba(255,255,255,0.08)';
+                        if (playOverlay) playOverlay.style.opacity = '0';
+                    });
+                    
+                    card.addEventListener('click', async () => {
+                        currentGalleryFolder = item.folder_name;
+                        const fileUrl = `/media/${encodeURIComponent(item.folder_name)}/${encodeURIComponent(item.filename)}`;
+                        openGallery(item.folder_name);
+                        playVideoInLightbox(fileUrl, item.filename);
+                    });
+                    
+                    list.appendChild(card);
+                });
+                
+                container.style.display = 'flex';
+            } else {
+                container.style.display = 'none';
+                list.innerHTML = '';
+            }
+        } catch (err) {
+            console.error('Failed to load recently watched videos:', err);
+            container.style.display = 'none';
+        }
+    };
+
+    const btnClearHistory = document.getElementById('btn-clear-history');
+    if (btnClearHistory) {
+        btnClearHistory.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm("Are you sure you want to clear your watch history?")) {
+                try {
+                    const res = await fetch('/api/recently-watched/clear', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        appendLog('info', 'Watch history cleared.');
+                        loadRecentlyWatched();
+                        if (currentGalleryFolder) {
+                            openGallery(currentGalleryFolder, true);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to clear watch history:', err);
+                }
+            }
+        });
+    }
     if (galleryRenameInput) {
         galleryRenameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -1162,4 +1714,219 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ===== GLOBAL MEDIA SEARCH CONTROLLER =====
+    const globalSearchTrigger = document.getElementById('header-search-trigger');
+    const globalSearchModal = document.getElementById('global-search-modal');
+    const globalSearchClose = document.getElementById('global-search-close');
+    const modalSearchInput = document.getElementById('modal-search-input');
+    const searchSpinner = document.getElementById('search-spinner');
+    const searchInitialPlaceholder = document.getElementById('search-initial-placeholder');
+    const searchNoResults = document.getElementById('search-no-results');
+    const searchQueryHighlight = document.getElementById('search-query-highlight');
+    const searchResultsGrid = document.getElementById('search-results-grid');
+
+    const openSearchModal = () => {
+        if (!globalSearchModal) return;
+        globalSearchModal.classList.add('active');
+        if (modalSearchInput) {
+            modalSearchInput.value = '';
+            setTimeout(() => { modalSearchInput.focus(); }, 100);
+        }
+        resetSearchResults();
+    };
+
+    const closeSearchModal = () => {
+        if (!globalSearchModal) return;
+        globalSearchModal.classList.remove('active');
+        if (modalSearchInput) modalSearchInput.blur();
+    };
+
+    const resetSearchResults = () => {
+        if (searchInitialPlaceholder) searchInitialPlaceholder.style.display = 'flex';
+        if (searchNoResults) searchNoResults.style.display = 'none';
+        if (searchResultsGrid) {
+            searchResultsGrid.style.display = 'none';
+            searchResultsGrid.innerHTML = '';
+        }
+        if (searchSpinner) searchSpinner.style.display = 'none';
+    };
+
+    if (globalSearchTrigger) {
+        globalSearchTrigger.style.cursor = 'pointer';
+        globalSearchTrigger.addEventListener('click', openSearchModal);
+    }
+
+    if (globalSearchClose) {
+        globalSearchClose.addEventListener('click', closeSearchModal);
+    }
+
+    if (globalSearchModal) {
+        globalSearchModal.addEventListener('click', (e) => {
+            if (e.target === globalSearchModal) closeSearchModal();
+        });
+    }
+
+    // Keyboard Shortcuts (Ctrl+K or / to open, Escape to close)
+    document.addEventListener('keydown', (e) => {
+        const activeEl = document.activeElement;
+        const isTyping = activeEl && (
+            activeEl.tagName === 'INPUT' || 
+            activeEl.tagName === 'TEXTAREA' || 
+            activeEl.isContentEditable
+        );
+
+        if ((e.key === '/' && !isTyping) || (e.ctrlKey && e.key.toLowerCase() === 'k')) {
+            e.preventDefault();
+            openSearchModal();
+        } else if (e.key === 'Escape') {
+            if (globalSearchModal && globalSearchModal.classList.contains('active')) {
+                e.preventDefault();
+                closeSearchModal();
+            }
+        }
+    });
+
+    let searchDebounceTimeout = null;
+
+    const performSearch = async () => {
+        if (!modalSearchInput) return;
+        const query = modalSearchInput.value.strip ? modalSearchInput.value.strip() : modalSearchInput.value.trim();
+        if (!query) {
+            resetSearchResults();
+            return;
+        }
+
+        if (searchSpinner) searchSpinner.style.display = 'inline-block';
+        if (searchInitialPlaceholder) searchInitialPlaceholder.style.display = 'none';
+        if (searchNoResults) searchNoResults.style.display = 'none';
+
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+
+            if (searchSpinner) searchSpinner.style.display = 'none';
+
+            if (data.status === 'success' && data.results && data.results.length > 0) {
+                renderSearchResults(data.results);
+            } else {
+                if (searchQueryHighlight) searchQueryHighlight.textContent = query;
+                if (searchNoResults) searchNoResults.style.display = 'flex';
+                if (searchResultsGrid) {
+                    searchResultsGrid.style.display = 'none';
+                    searchResultsGrid.innerHTML = '';
+                }
+            }
+        } catch (err) {
+            console.error('Global search error:', err);
+            if (searchSpinner) searchSpinner.style.display = 'none';
+            if (searchQueryHighlight) searchQueryHighlight.textContent = `Error: ${err.message}`;
+            if (searchNoResults) searchNoResults.style.display = 'flex';
+        }
+    };
+
+    if (modalSearchInput) {
+        modalSearchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounceTimeout);
+            searchDebounceTimeout = setTimeout(performSearch, 300);
+        });
+    }
+
+    const renderSearchResults = (results) => {
+        if (!searchResultsGrid) return;
+        searchResultsGrid.innerHTML = '';
+        searchResultsGrid.style.display = 'grid';
+
+        const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
+
+        results.forEach(file => {
+            const card = document.createElement('div');
+            card.className = 'search-result-card';
+            
+            const fileUrl = `/media/${encodeURIComponent(file.folder_name)}/${encodeURIComponent(file.filename)}`;
+            const isNative = file.ext === '.mp4' || file.ext === '.webm';
+            const useVLC = file.is_video && (!isNative || defaultPlayer === 'vlc');
+
+            let thumbHtml = '';
+            if (file.is_video) {
+                const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(file.folder_name)}/${encodeURIComponent(file.filename)}?t=${Date.now()}`;
+                thumbHtml = `
+                    <img src="${videoThumbUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${videoThumbUrl}&retry=' + Date.now(); }, 1500); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${file.filename}">
+                    <div class="video-placeholder" style="display:none; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);"><i class="fa-solid fa-circle-play" style="font-size: 2.2rem; color: rgba(255,255,255,0.7);"></i></div>
+                    <div class="video-play-indicator"><i class="fa-solid ${useVLC ? 'fa-laptop' : 'fa-circle-play'}"></i></div>
+                `;
+            } else {
+                thumbHtml = `<img src="${fileUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${fileUrl}&retry=' + Date.now(); }, 1000); }" alt="${file.filename}">`;
+            }
+
+            let progressHtml = '';
+            const progress = file.watch_progress || { playback_position: 0, duration: 0, is_completed: false, progress_percent: 0 };
+            
+            if (file.is_video) {
+                if (progress.is_completed) {
+                    progressHtml = `<span class="watch-badge watched" style="position: absolute; top: 8px; left: 8px; z-index: 5;" title="Watched"><i class="fa-solid fa-circle-check"></i> Watched</span>`;
+                } else if (progress.progress_percent > 0) {
+                    progressHtml = `
+                        <span class="watch-badge watching" style="position: absolute; top: 8px; left: 8px; z-index: 5;" title="In Progress"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>
+                        <div class="gallery-item-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;">
+                            <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                        </div>
+                    `;
+                }
+            }
+
+            card.innerHTML = `
+                <div class="thumbnail-container">
+                    ${thumbHtml}
+                    ${progressHtml}
+                </div>
+                <div class="card-details">
+                    <span class="filename-label" title="${file.filename}">${file.filename}</span>
+                    <button class="search-card-folder-badge" data-folder="${file.folder_name}" title="Open Folder">
+                        <i class="fa-solid fa-folder"></i> ${file.display_folder_name}
+                    </button>
+                </div>
+            `;
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.search-card-folder-badge')) {
+                    e.stopPropagation();
+                    return;
+                }
+                
+                closeSearchModal();
+                currentGalleryFolder = file.folder_name;
+                if (file.is_video) {
+                    if (useVLC) {
+                        playFileNatively(file.folder_name, file.filename);
+                    } else {
+                        playVideoInLightbox(fileUrl, file.filename);
+                    }
+                } else {
+                    showImageInLightbox(fileUrl, file.filename);
+                }
+            });
+
+            const folderBadge = card.querySelector('.search-card-folder-badge');
+            if (folderBadge) {
+                folderBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeSearchModal();
+                    
+                    const resultsTab = document.getElementById('btn-nav-results');
+                    if (resultsTab) {
+                        resultsTab.click();
+                    }
+                    
+                    setTimeout(() => {
+                        openGallery(file.folder_name);
+                    }, 150);
+                });
+            }
+
+            searchResultsGrid.appendChild(card);
+        });
+    };
+
+    loadRecentlyWatched();
 });
+

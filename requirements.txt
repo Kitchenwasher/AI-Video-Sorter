@@ -4,4 +4,10 @@ insightface
 onnxruntime-directml
 scikit-learn
 Flask
+Flask-SQLAlchemy
+psycopg2-binary
+celery
+redis
+tenacity
+flask-cors
 pytest

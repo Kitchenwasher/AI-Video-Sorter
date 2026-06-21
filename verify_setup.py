@@ -8,7 +8,7 @@ def print_result(name, success, message=""):
     return success
 
 def check_imports():
-    modules = ['flask', 'numpy', 'cv2', 'sklearn', 'sqlite3', 'insightface', 'onnxruntime']
+    modules = ['flask', 'numpy', 'cv2', 'sklearn', 'flask_sqlalchemy', 'psycopg2', 'tenacity', 'insightface', 'onnxruntime']
     all_success = True
     for m in modules:
         try:

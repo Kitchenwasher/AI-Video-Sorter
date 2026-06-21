@@ -1,57 +1,13 @@
-import sqlite3
 import os
 import json
 import numpy as np
 from utils.logger import logger
+from utils.models import db, ProcessedFile, Face, PersistentProfile
 
 class EmbeddingCache:
-    def __init__(self, cache_dir: str):
-        os.makedirs(cache_dir, exist_ok=True)
-        self.db_path = os.path.join(cache_dir, "face_embeddings_cache.db")
-        self._init_db()
-
-    def _init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Table for files
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS processed_files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_path TEXT UNIQUE,
-                file_type TEXT,
-                mtime REAL,
-                size INTEGER,
-                processed_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Table for faces
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS faces (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_id INTEGER,
-                frame_index INTEGER,
-                bbox_json TEXT,
-                gender TEXT,
-                gender_score REAL,
-                embedding_blob BLOB,
-                FOREIGN KEY (file_id) REFERENCES processed_files(id) ON DELETE CASCADE
-            )
-        ''')
-
-        # Table for persistent profiles
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS persistent_profiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                folder_name TEXT,
-                embedding_blob BLOB,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
+    def __init__(self, cache_dir: str = None):
+        # cache_dir is kept for signature compatibility with existing calls
+        pass
 
     def get_file_signature(self, file_path: str):
         try:
@@ -66,224 +22,230 @@ class EmbeddingCache:
         if mtime is None:
             return None
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, mtime, size FROM processed_files WHERE file_path = ?
-        ''', (file_path,))
-        row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
+        try:
+            processed_file = ProcessedFile.query.filter_by(file_path=file_path).first()
+            if not processed_file:
+                return None
+                
+            # Verify if file has changed
+            if abs(processed_file.mtime - mtime) > 0.01 or processed_file.size != size:
+                # File modified, delete old records
+                logger.info(f"File {file_path} changed, clearing cache.")
+                db.session.delete(processed_file)
+                db.session.commit()
+                return None
+                
+            # Retrieve faces
+            faces = []
+            for face in processed_file.faces:
+                bbox = json.loads(face.bbox_json)
+                embedding = np.frombuffer(face.embedding_blob, dtype=np.float32)
+                faces.append({
+                    'frame_index': face.frame_index,
+                    'bbox': bbox,
+                    'gender': face.gender,
+                    'gender_score': face.gender_score,
+                    'embedding': embedding
+                })
+                
+            return faces
+        except Exception as e:
+            logger.error(f"Failed to get cached faces for {file_path}: {e}")
             return None
-            
-        db_id, db_mtime, db_size = row
-        
-        # Verify if file has changed
-        if abs(db_mtime - mtime) > 0.01 or db_size != size:
-            # File modified, delete old records
-            logger.info(f"File {file_path} changed, clearing cache.")
-            cursor.execute("DELETE FROM processed_files WHERE id = ?", (db_id,))
-            conn.commit()
-            conn.close()
-            return None
-            
-        # Retrieve faces
-        cursor.execute('''
-            SELECT frame_index, bbox_json, gender, gender_score, embedding_blob FROM faces WHERE file_id = ?
-        ''', (db_id,))
-        rows = cursor.fetchall()
-        
-        faces = []
-        for frame_index, bbox_json, gender, gender_score, embedding_blob in rows:
-            bbox = json.loads(bbox_json)
-            embedding = np.frombuffer(embedding_blob, dtype=np.float32)
-            faces.append({
-                'frame_index': frame_index,
-                'bbox': bbox,
-                'gender': gender,
-                'gender_score': gender_score,
-                'embedding': embedding
-            })
-            
-        conn.close()
-        return faces
 
     def cache_faces(self, file_path: str, file_type: str, faces_data: list):
         mtime, size = self.get_file_signature(file_path)
         if mtime is None:
             return
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
         try:
             # Delete if exists
-            cursor.execute("DELETE FROM processed_files WHERE file_path = ?", (file_path,))
+            ProcessedFile.query.filter_by(file_path=file_path).delete()
+            db.session.commit()
             
             # Insert file
-            cursor.execute('''
-                INSERT INTO processed_files (file_path, file_type, mtime, size)
-                VALUES (?, ?, ?, ?)
-            ''', (file_path, file_type, mtime, size))
-            
-            file_id = cursor.lastrowid
+            processed_file = ProcessedFile(
+                file_path=file_path,
+                file_type=file_type,
+                mtime=mtime,
+                size=size
+            )
+            db.session.add(processed_file)
+            db.session.flush()  # Populate the ID for foreign keys
             
             # Insert faces
             for face in faces_data:
                 bbox_json = json.dumps(list(face['bbox']))
                 embedding_blob = face['embedding'].astype(np.float32).tobytes()
-                cursor.execute('''
-                    INSERT INTO faces (file_id, frame_index, bbox_json, gender, gender_score, embedding_blob)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (file_id, face['frame_index'], bbox_json, face['gender'], face['gender_score'], embedding_blob))
+                new_face = Face(
+                    file_id=processed_file.id,
+                    frame_index=face['frame_index'],
+                    bbox_json=bbox_json,
+                    gender=face['gender'],
+                    gender_score=face['gender_score'],
+                    embedding_blob=embedding_blob
+                )
+                db.session.add(new_face)
                 
-            conn.commit()
+            db.session.commit()
         except Exception as e:
             logger.error(f"Failed to cache faces for {file_path}: {e}")
-            conn.rollback()
-        finally:
-            conn.close()
+            db.session.rollback()
 
     def clear(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM faces")
-        cursor.execute("DELETE FROM processed_files")
-        conn.commit()
-        conn.close()
-        logger.info("Cache cleared.")
+        try:
+            Face.query.delete()
+            ProcessedFile.query.delete()
+            db.session.commit()
+            logger.info("Cache cleared.")
+        except Exception as e:
+            logger.error(f"Failed to clear cache: {e}")
+            db.session.rollback()
 
     def get_persistent_profiles(self) -> list:
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('''
-                SELECT id, folder_name, embedding_blob FROM persistent_profiles
-            ''')
-            rows = cursor.fetchall()
+            rows = PersistentProfile.query.all()
             profiles = []
-            for profile_id, folder_name, embedding_blob in rows:
-                embedding = np.frombuffer(embedding_blob, dtype=np.float32)
+            for row in rows:
+                embedding = np.frombuffer(row.embedding_blob, dtype=np.float32)
                 profiles.append({
-                    'profile_id': profile_id,
-                    'folder_name': folder_name,
+                    'profile_id': row.id,
+                    'folder_name': row.folder_name,
                     'embedding': embedding
                 })
             return profiles
-        except sqlite3.OperationalError:
+        except Exception as e:
+            logger.error(f"Failed to load persistent profiles: {e}")
             return []
-        finally:
-            conn.close()
 
     def update_profile_folder_name(self, profile_id: int, new_folder_name: str):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('''
-                UPDATE persistent_profiles 
-                SET folder_name = ?, last_updated = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (new_folder_name, profile_id))
-            conn.commit()
+            profile = PersistentProfile.query.get(profile_id)
+            if profile:
+                profile.folder_name = new_folder_name
+                db.session.commit()
         except Exception as e:
             logger.error(f"Failed to update profile folder name for ID {profile_id}: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
 
     def add_persistent_profile(self, folder_name: str, embedding: np.ndarray) -> int:
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         profile_id = -1
         try:
             embedding_blob = embedding.astype(np.float32).tobytes()
-            cursor.execute('''
-                INSERT INTO persistent_profiles (folder_name, embedding_blob)
-                VALUES (?, ?)
-            ''', (folder_name, embedding_blob))
-            conn.commit()
-            profile_id = cursor.lastrowid
+            profile = PersistentProfile(
+                folder_name=folder_name,
+                embedding_blob=embedding_blob
+            )
+            db.session.add(profile)
+            db.session.commit()
+            profile_id = profile.id
         except Exception as e:
             logger.error(f"Failed to add persistent profile for {folder_name}: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
         return profile_id
 
     def add_persistent_profile_with_id(self, profile_id: int, folder_name: str, embedding: np.ndarray):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
             embedding_blob = embedding.astype(np.float32).tobytes()
-            cursor.execute('''
-                INSERT OR REPLACE INTO persistent_profiles (id, folder_name, embedding_blob)
-                VALUES (?, ?, ?)
-            ''', (profile_id, folder_name, embedding_blob))
-            conn.commit()
+            profile = PersistentProfile.query.get(profile_id)
+            if profile:
+                profile.folder_name = folder_name
+                profile.embedding_blob = embedding_blob
+            else:
+                profile = PersistentProfile(
+                    id=profile_id,
+                    folder_name=folder_name,
+                    embedding_blob=embedding_blob
+                )
+                db.session.add(profile)
+            db.session.commit()
         except Exception as e:
             logger.error(f"Failed to insert persistent profile with ID {profile_id}: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
 
     def delete_persistent_profile(self, profile_id: int):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('DELETE FROM persistent_profiles WHERE id = ?', (profile_id,))
-            conn.commit()
+            profile = PersistentProfile.query.get(profile_id)
+            if profile:
+                db.session.delete(profile)
+                db.session.commit()
         except Exception as e:
             logger.error(f"Failed to delete persistent profile ID {profile_id}: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
+
+    def copy_file_cache(self, src_path: str, dest_path: str):
+        abs_src = os.path.abspath(src_path)
+        abs_dest = os.path.abspath(dest_path)
+        try:
+            pf = ProcessedFile.query.filter_by(file_path=abs_src).first()
+            if pf:
+                # Check if dest already exists
+                existing = ProcessedFile.query.filter_by(file_path=abs_dest).first()
+                if existing:
+                    db.session.delete(existing)
+                    db.session.commit()
+                
+                # Clone pf
+                new_pf = ProcessedFile(
+                    file_path=abs_dest,
+                    file_type=pf.file_type,
+                    mtime=pf.mtime,
+                    size=pf.size
+                )
+                db.session.add(new_pf)
+                db.session.flush()
+                
+                for face in pf.faces:
+                    new_face = Face(
+                        file_id=new_pf.id,
+                        frame_index=face.frame_index,
+                        bbox_json=face.bbox_json,
+                        gender=face.gender,
+                        gender_score=face.gender_score,
+                        embedding_blob=face.embedding_blob
+                    )
+                    db.session.add(new_face)
+                db.session.commit()
+                logger.info(f"DB copy cache: {abs_src} -> {abs_dest}")
+        except Exception as e:
+            logger.error(f"Failed to copy file cache in DB: {e}")
+            db.session.rollback()
 
     def update_file_path(self, old_path: str, new_path: str):
         abs_old = os.path.abspath(old_path)
         abs_new = os.path.abspath(new_path)
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('''
-                UPDATE processed_files 
-                SET file_path = ? 
-                WHERE file_path = ?
-            ''', (abs_new, abs_old))
-            conn.commit()
-            logger.info(f"DB update path: {abs_old} -> {abs_new}")
+            pf = ProcessedFile.query.filter_by(file_path=abs_old).first()
+            if pf:
+                pf.file_path = abs_new
+                db.session.commit()
+                logger.info(f"DB update path: {abs_old} -> {abs_new}")
         except Exception as e:
             logger.error(f"Failed to update file path in DB: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
 
     def update_folder_paths(self, old_folder_path: str, new_folder_path: str):
         abs_old_prefix = os.path.abspath(old_folder_path) + os.sep
         abs_new_prefix = os.path.abspath(new_folder_path) + os.sep
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('''
-                UPDATE processed_files 
-                SET file_path = REPLACE(file_path, ?, ?) 
-                WHERE file_path LIKE ?
-            ''', (abs_old_prefix, abs_new_prefix, abs_old_prefix + '%'))
-            conn.commit()
+            files_to_update = ProcessedFile.query.filter(
+                ProcessedFile.file_path.like(abs_old_prefix + '%')
+            ).all()
+            for pf in files_to_update:
+                pf.file_path = pf.file_path.replace(abs_old_prefix, abs_new_prefix)
+            db.session.commit()
             logger.info(f"DB update folder paths: {abs_old_prefix} -> {abs_new_prefix}")
         except Exception as e:
             logger.error(f"Failed to update folder paths in DB: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()
 
     def update_profile_folder_name_by_old_name(self, old_folder_name: str, new_folder_name: str):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         try:
-            cursor.execute('''
-                UPDATE persistent_profiles 
-                SET folder_name = ?, last_updated = CURRENT_TIMESTAMP
-                WHERE folder_name = ?
-            ''', (new_folder_name, old_folder_name))
-            conn.commit()
+            profiles = PersistentProfile.query.filter_by(folder_name=old_folder_name).all()
+            for profile in profiles:
+                profile.folder_name = new_folder_name
+            db.session.commit()
             logger.info(f"DB update profile folder name: {old_folder_name} -> {new_folder_name}")
         except Exception as e:
             logger.error(f"Failed to update profile folder name for {old_folder_name} -> {new_folder_name}: {e}")
-        finally:
-            conn.close()
+            db.session.rollback()

@@ -6,6 +6,7 @@ import difflib
 import requests
 import subprocess
 from bs4 import BeautifulSoup
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from utils.logger import logger
 from utils.cache import EmbeddingCache
 
@@ -137,6 +138,20 @@ class FilenameParser:
         return best_candidate, confidence
 
 
+def is_retryable_exception(exception):
+    # Retry on requests connection/timeout errors
+    if isinstance(exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        logger.warning(f"Connection/Timeout exception encountered: {exception}. Retrying...")
+        return True
+    # Retry on HTTP 429 or 5xx server errors
+    if isinstance(exception, requests.exceptions.HTTPError):
+        status_code = exception.response.status_code
+        if status_code == 429 or 500 <= status_code < 600:
+            logger.warning(f"HTTP status {status_code} encountered. Retrying...")
+            return True
+    return False
+
+
 class ReverseImageSearcher:
     """
     Identifies faces visually by performing reverse image search.
@@ -146,6 +161,17 @@ class ReverseImageSearcher:
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
+
+    @retry(
+        retry=retry_if_exception(is_retryable_exception),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=32),
+        reraise=True
+    )
+    def _send_request_with_retry(self, method, url, **kwargs):
+        response = self.session.request(method, url, **kwargs)
+        response.raise_for_status()
+        return response
 
     def search_yandex(self, image_path: str) -> list:
         """
@@ -162,27 +188,19 @@ class ReverseImageSearcher:
         try:
             with open(image_path, 'rb') as f:
                 files = {'upfile': ('blob', f, 'image/jpeg')}
-                response = self.session.post(search_url, params=params, files=files, timeout=15)
-                
-            if response.status_code != 200:
-                logger.warning(f"Yandex POST upload returned status {response.status_code}")
-                return []
+                response = self._send_request_with_retry('POST', search_url, params=params, files=files, timeout=15)
                 
             data = response.json()
             cbir_id = data['blocks'][0]['params']['cbirId']
             
             # Fetch results page
             results_url = f"https://yandex.com/images/search?cbir_id={cbir_id}&rpt=imageview"
-            res = self.session.get(results_url, timeout=15)
+            res = self._send_request_with_retry('GET', results_url, timeout=15)
             
-            if res.status_code != 200:
-                logger.warning(f"Yandex GET results returned status {res.status_code}")
-                return []
-                
             return self.parse_yandex_html(res.text)
             
         except Exception as e:
-            logger.error(f"Yandex search exception: {e}")
+            logger.error(f"Yandex search failed after retries: {e}")
             return []
 
     def parse_yandex_html(self, html: str) -> list:
