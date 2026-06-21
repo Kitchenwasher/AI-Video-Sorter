@@ -33,6 +33,8 @@ NON_NAME_WORDS = {
     'original', 'size', 'kb', 'mb', 'gb', 'resolution', 'photo', 'photos', 'wallpapers', 
     'wallpaper', 'pics', 'pic', 'actress', 'model', 'star', 'pornstar', 'channel', 'playlist',
     'youtube', 'tiktok', 'instagram', 'twitter', 'facebook', 'social', 'media', 'profile',
+    'pin', 'di', 'mail', 'ru', 'let', 'sporn', 'porrfilm', 'spankbang', 'eyeshadow', 'fuji', 
+    'mug', 'it', 'two', 'sock', 'stark', 'frida', 'metart', 'bible',
     
     # Common English prepositions, pronouns and small junk words
     'in', 'on', 'at', 'of', 'to', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 
@@ -359,8 +361,8 @@ class NameResolver:
                 # Highest confidence when both agree
                 return search_name, 0.95, f"Cross-Referenced ({search_source} & Filename)"
             else:
-                # Disagreement: prefer the one with higher confidence
-                if search_conf > file_conf:
+                # Disagreement: prefer search name only if it has high confidence, otherwise prefer filename
+                if search_conf >= 0.7 and search_conf > file_conf:
                     return search_name, search_conf - 0.1, f"{search_source} (Filename disagreed: {file_name})"
                 else:
                     return file_name, file_conf - 0.1, f"Filename (Search disagreed: {search_name})"
@@ -576,3 +578,130 @@ class NameResolver:
         import shutil
         shutil.rmtree(src_path)
         logger.info(f"Merged folder {old_folder_name} into {new_folder_name} and deleted source folder.")
+
+
+def merge_folders_manual(output_dir: str, folder_names: list, target_name: str = None) -> dict:
+    """
+    Manually merge multiple sorted folders into one.
+    
+    Args:
+        output_dir: The base output directory containing all sorted folders.
+        folder_names: List of folder names to merge (e.g. ['female_003', 'female_010']).
+        target_name: Optional name for the merged folder. If not provided, uses the first folder.
+    
+    Returns:
+        dict with merge results.
+    """
+    import shutil
+    
+    if len(folder_names) < 2:
+        return {'status': 'error', 'message': 'Need at least 2 folders to merge.'}
+    
+    # Validate all folders exist
+    valid_folders = []
+    for name in folder_names:
+        path = os.path.join(output_dir, name)
+        if os.path.isdir(path):
+            valid_folders.append(name)
+        else:
+            logger.warning(f"Merge: folder '{name}' not found in output directory, skipping.")
+    
+    if len(valid_folders) < 2:
+        return {'status': 'error', 'message': 'Less than 2 valid folders found after validation.'}
+    
+    # Determine target folder
+    if target_name:
+        dest_name = target_name
+    else:
+        dest_name = valid_folders[0]
+    
+    dest_path = os.path.join(output_dir, dest_name)
+    
+    # If target_name is new and doesn't exist, rename the first source folder to it
+    first_src = os.path.join(output_dir, valid_folders[0])
+    if target_name and not os.path.exists(dest_path):
+        shutil.move(first_src, dest_path)
+        logger.info(f"Renamed {valid_folders[0]} -> {dest_name}")
+        sources_to_merge = valid_folders[1:]
+    elif target_name and os.path.exists(dest_path) and dest_name not in valid_folders:
+        # Target already exists but wasn't in our merge list, merge everything into it
+        sources_to_merge = valid_folders
+    else:
+        sources_to_merge = [f for f in valid_folders if f != dest_name]
+    
+    merged_count = 0
+    moved_files = []
+    deleted_folders = []
+    
+    for src_name in sources_to_merge:
+        src_path = os.path.join(output_dir, src_name)
+        if not os.path.exists(src_path):
+            continue
+        
+        # Move all non-metadata files
+        for item in os.listdir(src_path):
+            src_item = os.path.join(src_path, item)
+            
+            if item.startswith('_'):
+                continue
+            
+            if os.path.isfile(src_item):
+                dest_item = os.path.join(dest_path, item)
+                if os.path.exists(dest_item):
+                    base, ext = os.path.splitext(item)
+                    counter = 1
+                    while os.path.exists(os.path.join(dest_path, f"{base}_{counter}{ext}")):
+                        counter += 1
+                    dest_item = os.path.join(dest_path, f"{base}_{counter}{ext}")
+                shutil.move(src_item, dest_item)
+                moved_files.append(os.path.basename(dest_item))
+                merged_count += 1
+        
+        # Delete the source profile from SQLite DB
+        profile_json = os.path.join(src_path, '_profile_embedding.json')
+        if os.path.exists(profile_json):
+            try:
+                with open(profile_json, 'r') as f:
+                    data = json.load(f)
+                profile_id = data.get('profile_id')
+                if profile_id is not None:
+                    cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
+                    if not os.path.isdir(cache_dir):
+                        cache_dir = os.path.join(output_dir, '..', '.cache')
+                    cache = EmbeddingCache(cache_dir)
+                    cache.delete_persistent_profile(int(profile_id))
+                    logger.info(f"Deleted persistent profile ID {profile_id} for merged folder {src_name}")
+            except Exception as e:
+                logger.error(f"Failed to clean up profile for {src_name}: {e}")
+        
+        # Remove source folder
+        shutil.rmtree(src_path)
+        deleted_folders.append(src_name)
+        logger.info(f"Merged {src_name} into {dest_name} ({merged_count} files moved so far)")
+    
+    # Update the target folder's profile JSON
+    target_profile_json = os.path.join(dest_path, '_profile_embedding.json')
+    if os.path.exists(target_profile_json) and target_name and target_name != valid_folders[0]:
+        try:
+            with open(target_profile_json, 'r') as f:
+                data = json.load(f)
+            data['folder_name'] = dest_name
+            profile_id = data.get('profile_id')
+            with open(target_profile_json, 'w') as f:
+                json.dump(data, f, indent=4)
+            if profile_id is not None:
+                cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
+                if not os.path.isdir(cache_dir):
+                    cache_dir = os.path.join(output_dir, '..', '.cache')
+                cache = EmbeddingCache(cache_dir)
+                cache.update_profile_folder_name(int(profile_id), dest_name)
+        except Exception as e:
+            logger.error(f"Failed to update target profile JSON: {e}")
+    
+    return {
+        'status': 'success',
+        'target_folder': dest_name,
+        'merged_folders': deleted_folders,
+        'files_moved': merged_count,
+        'moved_files': moved_files
+    }

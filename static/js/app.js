@@ -434,4 +434,218 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     checkInitialStatus();
+
+    // ===== MERGE FOLDERS FEATURE =====
+    const mergeModal = document.getElementById('merge-modal');
+    const mergeModalClose = document.getElementById('merge-modal-close');
+    const mergeFolderGrid = document.getElementById('merge-folder-grid');
+    const mergeSelectedCount = document.getElementById('merge-selected-count');
+    const btnExecuteMerge = document.getElementById('btn-execute-merge');
+    const btnMergeFolders = document.getElementById('btn-merge-folders');
+    const mergeTargetName = document.getElementById('merge-target-name');
+
+    const jsonMergeModal = document.getElementById('json-merge-modal');
+    const jsonMergeModalClose = document.getElementById('json-merge-modal-close');
+    const btnJsonMergeBack = document.getElementById('btn-json-merge-back');
+    const btnJsonMergeExec = document.getElementById('btn-json-merge-exec');
+    const jsonMergeInput = document.getElementById('json-merge-input');
+
+    let mergeSelectedFolders = new Set();
+
+    // Open merge modal
+    btnMergeFolders.addEventListener('click', async () => {
+        mergeSelectedFolders.clear();
+        mergeTargetName.value = '';
+        updateMergeCount();
+        mergeModal.classList.add('active');
+        await loadMergeFolders();
+    });
+
+    // Close merge modal
+    mergeModalClose.addEventListener('click', () => {
+        mergeModal.classList.remove('active');
+    });
+    mergeModal.addEventListener('click', (e) => {
+        if (e.target === mergeModal) mergeModal.classList.remove('active');
+    });
+
+    // Load folders into the merge grid
+    async function loadMergeFolders() {
+        mergeFolderGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folders...</p>';
+        try {
+            const res = await fetch('/api/list-folders');
+            const data = await res.json();
+            mergeFolderGrid.innerHTML = '';
+
+            if (!data.folders || data.folders.length === 0) {
+                mergeFolderGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">No sorted folders found.</p>';
+                return;
+            }
+
+            data.folders.forEach(folder => {
+                const card = document.createElement('div');
+                card.className = 'merge-folder-card';
+                card.dataset.folderName = folder.name;
+
+                const imgUrl = `/api/thumbnail/${folder.name}?t=${Date.now()}`;
+                const thumbHtml = folder.has_thumbnail
+                    ? `<img src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="${folder.name}"><div class="merge-no-img" style="display:none;"><i class="fa-solid fa-user"></i></div>`
+                    : `<div class="merge-no-img"><i class="fa-solid fa-user"></i></div>`;
+
+                card.innerHTML = `
+                    <div class="merge-check"><i class="fa-solid fa-check"></i></div>
+                    <div class="merge-thumb">${thumbHtml}</div>
+                    <div class="merge-card-info">
+                        <span class="merge-card-name">${folder.name.replace(/_/g, ' ')}</span>
+                        <span class="merge-card-count">${folder.file_count} files</span>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    if (mergeSelectedFolders.has(folder.name)) {
+                        mergeSelectedFolders.delete(folder.name);
+                        card.classList.remove('selected');
+                    } else {
+                        mergeSelectedFolders.add(folder.name);
+                        card.classList.add('selected');
+                    }
+                    updateMergeCount();
+                });
+
+                mergeFolderGrid.appendChild(card);
+            });
+        } catch (err) {
+            mergeFolderGrid.innerHTML = `<p style="color: #ff6b6b; grid-column: 1/-1; text-align: center;">Failed to load folders: ${err.message}</p>`;
+        }
+    }
+
+    function updateMergeCount() {
+        const count = mergeSelectedFolders.size;
+        mergeSelectedCount.textContent = count;
+        btnExecuteMerge.disabled = count < 2;
+    }
+
+    // Execute merge
+    btnExecuteMerge.addEventListener('click', async () => {
+        if (mergeSelectedFolders.size < 2) return;
+
+        const folders = Array.from(mergeSelectedFolders);
+        const targetName = mergeTargetName.value.trim() || null;
+
+        if (!confirm(`Merge ${folders.length} folders${targetName ? ' into "' + targetName + '"' : ''}? This will move all files and delete source folders.`)) {
+            return;
+        }
+
+        btnExecuteMerge.disabled = true;
+        btnExecuteMerge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Merging...';
+
+        try {
+            const res = await fetch('/api/merge-folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folders, target_name: targetName })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                alert(`Merge complete! ${data.files_moved} files moved to "${data.target_folder}". Deleted folders: ${data.merged_folders.join(', ')}`);
+                mergeModal.classList.remove('active');
+                appendLog('info', `Merged ${data.merged_folders.length} folders into "${data.target_folder}" (${data.files_moved} files moved)`);
+            } else {
+                alert(`Merge failed: ${data.message}`);
+                appendLog('error', `Merge failed: ${data.message}`);
+            }
+        } catch (err) {
+            alert(`Merge error: ${err.message}`);
+            appendLog('error', `Merge error: ${err.message}`);
+        } finally {
+            btnExecuteMerge.disabled = false;
+            btnExecuteMerge.innerHTML = '<i class="fa-solid fa-merge"></i> Merge Selected';
+        }
+    });
+
+    // JSON Merge - open from merge modal footer (use keyboard shortcut or a link)
+    // Add a small "or use JSON" link inside merge modal footer
+    const mergeFooter = document.querySelector('#merge-modal .modal-footer');
+    const jsonLink = document.createElement('a');
+    jsonLink.href = '#';
+    jsonLink.style.cssText = 'color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; cursor: pointer;';
+    jsonLink.textContent = 'or paste JSON';
+    jsonLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        mergeModal.classList.remove('active');
+        jsonMergeModal.classList.add('active');
+    });
+    mergeFooter.insertBefore(jsonLink, mergeFooter.lastElementChild);
+
+    // JSON merge modal controls
+    jsonMergeModalClose.addEventListener('click', () => {
+        jsonMergeModal.classList.remove('active');
+    });
+    jsonMergeModal.addEventListener('click', (e) => {
+        if (e.target === jsonMergeModal) jsonMergeModal.classList.remove('active');
+    });
+    btnJsonMergeBack.addEventListener('click', () => {
+        jsonMergeModal.classList.remove('active');
+        mergeModal.classList.add('active');
+    });
+
+    btnJsonMergeExec.addEventListener('click', async () => {
+        const raw = jsonMergeInput.value.trim();
+        if (!raw) {
+            alert('Please paste a JSON array or object.');
+            return;
+        }
+
+        let payload;
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                payload = { folders: parsed, target_name: null };
+            } else if (parsed.folders && Array.isArray(parsed.folders)) {
+                payload = { folders: parsed.folders, target_name: parsed.target_name || null };
+            } else {
+                alert('Invalid JSON format. Use an array of folder names or {folders: [...], target_name: "..."}');
+                return;
+            }
+        } catch (e) {
+            alert('Invalid JSON: ' + e.message);
+            return;
+        }
+
+        if (payload.folders.length < 2) {
+            alert('Need at least 2 folder names to merge.');
+            return;
+        }
+
+        if (!confirm(`Merge ${payload.folders.length} folders${payload.target_name ? ' into "' + payload.target_name + '"' : ''}?`)) {
+            return;
+        }
+
+        btnJsonMergeExec.disabled = true;
+        btnJsonMergeExec.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Merging...';
+
+        try {
+            const res = await fetch('/api/merge-folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                alert(`Merge complete! ${data.files_moved} files moved to "${data.target_folder}".`);
+                jsonMergeModal.classList.remove('active');
+                jsonMergeInput.value = '';
+                appendLog('info', `JSON Merge: ${data.merged_folders.length} folders into "${data.target_folder}" (${data.files_moved} files)`);
+            } else {
+                alert(`Merge failed: ${data.message}`);
+            }
+        } catch (err) {
+            alert(`Merge error: ${err.message}`);
+        } finally {
+            btnJsonMergeExec.disabled = false;
+            btnJsonMergeExec.innerHTML = '<i class="fa-solid fa-play"></i> Execute Merge';
+        }
+    });
 });

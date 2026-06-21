@@ -352,9 +352,14 @@
                             <h3 id="library-count-title">No library processed yet</h3>
                             <p class="results-info-text">Folders contain reference crops. Check them below.</p>
                         </div>
-                        <button class="btn btn-secondary" id="btn-manual-auto-name">
-                            <i class="fa-solid fa-tags"></i> Auto-Name Folders
-                        </button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" id="btn-merge-folders">
+                                <i class="fa-solid fa-object-group"></i> Merge Folders
+                            </button>
+                            <button class="btn btn-secondary" id="btn-manual-auto-name">
+                                <i class="fa-solid fa-tags"></i> Auto-Name Folders
+                            </button>
+                        </div>
                     </div>
 
                     <div class="library-grid" id="library-grid">
@@ -366,6 +371,55 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Merge Folders Modal -->
+    <div class="modal-overlay" id="merge-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-object-group" style="color: var(--color-primary); margin-right: 0.5rem;"></i>Merge Folders</h3>
+                <button class="modal-close-btn" id="merge-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="merge-instructions">
+                    Select 2 or more folders that contain the same person to merge them into one. 
+                    All media files will be moved to the target folder and the source folders will be deleted.
+                </p>
+                <div class="merge-target-row">
+                    <label for="merge-target-name"><i class="fa-solid fa-folder"></i> Target Folder Name:</label>
+                    <input type="text" id="merge-target-name" placeholder="Leave empty to use first selected folder's name">
+                </div>
+                <div class="merge-folder-grid" id="merge-folder-grid">
+                    <p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">Loading folders...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="merge-selection-count"><strong id="merge-selected-count">0</strong> folders selected</span>
+                <button class="btn btn-primary" id="btn-execute-merge" disabled>
+                    <i class="fa-solid fa-merge"></i> Merge Selected
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Merge Modal -->
+    <div class="modal-overlay" id="json-merge-modal">
+        <div class="modal-box" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-code" style="color: var(--color-accent); margin-right: 0.5rem;"></i>Merge via JSON</h3>
+                <button class="modal-close-btn" id="json-merge-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="merge-instructions">
+                    Paste a JSON array of folder names to merge, or a JSON object with <code>folders</code> and optional <code>target_name</code>.
+                </p>
+                <textarea id="json-merge-input" style="width: 100%; min-height: 150px; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-glass); background: var(--bg-input); color: var(--text-primary); font-family: 'Courier New', monospace; font-size: 0.88rem; resize: vertical;" placeholder='["female_003", "female_010"]&#10;&#10;or&#10;&#10;{"folders": ["female_003", "female_010"], "target_name": "Areta Ridera"}'></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-json-merge-back"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                <button class="btn btn-primary" id="btn-json-merge-exec"><i class="fa-solid fa-play"></i> Execute Merge</button>
+            </div>
+        </div>
     </div>
     
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

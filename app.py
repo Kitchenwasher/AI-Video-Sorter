@@ -5,6 +5,7 @@ import time
 from flask import Flask, render_template, jsonify, request, Response, send_from_directory
 from config import Config
 from pipeline import SortingPipeline
+from modules.name_resolver import merge_folders_manual
 from utils.logger import logger, ui_log_handler
 
 app = Flask(__name__)
@@ -292,6 +293,47 @@ def clear_cache():
         return jsonify({'status': 'success', 'message': 'Embedding cache cleared successfully.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f"Failed to clear cache: {str(e)}"}), 500
+
+@app.route('/api/list-folders', methods=['GET'])
+def list_folders():
+    """Lists all sorted folders in the output directory with their file counts."""
+    output_dir = current_config.output_dir
+    if not os.path.exists(output_dir):
+        return jsonify({'folders': []})
+    
+    folders = []
+    for name in sorted(os.listdir(output_dir)):
+        folder_path = os.path.join(output_dir, name)
+        if os.path.isdir(folder_path) and not name.startswith('.'):
+            file_count = len([f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')])
+            has_thumbnail = os.path.exists(os.path.join(folder_path, '_reference_face.jpg'))
+            folders.append({
+                'name': name,
+                'file_count': file_count,
+                'has_thumbnail': has_thumbnail
+            })
+    
+    return jsonify({'folders': folders})
+
+@app.route('/api/merge-folders', methods=['POST'])
+def merge_folders():
+    """Manually merge selected folders into one."""
+    data = request.json
+    if not data:
+        return jsonify({'status': 'error', 'message': 'No data provided.'}), 400
+    
+    folder_names = data.get('folders', [])
+    target_name = data.get('target_name', None)
+    
+    if not folder_names or len(folder_names) < 2:
+        return jsonify({'status': 'error', 'message': 'Please select at least 2 folders to merge.'}), 400
+    
+    try:
+        result = merge_folders_manual(current_config.output_dir, folder_names, target_name)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Merge error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/thumbnail/<cluster_folder>')
 def get_thumbnail(cluster_folder):

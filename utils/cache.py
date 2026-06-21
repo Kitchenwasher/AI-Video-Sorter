@@ -224,3 +224,14 @@ class EmbeddingCache:
             logger.error(f"Failed to insert persistent profile with ID {profile_id}: {e}")
         finally:
             conn.close()
+
+    def delete_persistent_profile(self, profile_id: int):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM persistent_profiles WHERE id = ?', (profile_id,))
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to delete persistent profile ID {profile_id}: {e}")
+        finally:
+            conn.close()
