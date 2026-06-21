@@ -57,6 +57,7 @@ def load_settings():
                     prefer_popular_identities=data.get('prefer_popular_identities', False),
                     extraction_percent=data.get('extraction_percent', 100),
                     auto_name_folders=data.get('auto_name_folders', False),
+                    only_name_unnamed=data.get('only_name_unnamed', True),
                     name_confidence_threshold=data.get('name_confidence_threshold', 0.5),
                     name_search_delay=data.get('name_search_delay', 4.0),
                     merge_on_name_conflict=data.get('merge_on_name_conflict', False),
@@ -86,6 +87,7 @@ def save_settings(config_obj):
             'prefer_popular_identities': config_obj.prefer_popular_identities,
             'extraction_percent': config_obj.extraction_percent,
             'auto_name_folders': config_obj.auto_name_folders,
+            'only_name_unnamed': config_obj.only_name_unnamed,
             'name_confidence_threshold': config_obj.name_confidence_threshold,
             'name_search_delay': config_obj.name_search_delay,
             'merge_on_name_conflict': config_obj.merge_on_name_conflict,
@@ -186,6 +188,7 @@ def handle_config():
         current_config.prefer_popular_identities = bool(data.get('prefer_popular_identities', current_config.prefer_popular_identities))
         current_config.extraction_percent = int(data.get('extraction_percent', current_config.extraction_percent))
         current_config.auto_name_folders = bool(data.get('auto_name_folders', current_config.auto_name_folders))
+        current_config.only_name_unnamed = bool(data.get('only_name_unnamed', current_config.only_name_unnamed))
         current_config.name_confidence_threshold = float(data.get('name_confidence_threshold', current_config.name_confidence_threshold))
         current_config.name_search_delay = float(data.get('name_search_delay', current_config.name_search_delay))
         current_config.merge_on_name_conflict = bool(data.get('merge_on_name_conflict', current_config.merge_on_name_conflict))
@@ -213,6 +216,7 @@ def handle_config():
             'prefer_popular_identities': current_config.prefer_popular_identities,
             'extraction_percent': current_config.extraction_percent,
             'auto_name_folders': current_config.auto_name_folders,
+            'only_name_unnamed': current_config.only_name_unnamed,
             'name_confidence_threshold': current_config.name_confidence_threshold,
             'name_search_delay': current_config.name_search_delay,
             'merge_on_name_conflict': current_config.merge_on_name_conflict,
@@ -511,6 +515,136 @@ def stream_progress():
                 time.sleep(0.3)
                 
     return Response(event_stream(), mimetype="text/event-stream")
+
+@app.route('/api/move-media', methods=['POST'])
+def move_media():
+    """Moves a media file physically and updates sqlite caching registry."""
+    data = request.json
+    from_folder = data.get('from_folder')
+    to_folder = data.get('to_folder')
+    filename = data.get('filename')
+    
+    if not from_folder or not to_folder or not filename:
+        return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
+        
+    # Prevent path traversal
+    if '..' in from_folder or '/' in from_folder or '\\' in from_folder or \
+       '..' in to_folder or '/' in to_folder or '\\' in to_folder or \
+       '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'status': 'error', 'message': 'Invalid paths'}), 400
+        
+    src_dir = os.path.join(current_config.output_dir, from_folder)
+    dest_dir = os.path.join(current_config.output_dir, to_folder)
+    src_file = os.path.join(src_dir, filename)
+    dest_file = os.path.join(dest_dir, filename)
+    
+    if not os.path.exists(src_file):
+        return jsonify({'status': 'error', 'message': f'Source file not found: {filename}'}), 404
+    if not os.path.exists(dest_dir):
+        return jsonify({'status': 'error', 'message': f'Target folder not found: {to_folder}'}), 404
+        
+    try:
+        import sqlite3
+        # Move the physical file
+        os.rename(src_file, dest_file)
+        logger.info(f"Moved physical file: {src_file} -> {dest_file}")
+        
+        # Update cache paths
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        from utils.cache import EmbeddingCache
+        cache_db = EmbeddingCache(cache_dir)
+        
+        # file_path in DB is absolute path: os.path.abspath(src_file)
+        abs_src_path = os.path.abspath(src_file)
+        abs_dest_path = os.path.abspath(dest_file)
+        
+        cache_db.update_file_path(abs_src_path, abs_dest_path)
+        logger.info(f"Updated SQLite cache for path: {abs_src_path} -> {abs_dest_path}")
+        
+        # Check if source folder is now empty (ignoring hidden/metadata files)
+        remaining_files = [f for f in os.listdir(src_dir) if not f.startswith('_')]
+        if len(remaining_files) == 0:
+            # Delete reference files and the folder itself
+            profile_json_path = os.path.join(src_dir, '_profile_embedding.json')
+            if os.path.exists(profile_json_path):
+                try:
+                    with open(profile_json_path, 'r') as f:
+                        profile_data = json.load(f)
+                        profile_id = profile_data.get('profile_id')
+                        if profile_id is not None:
+                            cache_db.delete_persistent_profile(profile_id)
+                            logger.info(f"Deleted empty profile ID {profile_id} from SQLite DB.")
+                except Exception as e:
+                    logger.error(f"Error deleting persistent profile: {e}")
+            
+            # Remove all files in the directory (like _reference_face.jpg, etc.)
+            for f in os.listdir(src_dir):
+                try:
+                    os.remove(os.path.join(src_dir, f))
+                except Exception as e:
+                    logger.error(f"Error removing reference file: {e}")
+            try:
+                os.rmdir(src_dir)
+                logger.info(f"Removed empty folder: {from_folder}")
+            except Exception as e:
+                logger.error(f"Error removing directory: {e}")
+                
+        return jsonify({'status': 'success', 'message': 'Media moved successfully.'})
+    except Exception as e:
+        logger.error(f"Error moving media file: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/rename-folder', methods=['POST'])
+def rename_folder():
+    """Renames a face cluster directory physically and updates cache database mappings."""
+    data = request.json
+    old_name = data.get('old_name')
+    new_name = data.get('new_name')
+    
+    if not old_name or not new_name:
+        return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
+        
+    # Prevent path traversal and invalid characters
+    if '..' in old_name or '/' in old_name or '\\' in old_name or \
+       '..' in new_name or '/' in new_name or '\\' in new_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    # Trim and strip to be clean
+    old_name = old_name.strip()
+    new_name = new_name.strip()
+    
+    if old_name == new_name:
+        return jsonify({'status': 'success', 'message': 'No changes needed.'})
+        
+    src_dir = os.path.join(current_config.output_dir, old_name)
+    dest_dir = os.path.join(current_config.output_dir, new_name)
+    
+    if not os.path.exists(src_dir):
+        return jsonify({'status': 'error', 'message': f'Folder not found: {old_name}'}), 404
+    if os.path.exists(dest_dir):
+        return jsonify({'status': 'error', 'message': f'Target folder already exists: {new_name}'}), 409
+        
+    try:
+        import sqlite3
+        # Rename the folder on disk
+        os.rename(src_dir, dest_dir)
+        logger.info(f"Renamed folder on disk: {src_dir} -> {dest_dir}")
+        
+        # Connect to DB and update paths and folder name references
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        from utils.cache import EmbeddingCache
+        cache_db = EmbeddingCache(cache_dir)
+        
+        cache_db.update_folder_paths(src_dir, dest_dir)
+        cache_db.update_profile_folder_name_by_old_name(old_name, new_name)
+        logger.info(f"Updated SQLite references for folder rename: {old_name} -> {new_name}")
+        
+        return jsonify({'status': 'success', 'message': 'Folder renamed successfully.'})
+    except Exception as e:
+        logger.error(f"Error renaming folder: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 if __name__ == '__main__':
     logger.info("Starting Face Sorter Web Interface...")

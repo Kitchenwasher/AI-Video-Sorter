@@ -375,7 +375,7 @@ class NameResolver:
             
         return None, 0.0, "None"
 
-    def resolve_all_folders(self, output_dir: str, progress_cb=None) -> dict:
+    def resolve_all_folders(self, output_dir: str, progress_cb=None, only_unnamed: bool = True) -> dict:
         """
         Scans all folders in the output directory, resolves names, and renames folders.
         Handles conflicts (merging vs keeping separate).
@@ -391,6 +391,10 @@ class NameResolver:
         conflict_map = {}
         
         folders = [f for f in folders if not (f.startswith('_') or f.startswith('.'))]
+        if only_unnamed:
+            import re
+            folders = [f for f in folders if re.match(r'^female_\d+$', f, re.IGNORECASE)]
+            
         total = len(folders)
         for idx, folder in enumerate(folders):
             folder_path = os.path.join(output_dir, folder)
@@ -540,11 +544,24 @@ class NameResolver:
                 logger.error(f"Failed to update metadata JSON folder name: {e}")
                 
         # 3. Update SQLite Database cache registry
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(src_path)), ".cache")
+        if not os.path.isdir(cache_dir):
+            cache_dir = os.path.abspath(os.path.join(os.path.dirname(src_path), "..", "..", ".cache"))
+            
+        cache = EmbeddingCache(cache_dir)
+        
+        # Update all processed files in that folder
+        try:
+            cache.update_folder_paths(src_path, dest_path)
+        except Exception as e:
+            logger.error(f"Failed to update SQLite paths on auto-rename: {e}")
+            
         if profile_id is not None:
-            cache_dir = os.path.join(os.path.dirname(os.path.dirname(src_path)), ".cache")
-            cache = EmbeddingCache(cache_dir)
-            cache.update_profile_folder_name(int(profile_id), new_folder_name)
-            logger.info(f"Updated profile registry database for ID {profile_id} -> {new_folder_name}")
+            try:
+                cache.update_profile_folder_name(int(profile_id), new_folder_name)
+                logger.info(f"Updated profile registry database for ID {profile_id} -> {new_folder_name}")
+            except Exception as e:
+                logger.error(f"Failed to update profile folder name: {e}")
 
     def _merge_folders(self, src_path: str, dest_path: str):
         """
@@ -554,6 +571,25 @@ class NameResolver:
         old_folder_name = os.path.basename(src_path)
         new_folder_name = os.path.basename(dest_path)
         
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(src_path)), ".cache")
+        if not os.path.isdir(cache_dir):
+            cache_dir = os.path.abspath(os.path.join(os.path.dirname(src_path), "..", "..", ".cache"))
+            
+        cache = EmbeddingCache(cache_dir)
+        
+        # Delete source profile from SQLite DB before merging
+        profile_json = os.path.join(src_path, '_profile_embedding.json')
+        if os.path.exists(profile_json):
+            try:
+                with open(profile_json, 'r') as f:
+                    data = json.load(f)
+                profile_id = data.get('profile_id')
+                if profile_id is not None:
+                    cache.delete_persistent_profile(int(profile_id))
+                    logger.info(f"Deleted persistent profile ID {profile_id} for merged folder {old_folder_name}")
+            except Exception as e:
+                logger.error(f"Failed to delete persistent profile for {old_folder_name}: {e}")
+
         # Move files
         for item in os.listdir(src_path):
             src_item = os.path.join(src_path, item)
@@ -573,6 +609,12 @@ class NameResolver:
                     dest_item = os.path.join(dest_path, f"{base}_{counter}{ext}")
                 import shutil
                 shutil.move(src_item, dest_item)
+                
+                # Update SQLite path for this moved file
+                try:
+                    cache.update_file_path(src_item, dest_item)
+                except Exception as e:
+                    logger.error(f"Failed to update SQLite cache for merged file: {src_item} -> {dest_item}: {e}")
                 
         # Delete source folder
         import shutil
@@ -623,6 +665,9 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
     cache_dir = os.path.join(os.path.dirname(output_dir), '.cache')
     if not os.path.isdir(cache_dir):
         cache_dir = os.path.abspath(os.path.join(output_dir, '..', '.cache'))
+        
+    from utils.cache import EmbeddingCache
+    cache = EmbeddingCache(cache_dir)
     
     # Step 1: Collect all embeddings from all folders being merged
     all_embeddings = []
@@ -661,6 +706,10 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
         shutil.move(first_src, dest_path)
         logger.info(f"Renamed {valid_folders[0]} -> {dest_name}")
         sources_to_merge = valid_folders[1:]
+        try:
+            cache.update_folder_paths(first_src, dest_path)
+        except Exception as e:
+            logger.error(f"Failed to update SQLite paths for renamed first source {first_src} -> {dest_path}: {e}")
     elif target_name and os.path.exists(dest_path) and dest_name not in valid_folders:
         sources_to_merge = valid_folders
     else:
@@ -692,6 +741,13 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
                         counter += 1
                     dest_item = os.path.join(dest_path, f"{base}_{counter}{ext}")
                 shutil.move(src_item, dest_item)
+                
+                # Update SQLite path for this moved file
+                try:
+                    cache.update_file_path(src_item, dest_item)
+                except Exception as e:
+                    logger.error(f"Failed to update SQLite cache for merged file: {e}")
+                    
                 moved_files.append(os.path.basename(dest_item))
                 merged_count += 1
         
@@ -703,7 +759,6 @@ def merge_folders_manual(output_dir: str, folder_names: list, target_name: str =
                     data = json.load(f)
                 profile_id = data.get('profile_id')
                 if profile_id is not None:
-                    cache = EmbeddingCache(cache_dir)
                     cache.delete_persistent_profile(int(profile_id))
                     logger.info(f"Deleted persistent profile ID {profile_id} for merged folder {src_name}")
             except Exception as e:

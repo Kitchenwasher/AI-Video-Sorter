@@ -1279,3 +1279,104 @@ input[type="range"]::-webkit-slider-thumb:hover {
     background: var(--color-secondary);
     box-shadow: 0 4px 20px rgba(139, 92, 246, 0.5);
 }
+
+/* ===== Gallery Sidebar & Drag-and-Drop ===== */
+.gallery-sidebar {
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.gallery-sidebar #gallery-sidebar-search {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-glass);
+    color: var(--text-main);
+    width: 100%;
+    outline: none;
+    transition: all var(--transition-speed) ease;
+}
+
+.gallery-sidebar #gallery-sidebar-search:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.15);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-folder-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sidebar-folder-item img {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-folder-item .folder-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex: 1;
+}
+
+.sidebar-folder-item .folder-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-folder-item .folder-count {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+}
+
+.sidebar-folder-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Drag states */
+.gallery-item.dragging {
+    opacity: 0.4;
+    border-style: dashed;
+    border-color: var(--color-primary);
+    transform: scale(0.98);
+}
+
+.sidebar-folder-item.drag-over {
+    background: rgba(236, 72, 153, 0.1) !important;
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 12px rgba(236, 72, 153, 0.25);
+    transform: scale(1.02);
+}
+
+.sidebar-folder-item.current-folder {
+    opacity: 0.45;
+    pointer-events: none;
+    border-color: transparent;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+/* Prevent background scrolling when modals are open */
+body.modal-open {
+    overflow: hidden !important;
+}
+
+.btn-icon-hover:hover {
+    color: var(--color-primary) !important;
+}
+

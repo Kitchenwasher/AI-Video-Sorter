@@ -85,6 +85,13 @@ class SortingPipeline:
                 if db_p['folder_name'] != disk_p['folder_name']:
                     logger.info(f"Detected manual rename of profile {p_id}: {db_p['folder_name']} -> {disk_p['folder_name']}")
                     self.cache.update_profile_folder_name(p_id, disk_p['folder_name'])
+                    # Update file paths in SQLite
+                    try:
+                        old_path = os.path.join(out_dir, db_p['folder_name'])
+                        new_path = os.path.join(out_dir, disk_p['folder_name'])
+                        self.cache.update_folder_paths(old_path, new_path)
+                    except Exception as e:
+                        logger.error(f"Failed to sync SQLite file paths for manual rename: {e}")
                     # Update in-memory copy
                     db_p['folder_name'] = disk_p['folder_name']
                 
@@ -498,7 +505,7 @@ class SortingPipeline:
             pct = 92.0 + (current / total) * 7.0
             self._update_progress("auto_naming", pct, msg)
             
-        results = resolver.resolve_all_folders(self.config.output_dir, naming_progress)
+        results = resolver.resolve_all_folders(self.config.output_dir, naming_progress, only_unnamed=self.config.only_name_unnamed)
         logger.info(f"Auto-naming completed. Results: {results}")
         self._update_progress("auto_naming", 99.0, f"Auto-naming finished. Processed {len(results)} folders.")
         return results

@@ -235,3 +235,55 @@ class EmbeddingCache:
             logger.error(f"Failed to delete persistent profile ID {profile_id}: {e}")
         finally:
             conn.close()
+
+    def update_file_path(self, old_path: str, new_path: str):
+        abs_old = os.path.abspath(old_path)
+        abs_new = os.path.abspath(new_path)
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE processed_files 
+                SET file_path = ? 
+                WHERE file_path = ?
+            ''', (abs_new, abs_old))
+            conn.commit()
+            logger.info(f"DB update path: {abs_old} -> {abs_new}")
+        except Exception as e:
+            logger.error(f"Failed to update file path in DB: {e}")
+        finally:
+            conn.close()
+
+    def update_folder_paths(self, old_folder_path: str, new_folder_path: str):
+        abs_old_prefix = os.path.abspath(old_folder_path) + os.sep
+        abs_new_prefix = os.path.abspath(new_folder_path) + os.sep
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE processed_files 
+                SET file_path = REPLACE(file_path, ?, ?) 
+                WHERE file_path LIKE ?
+            ''', (abs_old_prefix, abs_new_prefix, abs_old_prefix + '%'))
+            conn.commit()
+            logger.info(f"DB update folder paths: {abs_old_prefix} -> {abs_new_prefix}")
+        except Exception as e:
+            logger.error(f"Failed to update folder paths in DB: {e}")
+        finally:
+            conn.close()
+
+    def update_profile_folder_name_by_old_name(self, old_folder_name: str, new_folder_name: str):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE persistent_profiles 
+                SET folder_name = ?, last_updated = CURRENT_TIMESTAMP
+                WHERE folder_name = ?
+            ''', (new_folder_name, old_folder_name))
+            conn.commit()
+            logger.info(f"DB update profile folder name: {old_folder_name} -> {new_folder_name}")
+        except Exception as e:
+            logger.error(f"Failed to update profile folder name for {old_folder_name} -> {new_folder_name}: {e}")
+        finally:
+            conn.close()

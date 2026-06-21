@@ -275,6 +275,19 @@
                                     </label>
                                 </div>
                                 <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
+                                    <label class="switch-label" for="only_name_unnamed">
+                                        <span>Only Auto-Name Unnamed Folders</span>
+                                        <p class="input-desc">Only search/rename default folders starting with 'female_' (e.g. female_001), skipping already named ones.</p>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="only_name_unnamed">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="config-row">
+                                <div class="input-group toggle-group">
                                     <label class="switch-label" for="merge_on_name_conflict">
                                         <span>Merge Folders on Name Conflict</span>
                                         <p class="input-desc">If multiple folders match the same name, auto-merge them (otherwise suffixes like 2, 3 are used).</p>
@@ -439,9 +452,27 @@
     <div class="modal-overlay" id="gallery-modal">
         <div class="modal-box" style="max-width: 90%; width: 1000px; max-height: 90vh;">
             <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <h3 id="gallery-title">Identity Gallery</h3>
-                    <span class="badge" id="gallery-count-badge" style="background: rgba(236,72,153,0.15); color: var(--color-primary); padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">0 items</span>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+                    <!-- Normal View -->
+                    <div id="gallery-title-container" style="display: flex; align-items: center; gap: 0.75rem;">
+                        <h3 id="gallery-title" style="margin: 0;">Identity Gallery</h3>
+                        <button class="btn-icon-hover" id="btn-rename-gallery-folder" title="Rename Identity" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; transition: color 0.2s; padding: 0.25rem; display: flex; align-items: center; justify-content: center;">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Edit View (Initially Hidden) -->
+                    <div id="gallery-rename-container" style="display: none; align-items: center; gap: 0.5rem; flex: 1; max-width: 400px;">
+                        <input type="text" id="gallery-rename-input" style="padding: 0.4rem 0.7rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%; outline: none; transition: border-color 0.2s;">
+                        <button class="btn btn-primary" id="btn-rename-save" style="padding: 0.4rem 0.7rem; font-size: 0.85rem;" title="Save new name">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                        <button class="btn btn-secondary" id="btn-rename-cancel" style="padding: 0.4rem 0.7rem; font-size: 0.85rem; background: rgba(255,255,255,0.05); color: var(--text-main);" title="Cancel">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <span class="badge" id="gallery-count-badge" style="background: rgba(236,72,153,0.15); color: var(--color-primary); padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">0 items</span>
                 </div>
                 <div style="display: flex; gap: 0.75rem;">
                     <button class="btn btn-secondary" id="btn-open-explorer" title="Open in Windows File Explorer">
@@ -450,9 +481,26 @@
                     <button class="modal-close-btn" id="gallery-modal-close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-            <div class="modal-body" style="padding-top: 0.5rem;">
-                <div class="gallery-grid" id="gallery-media-grid">
-                    <!-- Media items will be rendered here dynamically -->
+            <div class="modal-body" style="padding-top: 0.5rem; display: flex; flex-direction: row; gap: 1.5rem; height: 70vh; overflow: hidden;">
+                <!-- Left Pane: Folder Sidebar for drag drop destination -->
+                <div class="gallery-sidebar" style="width: 260px; display: flex; flex-direction: column; gap: 0.75rem; border-right: 1px solid var(--border-glass); padding-right: 1rem; height: 100%; overflow: hidden;">
+                    <div class="sidebar-header-section" style="padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-arrows-up-down-left-right"></i> Clustering Corrector
+                        </span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">
+                            Drag media files here to correct sorting.
+                        </span>
+                    </div>
+                    <div id="gallery-sidebar-list" style="flex: 1; overflow-y: auto; max-height: calc(70vh - 90px); display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
+                        <!-- Folder items will be rendered here dynamically -->
+                    </div>
+                </div>
+                
+                <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; min-height: 0;">
+                    <div class="gallery-grid" id="gallery-media-grid" style="flex: 1; overflow-y: auto; max-height: calc(70vh - 30px);">
+                        <!-- Media items will be rendered here dynamically -->
+                    </div>
                 </div>
             </div>
         </div>

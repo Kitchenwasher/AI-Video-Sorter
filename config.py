@@ -30,6 +30,7 @@ class Config:
     
     # Auto-naming
     auto_name_folders: bool = False     # Auto-name folders after sorting
+    only_name_unnamed: bool = True      # Only attempt auto-naming for unnamed folders (female_xxx)
     name_confidence_threshold: float = 0.5 # Confidence threshold for renaming
     name_search_delay: float = 4.0      # Seconds to wait between search queries
     merge_on_name_conflict: bool = False # Merge folders if they resolve to the same name

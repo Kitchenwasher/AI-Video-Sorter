@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('val-extraction_percent').textContent = parseInt(data.extraction_percent || 100) + '%';
             
             document.getElementById('auto_name_folders').checked = data.auto_name_folders === true;
+            document.getElementById('only_name_unnamed').checked = data.only_name_unnamed !== false;
             document.getElementById('merge_on_name_conflict').checked = data.merge_on_name_conflict === true;
             
             document.getElementById('name_confidence_threshold').value = data.name_confidence_threshold !== undefined ? data.name_confidence_threshold : 0.5;
@@ -136,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             min_face_size: parseInt(document.getElementById('min_face_size').value),
             extraction_percent: parseInt(document.getElementById('extraction_percent').value),
             auto_name_folders: document.getElementById('auto_name_folders').checked,
+            only_name_unnamed: document.getElementById('only_name_unnamed').checked,
             merge_on_name_conflict: document.getElementById('merge_on_name_conflict').checked,
             name_confidence_threshold: parseFloat(document.getElementById('name_confidence_threshold').value),
             name_search_delay: parseFloat(document.getElementById('name_search_delay').value),
@@ -386,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${thumbHtml}
                     </div>
                     <div class="card-details">
-                        <span class="cluster-name">${folder.name.replace(/_/g, ' ')}</span>
+                        <span class="cluster-name">${folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim()}</span>
                         <span class="cluster-count">${folder.file_count} media items</span>
                     </div>
                 `;
@@ -491,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="merge-check"><i class="fa-solid fa-check"></i></div>
                     <div class="merge-thumb">${thumbHtml}</div>
                     <div class="merge-card-info">
-                        <span class="merge-card-name">${folder.name.replace(/_/g, ' ')}</span>
+                        <span class="merge-card-name">${folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim()}</span>
                         <span class="merge-card-count">${folder.file_count} files</span>
                     </div>
                 `;
@@ -653,6 +655,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const galleryCountBadge = document.getElementById('gallery-count-badge');
     const galleryMediaGrid = document.getElementById('gallery-media-grid');
     const btnOpenExplorer = document.getElementById('btn-open-explorer');
+    const gallerySidebarSearch = document.getElementById('gallery-sidebar-search');
+    const gallerySidebarList = document.getElementById('gallery-sidebar-list');
+    const btnRenameGalleryFolder = document.getElementById('btn-rename-gallery-folder');
+    const btnRenameSave = document.getElementById('btn-rename-save');
+    const btnRenameCancel = document.getElementById('btn-rename-cancel');
+    const galleryRenameInput = document.getElementById('gallery-rename-input');
+    const galleryTitleContainer = document.getElementById('gallery-title-container');
+    const galleryRenameContainer = document.getElementById('gallery-rename-container');
 
     const lightboxModal = document.getElementById('lightbox-modal');
     const lightboxClose = document.getElementById('lightbox-close');
@@ -672,13 +682,164 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentGalleryFolder = null;
 
+    // Filter folders in sidebar
+    const filterSidebarFolders = () => {
+        if (!gallerySidebarSearch || !gallerySidebarList) return;
+        const query = gallerySidebarSearch.value.toLowerCase().trim();
+        const items = gallerySidebarList.querySelectorAll('.sidebar-folder-item');
+        items.forEach(item => {
+            const folderName = item.dataset.folder.replace(/_/g, ' ').trim().toLowerCase();
+            if (folderName.includes(query)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    };
+
+    if (gallerySidebarSearch) {
+        gallerySidebarSearch.addEventListener('input', filterSidebarFolders);
+    }
+
+    const loadSidebarFolders = async () => {
+        if (!gallerySidebarList) return;
+        try {
+            const res = await fetch('/api/list-folders');
+            const data = await res.json();
+            
+            gallerySidebarList.innerHTML = '';
+            
+            const targetFolders = data.folders.filter(f => f.name !== '_unsorted');
+            
+            if (targetFolders.length === 0) {
+                gallerySidebarList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem 0; font-size: 0.85rem;">No target folders found</p>';
+                return;
+            }
+
+            targetFolders.forEach(folder => {
+                const isCurrent = folder.name === currentGalleryFolder;
+                const item = document.createElement('div');
+                item.className = `sidebar-folder-item${isCurrent ? ' current-folder' : ''}`;
+                item.dataset.folder = folder.name;
+                
+                const isUnsorted = folder.name === '_unsorted';
+                const displayName = folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim();
+                const fallbackIcon = isUnsorted ? 'fa-circle-question' : 'fa-user';
+                
+                const imgUrl = `/api/thumbnail/${encodeURIComponent(folder.name)}?t=${Date.now()}`;
+                let thumbHtml = '';
+                if (folder.has_thumbnail) {
+                    thumbHtml = `<img src="${imgUrl}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';" alt="">`;
+                }
+                
+                const placeholderHtml = `
+                    <div class="sidebar-folder-avatar-placeholder" style="width:38px; height:38px; border-radius:50%; display:${folder.has_thumbnail ? 'none' : 'flex'}; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--text-muted); flex-shrink:0;">
+                        <i class="fa-solid ${fallbackIcon}" style="font-size:0.9rem;"></i>
+                    </div>
+                `;
+
+                item.innerHTML = `
+                    ${thumbHtml}
+                    ${placeholderHtml}
+                    <div class="folder-info">
+                        <span class="folder-name">${displayName}</span>
+                        <span class="folder-count">${folder.file_count} media items</span>
+                    </div>
+                `;
+
+                if (!isCurrent) {
+                    item.addEventListener('click', () => {
+                        openGallery(folder.name);
+                    });
+
+                    item.addEventListener('dragenter', (e) => {
+                        e.preventDefault();
+                        item.classList.add('drag-over');
+                    });
+
+                    item.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        item.classList.add('drag-over');
+                    });
+
+                    item.addEventListener('dragleave', () => {
+                        item.classList.remove('drag-over');
+                    });
+
+                    item.addEventListener('drop', async (e) => {
+                        e.preventDefault();
+                        item.classList.remove('drag-over');
+                        
+                        try {
+                            const dragDataRaw = e.dataTransfer.getData('text/plain');
+                            if (!dragDataRaw) return;
+                            
+                            const dragData = JSON.parse(dragDataRaw);
+                            const filename = dragData.filename;
+                            if (!filename) return;
+
+                            const moveRes = await fetch('/api/move-media', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    from_folder: currentGalleryFolder,
+                                    to_folder: folder.name,
+                                    filename: filename
+                                })
+                            });
+                            const moveData = await moveRes.json();
+
+                            if (moveData.status === 'success') {
+                                const targetDisplayName = folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim();
+                                appendLog('info', `Successfully moved ${filename} to ${targetDisplayName}`);
+                                // Refresh current gallery
+                                await openGallery(currentGalleryFolder);
+                                // Refresh library page details & counts
+                                await loadLibrary();
+                                // Refresh sidebar folder items list
+                                await loadSidebarFolders();
+                            } else {
+                                alert(`Failed to move: ${moveData.message}`);
+                            }
+                        } catch (err) {
+                            console.error('Error handling dropped media:', err);
+                            alert(`Error: ${err.message}`);
+                        }
+                    });
+                }
+
+                gallerySidebarList.appendChild(item);
+            });
+
+            filterSidebarFolders();
+        } catch (err) {
+            console.error('Failed to load sidebar folders:', err);
+        }
+    };
+
     const openGallery = async (folderName) => {
         currentGalleryFolder = folderName;
-        galleryTitle.textContent = folderName.replace(/_/g, ' ');
+        galleryTitle.textContent = folderName === '_unsorted' ? 'Unsorted' : folderName.replace(/_/g, ' ').trim();
         galleryMediaGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folder contents...</p>';
         galleryCountBadge.textContent = '0 items';
         
+        // Reset rename view to normal
+        if (galleryRenameContainer && galleryTitleContainer) {
+            galleryRenameContainer.style.display = 'none';
+            galleryTitleContainer.style.display = 'flex';
+        }
+        if (btnRenameGalleryFolder) {
+            btnRenameGalleryFolder.style.display = folderName === '_unsorted' ? 'none' : 'flex';
+        }
+        
+        if (gallerySidebarSearch) {
+            gallerySidebarSearch.value = '';
+        }
+        
         galleryModal.classList.add('active');
+
+        // Load target folders in sidebar
+        loadSidebarFolders();
 
         try {
             const res = await fetch(`/api/list-media/${encodeURIComponent(folderName)}`);
@@ -697,8 +858,20 @@ document.addEventListener('DOMContentLoaded', () => {
             data.files.forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'gallery-item';
+                item.setAttribute('draggable', 'true');
                 
                 const fileUrl = `/media/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`;
+                
+                // Drag and drop event listeners on gallery items
+                item.addEventListener('dragstart', (e) => {
+                    item.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ filename: file.name }));
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('dragging');
+                });
                 
                 if (file.is_video) {
                     const isNative = file.ext === '.mp4' || file.ext === '.webm';
@@ -871,10 +1044,122 @@ document.addEventListener('DOMContentLoaded', () => {
         lightboxModal.classList.remove('active');
         stopLightboxMedia();
     });
-    lightboxModal.addEventListener('click', (e) => {
-        if (e.target === lightboxModal || e.target === document.querySelector('.lightbox-content')) {
-            lightboxModal.classList.remove('active');
-            stopLightboxMedia();
+    // Automatically manage body scroll lock when modals are opened/closed
+    const modalObserver = new MutationObserver(() => {
+        const anyModalActive = document.querySelector('.modal-overlay.active') !== null;
+        if (anyModalActive) {
+            document.body.classList.add('modal-open');
+        } else {
+            document.body.classList.remove('modal-open');
         }
     });
+    // Observe class attribute changes on all modal-overlay elements
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    });
+
+    // ===== GALLERY FOLDER RENAMING CONTROLLERS =====
+    if (btnRenameGalleryFolder) {
+        btnRenameGalleryFolder.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!currentGalleryFolder || currentGalleryFolder === '_unsorted') return;
+            
+            // Show edit input, populate it with current folder name (nicely cleaned)
+            galleryTitleContainer.style.display = 'none';
+            galleryRenameContainer.style.display = 'flex';
+            galleryRenameInput.value = currentGalleryFolder.replace(/_/g, ' ').trim();
+            galleryRenameInput.focus();
+            galleryRenameInput.select();
+        });
+    }
+
+    const cancelRename = () => {
+        galleryRenameContainer.style.display = 'none';
+        galleryTitleContainer.style.display = 'flex';
+    };
+
+    if (btnRenameCancel) {
+        btnRenameCancel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelRename();
+        });
+    }
+
+    const executeRename = async () => {
+        if (!currentGalleryFolder || currentGalleryFolder === '_unsorted') return;
+        const newNameClean = galleryRenameInput.value.trim();
+        
+        if (!newNameClean) {
+            alert('Folder name cannot be empty.');
+            return;
+        }
+        
+        const formattedNewName = newNameClean.replace(/\s+/g, ' ');
+        const formattedOldName = currentGalleryFolder.replace(/_/g, ' ').trim();
+        
+        if (formattedNewName === formattedOldName) {
+            cancelRename();
+            return;
+        }
+
+        btnRenameSave.disabled = true;
+        galleryRenameInput.disabled = true;
+        
+        try {
+            const res = await fetch('/api/rename-folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    old_name: currentGalleryFolder,
+                    new_name: formattedNewName
+                })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                appendLog('info', `Renamed identity folder: "${formattedOldName}" -> "${formattedNewName}"`);
+                
+                // Update current gallery folder reference
+                currentGalleryFolder = formattedNewName;
+                
+                // Refresh title
+                galleryTitle.textContent = formattedNewName;
+                
+                // Close edit mode
+                cancelRename();
+                
+                // Reload main library lists & numbers
+                await loadLibrary();
+                
+                // Reload sidebar folders list
+                await loadSidebarFolders();
+            } else {
+                alert(`Failed to rename folder: ${data.message}`);
+            }
+        } catch (err) {
+            alert(`Rename error: ${err.message}`);
+        } finally {
+            btnRenameSave.disabled = false;
+            galleryRenameInput.disabled = false;
+        }
+    };
+
+    if (btnRenameSave) {
+        btnRenameSave.addEventListener('click', (e) => {
+            e.stopPropagation();
+            executeRename();
+        });
+    }
+
+    if (galleryRenameInput) {
+        galleryRenameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeRename();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelRename();
+            }
+        });
+    }
 });
