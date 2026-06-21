@@ -1753,6 +1753,147 @@ body.modal-open {
 }
 
 
+/* ===== Lightbox Playlist & Queue Styles ===== */
+.lightbox-nav-arrow-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1200;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.5;
+}
+
+.lightbox-nav-arrow-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.6);
+    border-color: var(--color-primary, #ec4899);
+    box-shadow: 0 0 15px rgba(236, 72, 153, 0.3);
+}
+
+.lightbox-nav-arrow-btn.left {
+    left: 20px;
+}
+
+.lightbox-nav-arrow-btn.right {
+    right: 20px;
+}
+
+.lightbox-nav-arrow-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Panel Tab Button styles */
+.panel-tab-btn {
+    outline: none;
+    border-bottom: 2px solid transparent !important;
+}
+
+.panel-tab-btn:hover {
+    color: white !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.panel-tab-btn.active {
+    color: white !important;
+    border-bottom-color: var(--color-primary, #ec4899) !important;
+}
+
+/* Queue items */
+.queue-item-card {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.queue-item-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateX(2px);
+}
+
+.queue-item-card.active {
+    background: rgba(236, 72, 153, 0.08) !important;
+    border-color: var(--color-primary, #ec4899) !important;
+    box-shadow: inset 0 0 8px rgba(236, 72, 153, 0.1);
+}
+
+.queue-item-card .queue-item-thumb {
+    width: 65px;
+    height: 40px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.queue-item-card .queue-item-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.queue-item-card .queue-item-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.queue-item-card .queue-item-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-main, #f3f4f6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-item-card.active .queue-item-name {
+    color: var(--color-primary, #ec4899);
+    font-weight: 600;
+}
+
+.queue-item-card .queue-item-status-icon {
+    font-size: 0.85rem;
+    color: var(--color-primary, #ec4899);
+    margin-right: 0.25rem;
+}
+
+/* Control toggle styling */
+.lightbox-control-btn.active {
+    color: var(--color-primary, #ec4899) !important;
+    background: rgba(236, 72, 153, 0.1) !important;
+    border-color: rgba(236, 72, 153, 0.2) !important;
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.15);
+}
+
+
+
 
 
 
