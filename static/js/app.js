@@ -3268,4 +3268,133 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(checkIndexerStatus, 100);
         setTimeout(loadRecentlyWatched, 100);
     });
+
+    // ===== WATCH PARTY LAUNCHER =====
+    const btnCreateWatchParty = document.getElementById('btn-create-watch-party');
+    const watchPartyModal = document.getElementById('watch-party-modal');
+    const watchPartyModalClose = document.getElementById('watch-party-modal-close');
+    const btnWpGenerate = document.getElementById('btn-wp-generate');
+    const btnWpCopy = document.getElementById('btn-wp-copy');
+    const btnWpBack = document.getElementById('btn-wp-back');
+    const btnWpJoin = document.getElementById('btn-wp-join');
+    
+    const wpHostName = document.getElementById('wp-host-name');
+    const wpPassword = document.getElementById('wp-password');
+    const wpShareUrl = document.getElementById('wp-share-url');
+    
+    const wpCreateStep = document.getElementById('wp-create-step');
+    const wpShareStep = document.getElementById('wp-share-step');
+    
+    let createdPartyId = null;
+    let createdPartyUrl = null;
+
+    if (btnCreateWatchParty) {
+        btnCreateWatchParty.addEventListener('click', () => {
+            if (watchPartyModal) {
+                // Reset steps
+                if (wpCreateStep) wpCreateStep.style.display = 'flex';
+                if (wpShareStep) wpShareStep.style.display = 'none';
+                if (wpPassword) wpPassword.value = '';
+                
+                watchPartyModal.classList.add('active');
+            }
+        });
+    }
+
+    if (watchPartyModalClose) {
+        watchPartyModalClose.addEventListener('click', () => {
+            watchPartyModal.classList.remove('active');
+        });
+    }
+
+    if (btnWpGenerate) {
+        btnWpGenerate.addEventListener('click', async () => {
+            const hostName = (wpHostName ? wpHostName.value.trim() : '') || 'Host';
+            const password = wpPassword ? wpPassword.value : '';
+            
+            if (!currentGalleryFolder) {
+                alert('No active folder selected.');
+                return;
+            }
+
+            try {
+                btnWpGenerate.disabled = true;
+                btnWpGenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+                
+                const res = await fetch('/api/watch-party/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        folder_name: currentGalleryFolder,
+                        password: password
+                    })
+                });
+                
+                const data = await res.json();
+                btnWpGenerate.disabled = false;
+                btnWpGenerate.innerHTML = '<i class="fa-solid fa-magic"></i> Generate Shareable Link';
+                
+                if (data.status === 'success') {
+                    createdPartyId = data.party_id;
+                    
+                    // Construct absolute URL
+                    const port = window.location.port ? `:${window.location.port}` : '';
+                    createdPartyUrl = `${window.location.protocol}//${window.location.hostname}${port}${data.url}`;
+                    
+                    if (wpShareUrl) {
+                        wpShareUrl.value = createdPartyUrl;
+                    }
+                    
+                    if (wpCreateStep) wpCreateStep.style.display = 'none';
+                    if (wpShareStep) wpShareStep.style.display = 'flex';
+                } else {
+                    alert(`Failed to create party: ${data.message}`);
+                }
+            } catch (err) {
+                btnWpGenerate.disabled = false;
+                btnWpGenerate.innerHTML = '<i class="fa-solid fa-magic"></i> Generate Shareable Link';
+                console.error(err);
+                alert(`Error: ${err.message}`);
+            }
+        });
+    }
+
+    if (btnWpCopy) {
+        btnWpCopy.addEventListener('click', () => {
+            if (wpShareUrl) {
+                wpShareUrl.select();
+                document.execCommand('copy');
+                
+                // Visual feedback
+                const icon = btnWpCopy.querySelector('i');
+                if (icon) {
+                    icon.className = 'fa-solid fa-check';
+                    setTimeout(() => {
+                        icon.className = 'fa-solid fa-copy';
+                    }, 2000);
+                }
+            }
+        });
+    }
+
+    if (btnWpBack) {
+        btnWpBack.addEventListener('click', () => {
+            if (wpCreateStep) wpCreateStep.style.display = 'flex';
+            if (wpShareStep) wpShareStep.style.display = 'none';
+        });
+    }
+
+    if (btnWpJoin) {
+        btnWpJoin.addEventListener('click', () => {
+            if (createdPartyId) {
+                const nickname = (wpHostName ? wpHostName.value.trim() : '') || 'Host';
+                
+                // Store nickname in localStorage so watch party page can retrieve it
+                localStorage.setItem('wp_nickname', nickname);
+                
+                // Open party URL
+                window.location.href = `/watch-party/${createdPartyId}`;
+            }
+        });
+    }
 });

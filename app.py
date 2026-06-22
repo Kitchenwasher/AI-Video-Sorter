@@ -1685,6 +1685,282 @@ def merge_profiles_api():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+import uuid
+import hashlib
+from datetime import datetime, timedelta
+import queue
+
+# In-memory watch party active connections
+watch_parties_state = {}
+watch_parties_lock = threading.Lock()
+
+@app.route('/api/watch-party/create', methods=['POST'])
+def create_watch_party():
+    """Generates a new watch party with optional password protection."""
+    data = request.json or {}
+    folder_name = data.get('folder_name')
+    password = data.get('password')
+    
+    if not folder_name:
+        return jsonify({'status': 'error', 'message': 'Folder name is required'}), 400
+        
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+
+    try:
+        from utils.models import WatchParty
+        party_id = str(uuid.uuid4())
+        
+        # Optional password hashing
+        password_hash = None
+        if password:
+            password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            
+        expires_at = datetime.utcnow() + timedelta(hours=24)
+        
+        party = WatchParty(
+            id=party_id,
+            folder_name=folder_name,
+            password_hash=password_hash,
+            expires_at=expires_at
+        )
+        
+        db.session.add(party)
+        db.session.commit()
+        
+        # Initialize in-memory state
+        with watch_parties_lock:
+            watch_parties_state[party_id] = {
+                'clients': {},
+                'playback_state': {
+                    'filename': None,
+                    'position': 0.0,
+                    'playing': False,
+                    'last_updated': time.time()
+                }
+            }
+            
+        logger.info(f"Watch party {party_id} created for folder {folder_name} (expires: {expires_at})")
+        return jsonify({
+            'status': 'success',
+            'party_id': party_id,
+            'url': f"/watch-party/{party_id}",
+            'password_protected': password is not None and len(password) > 0
+        })
+    except Exception as e:
+        logger.error(f"Error creating watch party: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/watch-party/<party_id>')
+def watch_party_page(party_id):
+    """Serves the standalone watch party viewer template."""
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return "Watch party not found or expired", 404
+            
+        return render_template('watch_party.html', party_id=party_id, folder_name=party.folder_name)
+    except Exception as e:
+        logger.error(f"Error loading watch party template: {e}")
+        return str(e), 500
+
+
+@app.route('/api/watch-party/<party_id>/auth', methods=['POST'])
+def auth_watch_party(party_id):
+    """Verifies the password for password-protected watch parties."""
+    data = request.json or {}
+    password = data.get('password', '')
+    
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if not party.password_hash:
+            return jsonify({'status': 'success', 'authenticated': True})
+            
+        input_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        if input_hash == party.password_hash:
+            return jsonify({'status': 'success', 'authenticated': True})
+        else:
+            return jsonify({'status': 'error', 'message': 'Incorrect password'}), 401
+    except Exception as e:
+        logger.error(f"Error authenticating watch party: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/stream')
+def stream_watch_party(party_id):
+    """SSE endpoint for streaming playback state, participants, and WebRTC signals."""
+    client_id = request.args.get('client_id')
+    client_name = request.args.get('client_name', 'Viewer')
+    
+    if not client_id:
+        return "client_id is required", 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return "Watch party not found or expired", 404
+    except Exception as e:
+        logger.error(f"DB error checking watch party: {e}")
+        return "Server Error", 500
+
+    def event_stream():
+        q = queue.Queue()
+        
+        with watch_parties_lock:
+            # Reinitialize state if server was restarted
+            if party_id not in watch_parties_state:
+                watch_parties_state[party_id] = {
+                    'clients': {},
+                    'playback_state': {
+                        'filename': None,
+                        'position': 0.0,
+                        'playing': False,
+                        'last_updated': time.time()
+                    }
+                }
+                
+            party_state = watch_parties_state[party_id]
+            
+            # Register new client
+            party_state['clients'][client_id] = {
+                'name': client_name,
+                'queue': q,
+                'last_seen': time.time()
+            }
+            
+            # Broadcast join event to all other clients
+            join_msg = {
+                'type': 'peer_joined',
+                'client_id': client_id,
+                'name': client_name
+            }
+            for c_id, client in party_state['clients'].items():
+                if c_id != client_id:
+                    client['queue'].put(join_msg)
+                    
+            # Queue current playback state to new client
+            q.put({
+                'type': 'init',
+                'playback_state': party_state['playback_state'],
+                'peers': [{'client_id': c_id, 'name': c['name']} for c_id, c in party_state['clients'].items() if c_id != client_id]
+            })
+            
+        logger.info(f"Client {client_name} ({client_id}) connected to watch party {party_id}")
+        
+        try:
+            while True:
+                try:
+                    # Retrieve pending messages with a short timeout to handle socket check
+                    msg = q.get(timeout=2.0)
+                    yield f"data: {json.dumps(msg)}\n\n"
+                except queue.Empty:
+                    # Send a heartbeat to keep connection alive
+                    yield "data: {\"type\": \"ping\"}\n\n"
+                    
+                # Update last seen to keep active user registry healthy
+                with watch_parties_lock:
+                    if party_id in watch_parties_state and client_id in watch_parties_state[party_id]['clients']:
+                        watch_parties_state[party_id]['clients'][client_id]['last_seen'] = time.time()
+                        
+        except GeneratorExit:
+            # Handle client disconnection
+            with watch_parties_lock:
+                if party_id in watch_parties_state:
+                    party_state = watch_parties_state[party_id]
+                    if client_id in party_state['clients']:
+                        del party_state['clients'][client_id]
+                        
+                        # Broadcast leave event
+                        leave_msg = {
+                            'type': 'peer_left',
+                            'client_id': client_id,
+                            'name': client_name
+                        }
+                        for c_id, client in party_state['clients'].items():
+                            client['queue'].put(leave_msg)
+                            
+            logger.info(f"Client {client_name} ({client_id}) disconnected from watch party {party_id}")
+            
+    return Response(event_stream(), mimetype="text/event-stream")
+
+
+@app.route('/api/watch-party/<party_id>/sync', methods=['POST'])
+def sync_watch_party(party_id):
+    """Receives and broadcasts playback actions (play, pause, seek) to all watch party clients."""
+    data = request.json or {}
+    client_id = data.get('client_id')
+    action = data.get('action') # 'play' | 'pause' | 'seek'
+    position = data.get('position', 0.0)
+    filename = data.get('filename')
+    
+    if not client_id:
+        return jsonify({'status': 'error', 'message': 'client_id is required'}), 400
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return jsonify({'status': 'error', 'message': 'Watch party state not initialized'}), 404
+            
+        party_state = watch_parties_state[party_id]
+        
+        # Update playback state
+        party_state['playback_state'] = {
+            'filename': filename,
+            'position': position,
+            'playing': action == 'play',
+            'last_updated': time.time()
+        }
+        
+        # Broadcast event to other clients
+        sync_msg = {
+            'type': 'sync',
+            'action': action,
+            'position': position,
+            'filename': filename,
+            'sender_id': client_id
+        }
+        for c_id, client in party_state['clients'].items():
+            if c_id != client_id:
+                client['queue'].put(sync_msg)
+                
+    return jsonify({'status': 'success'})
+
+
+@app.route('/api/watch-party/<party_id>/signal', methods=['POST'])
+def signal_watch_party(party_id):
+    """Relays WebRTC connection signaling messages (offers, answers, ICE candidates) to a targeted peer."""
+    data = request.json or {}
+    sender_id = data.get('sender_id')
+    target_id = data.get('target_id')
+    signal = data.get('signal') # { type: 'offer'|'answer'|'candidate', ... }
+    
+    if not sender_id or not target_id or not signal:
+        return jsonify({'status': 'error', 'message': 'Missing signaling parameters'}), 400
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return jsonify({'status': 'error', 'message': 'Watch party state not initialized'}), 404
+            
+        party_state = watch_parties_state[party_id]
+        
+        if target_id in party_state['clients']:
+            # Relay signal to target client queue
+            party_state['clients'][target_id]['queue'].put({
+                'type': 'signal',
+                'sender_id': sender_id,
+                'signal': signal
+            })
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Target peer not found'}), 404
+
+
 if __name__ == '__main__':
     logger.info("Starting Face Sorter Web Interface...")
     app.run(host='127.0.0.1', port=5000, debug=True)

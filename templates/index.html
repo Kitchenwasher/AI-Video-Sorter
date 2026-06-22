@@ -219,9 +219,12 @@
                                 <p class="gallery-hero-stats" id="gallery-info-subtitle">Metadata stats are loaded dynamically</p>
                             </div>
                         </div>
-                        <div class="gallery-hero-actions">
+                        <div class="gallery-hero-actions" style="display: flex; gap: 0.75rem;">
                             <button class="btn btn-secondary" id="btn-open-explorer" title="Open in Windows File Explorer">
                                 <i class="fa-solid fa-folder-open"></i> Open Folder
+                            </button>
+                            <button class="btn btn-primary" id="btn-create-watch-party" title="Create a real-time synchronized Watch Party with friends">
+                                <i class="fa-solid fa-users"></i> Watch Party
                             </button>
                         </div>
                     </div>
@@ -758,6 +761,49 @@
                     </div>
                     <div id="playlist-queue-list">
                         <!-- Queue items will be loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watch Party Creation Modal -->
+    <div class="modal-overlay" id="watch-party-modal">
+        <div class="modal-box" style="max-width: 420px; border-radius: 16px; background: rgba(20,20,20,0.85); backdrop-filter: blur(20px); border: 1px solid var(--border-glass);">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 0.6rem; color: var(--color-primary, #ec4899);"><i class="fa-solid fa-users"></i> Create Watch Party</h3>
+                <button class="modal-close-btn" id="watch-party-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <!-- Configure options (Step 1) -->
+                <div id="wp-create-step" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label for="wp-host-name" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">YOUR NICKNAME</label>
+                        <input type="text" id="wp-host-name" value="Host" placeholder="Enter nickname..." style="padding: 0.6rem 0.8rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.04); color: var(--text-main); outline: none;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label for="wp-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">PASSWORD (OPTIONAL)</label>
+                        <input type="password" id="wp-password" placeholder="Leave empty for no password..." style="padding: 0.6rem 0.8rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.04); color: var(--text-main); outline: none;">
+                    </div>
+                    <button class="btn btn-primary" id="btn-wp-generate" style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.5rem;">
+                        <i class="fa-solid fa-magic"></i> Generate Shareable Link
+                    </button>
+                </div>
+                
+                <!-- Share link & Join (Step 2 - Initially Hidden) -->
+                <div id="wp-share-step" style="display: none; flex-direction: column; gap: 1rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4;">Copy the link below and share it with your friends. Once they open it, you'll be connected in real-time!</p>
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <input type="text" id="wp-share-url" readonly style="width: 100%; padding: 0.6rem 2.8rem 0.6rem 0.8rem; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.3); color: var(--text-main); outline: none;">
+                        <button id="btn-wp-copy" title="Copy Link" style="position: absolute; right: 0.5rem; background: transparent; border: none; color: var(--color-primary); cursor: pointer; padding: 0.4rem; font-size: 1rem; transition: transform 0.1s;"><i class="fa-solid fa-copy"></i></button>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; width: 100%; margin-top: 0.5rem;">
+                        <button class="btn btn-secondary" id="btn-wp-back" style="flex: 1; padding: 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-main);">
+                            Back
+                        </button>
+                        <button class="btn btn-primary" id="btn-wp-join" style="flex: 1.5; padding: 0.65rem; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                            Join Party <i class="fa-solid fa-right-to-bracket"></i>
+                        </button>
                     </div>
                 </div>
             </div>

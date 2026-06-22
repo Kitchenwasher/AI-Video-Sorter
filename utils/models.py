@@ -40,3 +40,12 @@ class WatchHistory(db.Model):
     is_completed = db.Column(db.Boolean, default=False)
     rating = db.Column(db.Integer, nullable=True)
 
+
+class WatchParty(db.Model):
+    __tablename__ = 'watch_parties'
+    id = db.Column(db.String(36), primary_key=True)  # UUID token
+    folder_name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+
