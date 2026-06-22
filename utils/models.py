@@ -46,6 +46,7 @@ class WatchParty(db.Model):
     id = db.Column(db.String(36), primary_key=True)  # UUID token
     folder_name = db.Column(db.String(255), nullable=False)
     password_hash = db.Column(db.String(255), nullable=True)
+    admin_token = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
 

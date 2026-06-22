@@ -19,6 +19,39 @@
     let currentFilename = null;
     let mediaFilesList = [];
     let ignorePlayerEvents = false;
+    let adminToken = null;
+    let selectedFolder = null;
+    let isPlaybackLocked = false;
+    let isSlowMode = false;
+    let slowModeTimer = null;
+    let lastChatSentTime = 0;
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('wp-toast-container');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.className = 'wp-toast';
+        if (type === 'error') {
+            toast.style.borderLeftColor = '#ef4444';
+        } else if (type === 'success') {
+            toast.style.borderLeftColor = '#22c55e';
+        } else if (type === 'warning') {
+            toast.style.borderLeftColor = '#eab308';
+        }
+        
+        toast.innerText = message;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'none';
+            toast.offsetHeight; // trigger reflow
+            toast.style.transition = 'opacity 0.5s, transform 0.5s';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-20px)';
+            setTimeout(() => toast.remove(), 500);
+        }, 3500);
+    }
 
     // WebRTC connection and audio maps
     const peerConnections = {};
@@ -202,6 +235,9 @@
     async function startWatchParty() {
         addLogEntry('System', 'Connecting to watch party stream...');
 
+        // Verify admin privileges
+        checkAdminStatus();
+
         // Fetch folder media files
         try {
             const res = await fetch(`/api/profile/${window.FOLDER_NAME}/media`);
@@ -218,7 +254,11 @@
         }
 
         // Establish the EventSource connection
-        const streamUrl = `/api/watch-party/${window.PARTY_ID}/stream?client_id=${encodeURIComponent(clientId)}&client_name=${encodeURIComponent(clientName)}`;
+        const storedToken = localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
+        let streamUrl = `/api/watch-party/${window.PARTY_ID}/stream?client_id=${encodeURIComponent(clientId)}&client_name=${encodeURIComponent(clientName)}`;
+        if (storedToken) {
+            streamUrl += `&admin_token=${encodeURIComponent(storedToken)}`;
+        }
         sseSource = new EventSource(streamUrl);
 
         sseSource.onopen = () => {
@@ -243,16 +283,31 @@
         // Bind local player events to broadcast modifications
         player.on('play', () => {
             if (ignorePlayerEvents) return;
+            if (isPlaybackLocked && !adminToken) {
+                showToast('Playback is locked by the host.', 'warning');
+                ignorePlayerEvents = true;
+                player.pause();
+                setTimeout(() => { ignorePlayerEvents = false; }, 100);
+                return;
+            }
             broadcastSync('play', player.currentTime);
         });
 
         player.on('pause', () => {
             if (ignorePlayerEvents) return;
+            if (isPlaybackLocked && !adminToken) {
+                showToast('Playback is locked by the host.', 'warning');
+                return;
+            }
             broadcastSync('pause', player.currentTime);
         });
 
         player.on('seeked', () => {
             if (ignorePlayerEvents) return;
+            if (isPlaybackLocked && !adminToken) {
+                showToast('Playback is locked by the host.', 'warning');
+                return;
+            }
             broadcastSync('seek', player.currentTime);
         });
     }
@@ -286,6 +341,10 @@
             `;
 
             item.onclick = () => {
+                if (isPlaybackLocked && !adminToken) {
+                    showToast('Playlist is locked by the host.', 'warning');
+                    return;
+                }
                 if (file.filename === currentFilename) return;
                 selectAndBroadcastMedia(file.filename);
             };
@@ -370,6 +429,22 @@
         switch (data.type) {
             case 'init':
                 // Initial playback state
+                isPlaybackLocked = data.playback_locked || false;
+                isSlowMode = data.slow_mode || false;
+                
+                const lockOverlay = document.getElementById('wp-player-lock-overlay');
+                if (lockOverlay) {
+                    if (isPlaybackLocked && !adminToken) {
+                        lockOverlay.classList.add('active');
+                    } else {
+                        lockOverlay.classList.remove('active');
+                    }
+                }
+                
+                if (isSlowMode && !adminToken) {
+                    startSlowModeCooldown();
+                }
+
                 if (data.playback_state && data.playback_state.filename) {
                     const ps = data.playback_state;
                     loadMediaFile(ps.filename).then(() => {
@@ -392,7 +467,7 @@
                 // Register existing peers
                 if (data.peers) {
                     data.peers.forEach(peer => {
-                        activePeers[peer.client_id] = { name: peer.name };
+                        activePeers[peer.client_id] = { name: peer.name, is_admin: peer.is_admin || false };
                     });
                     updatePeersUI();
                 }
@@ -401,7 +476,7 @@
             case 'peer_joined':
                 addLogEntry('System', `${data.name} joined the watch party.`);
                 addSystemChatMessage(`${data.name} joined the room.`);
-                activePeers[data.client_id] = { name: data.name };
+                activePeers[data.client_id] = { name: data.name, is_admin: data.is_admin || false };
                 updatePeersUI();
 
                 // Existing client initiates connection to the newly joined peer
@@ -445,9 +520,114 @@
                 handleIncomingSync(data.action, data.position, data.filename);
                 break;
 
+            case 'folder_changed':
+                addSystemChatMessage(`Admin switched folder to: ${data.folder_name}`);
+                addLogEntry('System', `Admin switched folder to: ${data.folder_name}`);
+                window.FOLDER_NAME = data.folder_name;
+                const badgeEl = document.getElementById('wp-active-folder-name');
+                if (badgeEl) {
+                    badgeEl.innerText = data.folder_name;
+                }
+                mediaFilesList = data.files || [];
+                renderPlaylist(mediaFilesList);
+                if (mediaFilesList.length > 0) {
+                    loadMediaFile(mediaFilesList[0].filename).then(() => {
+                        // Reset player to paused at 0.0
+                        ignorePlayerEvents = true;
+                        player.currentTime = 0;
+                        player.pause();
+                        setTimeout(() => { ignorePlayerEvents = false; }, 500);
+                    });
+                } else {
+                    currentFilename = null;
+                    const plyrContainer = document.querySelector('.plyr');
+                    if (plyrContainer) plyrContainer.style.display = 'none';
+                    const imagePlayer = document.getElementById('lightbox-image');
+                    if (imagePlayer) imagePlayer.style.display = 'none';
+                }
+                break;
+
             case 'chat':
                 if (data.sender_id === clientId) return;
-                addChatMessage(data.sender_name, data.message, data.time, false);
+                addChatMessage(data.sender_name, data.message, data.time, false, data.message_id, data.is_admin || false);
+                break;
+
+            case 'kicked':
+                if (sseSource) sseSource.close();
+                Object.keys(peerConnections).forEach(id => {
+                    try { peerConnections[id].close(); } catch(e) {}
+                });
+                document.getElementById('wp-kicked-overlay').classList.add('active');
+                break;
+                
+            case 'force_mute':
+                if (localStream) {
+                    const audioTrack = localStream.getAudioTracks()[0];
+                    if (audioTrack && audioTrack.enabled) {
+                        audioTrack.enabled = false;
+                        updateMicUI(false);
+                        document.getElementById('local-voice-status').innerText = 'Muted';
+                        showToast('You have been muted by the host.', 'warning');
+                    }
+                }
+                break;
+                
+            case 'playback_locked':
+                isPlaybackLocked = data.locked;
+                const overlay = document.getElementById('wp-player-lock-overlay');
+                if (overlay) {
+                    if (isPlaybackLocked && !adminToken) {
+                        overlay.classList.add('active');
+                    } else {
+                        overlay.classList.remove('active');
+                    }
+                }
+                showToast(isPlaybackLocked ? 'Playback has been locked by the host.' : 'Playback has been unlocked.', 'info');
+                break;
+                
+            case 'chat_delete':
+                const msgEl = document.getElementById(`chat-msg-${data.message_id}`);
+                if (msgEl) msgEl.remove();
+                break;
+                
+            case 'chat_clear':
+                const chatContainer = document.getElementById('wp-chat-messages');
+                if (chatContainer) {
+                    chatContainer.innerHTML = '';
+                    addSystemChatMessage('Chat history was cleared by the host.');
+                }
+                break;
+                
+            case 'party_ended':
+                if (sseSource) sseSource.close();
+                Object.keys(peerConnections).forEach(id => {
+                    try { peerConnections[id].close(); } catch(e) {}
+                });
+                document.getElementById('wp-ended-overlay').classList.add('active');
+                break;
+                
+            case 'settings_changed':
+                if (data.slow_mode !== undefined) {
+                    isSlowMode = data.slow_mode;
+                    showToast(isSlowMode ? 'Slow mode enabled by host.' : 'Slow mode disabled.', 'info');
+                    if (isSlowMode && !adminToken) {
+                        startSlowModeCooldown();
+                    } else {
+                        if (slowModeTimer) clearInterval(slowModeTimer);
+                        const chatInput = document.getElementById('wp-chat-input');
+                        const sendBtn = document.getElementById('btn-chat-send');
+                        if (chatInput && sendBtn) {
+                            chatInput.placeholder = 'Type a message...';
+                            chatInput.disabled = false;
+                            sendBtn.disabled = false;
+                        }
+                    }
+                }
+                if (data.expires_at !== undefined) {
+                    showToast(`Party duration extended until ${data.expires_at}.`, 'success');
+                    const label = document.getElementById('admin-expiry-label');
+                    if (label) label.innerText = data.expires_at;
+                }
                 break;
 
             case 'signal':
@@ -739,16 +919,100 @@
 
             const pc = peerConnections[peerId];
             const isMuted = !pc || pc.connectionState !== 'connected';
+            const crownHtml = peer.is_admin ? '<i class="fa-solid fa-crown crown-badge" title="Host"></i>' : '';
+            
+            let actionsHtml = '';
+            if (adminToken && !peer.is_admin) {
+                actionsHtml = `
+                    <div class="peer-actions">
+                        <button class="btn-peer-action mute" onclick="adminForceMute('${peerId}', '${peer.name}')" title="Force Mute"><i class="fa-solid fa-microphone-slash"></i></button>
+                        <button class="btn-peer-action kick" onclick="adminKickPeer('${peerId}', '${peer.name}')" title="Kick"><i class="fa-solid fa-user-slash"></i></button>
+                    </div>
+                `;
+            }
 
             peerItem.innerHTML = `
                 <div class="peer-name">
+                    ${crownHtml}
                     <i class="fa-solid fa-user"></i>
                     <span>${peer.name}</span>
                 </div>
-                <div class="voice-indicator ${isMuted ? 'muted' : ''}" id="voice-${peerId}"></div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    ${actionsHtml}
+                    <div class="voice-indicator ${isMuted ? 'muted' : ''}" id="voice-${peerId}"></div>
+                </div>
             `;
             peersList.appendChild(peerItem);
         });
+    }
+
+    window.adminForceMute = (peerId, peerName) => {
+        if (!adminToken) return;
+        if (!confirm(`Are you sure you want to force mute ${peerName}?`)) return;
+        
+        fetch(`/api/watch-party/${window.PARTY_ID}/force-mute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_token: adminToken,
+                client_id: peerId
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast(`Force mute request sent for ${peerName}.`, 'success');
+            } else {
+                showToast('Failed to force mute user.', 'error');
+            }
+        });
+    };
+
+    window.adminKickPeer = (peerId, peerName) => {
+        if (!adminToken) return;
+        if (!confirm(`Are you sure you want to kick ${peerName}?`)) return;
+        
+        fetch(`/api/watch-party/${window.PARTY_ID}/kick`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_token: adminToken,
+                client_id: peerId
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast(`${peerName} has been kicked.`, 'success');
+            } else {
+                showToast('Failed to kick user.', 'error');
+            }
+        });
+    };
+
+    function startSlowModeCooldown() {
+        const chatInput = document.getElementById('wp-chat-input');
+        const sendBtn = document.getElementById('btn-chat-send');
+        if (!chatInput || !sendBtn) return;
+        
+        let remaining = 10;
+        chatInput.disabled = true;
+        sendBtn.disabled = true;
+        
+        if (slowModeTimer) clearInterval(slowModeTimer);
+        
+        slowModeTimer = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(slowModeTimer);
+                chatInput.placeholder = 'Type a message...';
+                chatInput.disabled = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
+            } else {
+                chatInput.placeholder = `Slow mode active (${remaining}s)...`;
+            }
+        }, 1000);
     }
 
     function initChat() {
@@ -761,10 +1025,18 @@
             const msgText = chatInput.value.trim();
             if (!msgText) return;
 
-            chatInput.value = '';
+            if (isSlowMode && !adminToken) {
+                const now = Date.now();
+                const elapsed = now - lastChatSentTime;
+                if (elapsed < 10000) {
+                    const remaining = Math.ceil((10000 - elapsed) / 1000);
+                    showToast(`Slow mode active. Please wait ${remaining}s.`, 'warning');
+                    return;
+                }
+            }
 
+            chatInput.value = '';
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-            addChatMessage(clientName, msgText, timeStr, true);
 
             fetch(`/api/watch-party/${window.PARTY_ID}/chat`, {
                 method: 'POST',
@@ -774,7 +1046,20 @@
                     client_name: clientName,
                     message: msgText
                 })
-            }).catch(err => {
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    lastChatSentTime = Date.now();
+                    if (isSlowMode && !adminToken) {
+                        startSlowModeCooldown();
+                    }
+                    addChatMessage(clientName, msgText, timeStr, true, data.message_id, adminToken !== null);
+                } else if (data.status === 'error') {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(err => {
                 console.error('Failed to send chat message:', err);
                 addSystemChatMessage('Error sending message.');
             });
@@ -788,17 +1073,45 @@
         };
     }
 
-    function addChatMessage(sender, text, timeStr, isSelf) {
+    window.deleteChatMessage = (messageId) => {
+        if (!adminToken) return;
+        fetch(`/api/watch-party/${window.PARTY_ID}/delete-message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_token: adminToken,
+                message_id: messageId
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'error') {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => console.error('Error deleting message:', err));
+    };
+
+    function addChatMessage(sender, text, timeStr, isSelf, msgId = null, isSenderAdmin = false) {
         const messagesContainer = document.getElementById('wp-chat-messages');
         if (!messagesContainer) return;
 
         const entry = document.createElement('div');
         entry.className = `chat-entry ${isSelf ? 'outgoing' : 'incoming'}`;
+        if (msgId) {
+            entry.id = `chat-msg-${msgId}`;
+        }
         
+        const crownHtml = isSenderAdmin ? '<i class="fa-solid fa-crown crown-badge" title="Host"></i>' : '';
+        const deleteBtnHtml = (adminToken && msgId) 
+            ? `<button class="btn-msg-delete" onclick="deleteChatMessage('${msgId}')" title="Delete Message"><i class="fa-solid fa-xmark"></i></button>` 
+            : '';
+
         entry.innerHTML = `
-            <span class="chat-sender">${sender}</span>
+            <span class="chat-sender">${crownHtml}${sender}</span>
             <span>${escapeHTML(text)}</span>
             <span class="chat-time">${timeStr}</span>
+            ${deleteBtnHtml}
         `;
         
         messagesContainer.appendChild(entry);
@@ -847,5 +1160,331 @@
         const m = Math.floor(secs / 60);
         const s = Math.floor(secs % 60);
         return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function checkAdminStatus() {
+        const storedToken = localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
+        if (!storedToken) return;
+
+        fetch(`/api/watch-party/${window.PARTY_ID}/is-admin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ admin_token: storedToken })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.is_admin) {
+                adminToken = storedToken;
+                setupAdminUI();
+            }
+        })
+        .catch(err => console.error('Error verifying admin token:', err));
+    }
+
+    function setupAdminUI() {
+        const btnChangeFolder = document.getElementById('btn-wp-change-folder');
+        if (btnChangeFolder) {
+            btnChangeFolder.style.display = 'inline-block';
+            btnChangeFolder.onclick = () => {
+                openFolderSwitcherModal();
+            };
+        }
+
+        const btnAdminPanel = document.getElementById('btn-wp-admin-panel');
+        if (btnAdminPanel) {
+            btnAdminPanel.style.display = 'inline-flex';
+            btnAdminPanel.onclick = () => {
+                document.getElementById('wp-admin-overlay').classList.add('active');
+                const expiryLabel = document.getElementById('admin-expiry-label');
+                if (expiryLabel && expiryLabel.innerText === 'Loading...') {
+                    expiryLabel.innerText = 'Active (24h default)';
+                }
+            };
+        }
+
+        const btnAdminClose = document.getElementById('btn-wp-admin-close');
+        if (btnAdminClose) {
+            btnAdminClose.onclick = () => {
+                document.getElementById('wp-admin-overlay').classList.remove('active');
+            };
+        }
+
+        const togglePlaybackLock = document.getElementById('admin-toggle-playback-lock');
+        if (togglePlaybackLock) {
+            togglePlaybackLock.checked = isPlaybackLocked;
+            togglePlaybackLock.onchange = () => {
+                fetch(`/api/watch-party/${window.PARTY_ID}/playback-lock`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        locked: togglePlaybackLock.checked
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(data.locked ? 'Playback locked.' : 'Playback unlocked.', 'success');
+                    } else {
+                        showToast('Error setting playback lock.', 'error');
+                        togglePlaybackLock.checked = !togglePlaybackLock.checked;
+                    }
+                });
+            };
+        }
+
+        const toggleSlowMode = document.getElementById('admin-toggle-slow-mode');
+        if (toggleSlowMode) {
+            toggleSlowMode.checked = isSlowMode;
+            toggleSlowMode.onchange = () => {
+                fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        slow_mode: toggleSlowMode.checked
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(data.slow_mode ? 'Slow mode enabled.' : 'Slow mode disabled.', 'success');
+                    } else {
+                        showToast('Error setting slow mode.', 'error');
+                        toggleSlowMode.checked = !toggleSlowMode.checked;
+                    }
+                });
+            };
+        }
+
+        const btnClearChat = document.getElementById('btn-admin-clear-chat');
+        if (btnClearChat) {
+            btnClearChat.onclick = () => {
+                if (!confirm('Clear chat history for all participants?')) return;
+                fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        clear_chat: true
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast('Chat cleared.', 'success');
+                    }
+                });
+            };
+        }
+
+        const btnSavePassword = document.getElementById('btn-admin-save-password');
+        const adminPasswordInput = document.getElementById('admin-room-password');
+        if (btnSavePassword && adminPasswordInput) {
+            btnSavePassword.onclick = () => {
+                const pwd = adminPasswordInput.value.trim();
+                if (!pwd) return;
+                fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        password: pwd
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast('Access password set successfully.', 'success');
+                        adminPasswordInput.value = '';
+                    } else {
+                        showToast('Error setting password.', 'error');
+                    }
+                });
+            };
+        }
+
+        const btnRemovePassword = document.getElementById('btn-admin-remove-password');
+        if (btnRemovePassword) {
+            btnRemovePassword.onclick = () => {
+                fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        password: ''
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast('Password protection removed.', 'success');
+                    }
+                });
+            };
+        }
+
+        const extendButtons = document.querySelectorAll('.btn-wp-extend-hours');
+        extendButtons.forEach(btn => {
+            btn.onclick = () => {
+                const hours = parseInt(btn.getAttribute('data-hours'));
+                fetch(`/api/watch-party/${window.PARTY_ID}/extend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        hours: hours
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(`Extended party duration by ${hours} hours.`, 'success');
+                        document.getElementById('admin-expiry-label').innerText = data.expires_at;
+                    } else {
+                        showToast('Failed to extend room.', 'error');
+                    }
+                });
+            };
+        });
+
+        const btnEndParty = document.getElementById('btn-admin-end-party');
+        if (btnEndParty) {
+            btnEndParty.onclick = () => {
+                if (!confirm('Are you sure you want to end this watch party session now? All connected participants will be disconnected.')) return;
+                fetch(`/api/watch-party/${window.PARTY_ID}/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('wp-admin-overlay').classList.remove('active');
+                    }
+                });
+            };
+        }
+    }
+
+    function openFolderSwitcherModal() {
+        const overlay = document.getElementById('wp-change-folder-overlay');
+        const container = document.getElementById('wp-folders-list-container');
+        const confirmBtn = document.getElementById('btn-wp-confirm-change');
+        const cancelBtn = document.getElementById('btn-wp-cancel-change');
+
+        overlay.classList.add('active');
+        confirmBtn.disabled = true;
+        selectedFolder = null;
+
+        container.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folders...</div>';
+
+        // Load folders/profiles
+        fetch(`/api/profiles?admin_token=${encodeURIComponent(adminToken)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    renderFolderList(data.profiles);
+                } else {
+                    container.innerHTML = '<div style="padding:1rem; text-align:center; color:#f87171; font-size:0.85rem;">Error loading folders.</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching profiles:', err);
+                container.innerHTML = '<div style="padding:1rem; text-align:center; color:#f87171; font-size:0.85rem;">Failed to fetch folders.</div>';
+            });
+
+        const closeModal = () => {
+            overlay.classList.remove('active');
+        };
+
+        cancelBtn.onclick = closeModal;
+        
+        // Close on clicking overlay background
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                closeModal();
+            }
+        };
+
+        confirmBtn.onclick = () => {
+            if (!selectedFolder) return;
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerText = 'Switching...';
+
+            fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    folder_name: selectedFolder
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    closeModal();
+                } else {
+                    alert('Error changing folder: ' + data.message);
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = 'Switch Folder';
+                }
+            })
+            .catch(err => {
+                console.error('Error switching folder:', err);
+                alert('An error occurred while switching the folder.');
+                confirmBtn.disabled = false;
+                confirmBtn.innerText = 'Switch Folder';
+            });
+        };
+    }
+
+    function renderFolderList(profiles) {
+        const container = document.getElementById('wp-folders-list-container');
+        const confirmBtn = document.getElementById('btn-wp-confirm-change');
+        container.innerHTML = '';
+
+        if (!profiles || profiles.length === 0) {
+            container.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">No folders available.</div>';
+            return;
+        }
+
+        profiles.forEach(profile => {
+            const item = document.createElement('div');
+            item.className = 'folder-select-item';
+            if (profile.folder_name === window.FOLDER_NAME) {
+                item.classList.add('selected');
+                selectedFolder = profile.folder_name;
+                confirmBtn.disabled = false;
+            }
+
+            const avatarHtml = profile.avatar_url 
+                ? `<img src="${profile.avatar_url}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" alt="">` 
+                : `<i class="fa-solid fa-folder"></i>`;
+
+            item.innerHTML = `
+                <div class="folder-select-name">
+                    ${avatarHtml}
+                    <span>${escapeHTML(profile.display_name)}</span>
+                </div>
+                <div class="folder-select-count">${profile.media_count} files</div>
+            `;
+
+            item.onclick = () => {
+                // Remove selected from all
+                const items = container.querySelectorAll('.folder-select-item');
+                items.forEach(i => i.classList.remove('selected'));
+
+                // Add to clicked
+                item.classList.add('selected');
+                selectedFolder = profile.folder_name;
+                confirmBtn.disabled = false;
+            };
+
+            container.appendChild(item);
+        });
     }
 })();

@@ -25,6 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 video.muted = true;
                 video.loop = true;
                 video.setAttribute('playsinline', '');
+                
+                video.addEventListener('loadedmetadata', () => {
+                    if (video.duration) {
+                        video.currentTime = video.duration * 0.5;
+                    }
+                });
+                
                 video.src = videoUrl;
 
                 const thumbContainer = card.querySelector('.thumbnail-container');
@@ -3676,6 +3683,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (data.status === 'success') {
                     createdPartyId = data.party_id;
+                    if (data.admin_token) {
+                        localStorage.setItem(`wp_admin_token_${data.party_id}`, data.admin_token);
+                    }
                     
                     // Construct absolute URL (use public tunnel URL if provided by backend)
                     if (data.public_url) {

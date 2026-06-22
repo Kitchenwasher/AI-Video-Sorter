@@ -45,6 +45,14 @@ with app.app_context():
                 conn.execute(db.text("ALTER TABLE watch_history ADD COLUMN rating INTEGER"))
                 conn.commit()
             logger.info("Added 'rating' column to 'watch_history' table.")
+            
+        # Check if admin_token exists in watch_parties, if not add it
+        wp_columns = [c['name'] for c in inspector.get_columns('watch_parties')]
+        if 'admin_token' not in wp_columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE watch_parties ADD COLUMN admin_token VARCHAR(255)"))
+                conn.commit()
+            logger.info("Added 'admin_token' column to 'watch_parties' table.")
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")
 
@@ -200,6 +208,72 @@ def run_auto_naming_thread(config_obj):
         finally:
             with state_lock:
                 pipeline_state['running'] = False
+
+@app.before_request
+def restrict_public_access():
+    """Restricts public tunnel (localhost.run) viewers from accessing admin routes/APIs."""
+    host = request.headers.get('Host', '')
+    if '.lhr.life' in host or 'localhost.run' in host:
+        path = request.path
+        
+        # 1. Allow static files
+        if path.startswith('/static/'):
+            return
+            
+        # 2. Allow watch party visual pages
+        if path.startswith('/watch-party/'):
+            return
+            
+        # 3. Allow watch party core signaling and control APIs
+        if path.startswith('/api/watch-party/'):
+            return
+            
+        # 4. Allow specific media routes for the player
+        if path.startswith('/media/') or path.startswith('/api/video-thumbnail/') or path.startswith('/api/thumbnail/'):
+            return
+            
+        # 5. Allow list media files *only* for currently shared watch party folders
+        if path.startswith('/api/profile/') and path.endswith('/media'):
+            folder_name = path.split('/')[3]
+            with watch_parties_lock:
+                # Active in memory
+                active_folders = [p['folder_name'] for p in watch_parties_state.values()]
+                if folder_name in active_folders:
+                    return
+                # Active in DB
+                try:
+                    from utils.models import WatchParty
+                    exists = WatchParty.query.filter_by(folder_name=folder_name).first()
+                    if exists:
+                        return
+                except Exception:
+                    pass
+            return jsonify({'status': 'error', 'message': 'Access denied: Folder is not shared in any active watch party.'}), 403
+
+        # 6. Allow profiles listing ONLY if a valid active watch party admin token is provided
+        if path == '/api/profiles':
+            admin_token = request.args.get('admin_token') or request.headers.get('X-Admin-Token')
+            if admin_token:
+                with watch_parties_lock:
+                    # Valid active admin token in memory
+                    active_tokens = [p.get('admin_token') for p in watch_parties_state.values() if p.get('admin_token')]
+                    if admin_token in active_tokens:
+                        return
+                    # Valid active admin token in DB
+                    try:
+                        from utils.models import WatchParty
+                        exists = WatchParty.query.filter_by(admin_token=admin_token).first()
+                        if exists:
+                            return
+                    except Exception:
+                        pass
+            return jsonify({'status': 'error', 'message': 'Access denied: Admin authentication required.'}), 403
+
+        # For all other routes, block access
+        if 'text/html' in request.headers.get('Accept', ''):
+            return '<div style="font-family: sans-serif; text-align: center; margin-top: 10%; color: #ef4444;"><h1>Access Denied</h1><p>Public viewers are only permitted to access Watch Party rooms via their direct links.</p></div>', 403
+            
+        return jsonify({'status': 'error', 'message': 'Access denied: Public viewers are only permitted to access watch parties.'}), 403
 
 @app.route('/')
 def index():
@@ -1797,6 +1871,7 @@ def create_watch_party():
     try:
         from utils.models import WatchParty
         party_id = str(uuid.uuid4())
+        admin_token = str(uuid.uuid4())
         
         # Optional password hashing
         password_hash = None
@@ -1809,6 +1884,7 @@ def create_watch_party():
             id=party_id,
             folder_name=folder_name,
             password_hash=password_hash,
+            admin_token=admin_token,
             expires_at=expires_at
         )
         
@@ -1818,13 +1894,18 @@ def create_watch_party():
         # Initialize in-memory state
         with watch_parties_lock:
             watch_parties_state[party_id] = {
+                'admin_token': admin_token,
                 'clients': {},
                 'playback_state': {
                     'filename': None,
                     'position': 0.0,
                     'playing': False,
                     'last_updated': time.time()
-                }
+                },
+                'playback_locked': False,
+                'slow_mode': False,
+                'kicked_clients': [],
+                'cooldowns': {}
             }
             
         logger.info(f"Watch party {party_id} created for folder {folder_name} (expires: {expires_at})")
@@ -1832,6 +1913,7 @@ def create_watch_party():
         res_data = {
             'status': 'success',
             'party_id': party_id,
+            'admin_token': admin_token,
             'url': f"/watch-party/{party_id}",
             'password_protected': password is not None and len(password) > 0
         }
@@ -1889,6 +1971,7 @@ def stream_watch_party(party_id):
     """SSE endpoint for streaming playback state, participants, and WebRTC signals."""
     client_id = request.args.get('client_id')
     client_name = request.args.get('client_name', 'Viewer')
+    admin_token = request.args.get('admin_token')
     
     if not client_id:
         return "client_id is required", 400
@@ -1902,6 +1985,18 @@ def stream_watch_party(party_id):
         logger.error(f"DB error checking watch party: {e}")
         return "Server Error", 500
 
+    is_admin = False
+    with watch_parties_lock:
+        if party_id in watch_parties_state:
+            party_state = watch_parties_state[party_id]
+            if client_id in party_state.get('kicked_clients', []):
+                return "You have been kicked from this party", 403
+            if admin_token and party_state.get('admin_token') == admin_token:
+                is_admin = True
+        else:
+            if admin_token and party.admin_token == admin_token:
+                is_admin = True
+
     def event_stream():
         q = queue.Queue()
         
@@ -1909,13 +2004,18 @@ def stream_watch_party(party_id):
             # Reinitialize state if server was restarted
             if party_id not in watch_parties_state:
                 watch_parties_state[party_id] = {
+                    'admin_token': party.admin_token,
                     'clients': {},
                     'playback_state': {
                         'filename': None,
                         'position': 0.0,
                         'playing': False,
                         'last_updated': time.time()
-                    }
+                    },
+                    'playback_locked': False,
+                    'slow_mode': False,
+                    'kicked_clients': [],
+                    'cooldowns': {}
                 }
                 
             party_state = watch_parties_state[party_id]
@@ -1924,14 +2024,16 @@ def stream_watch_party(party_id):
             party_state['clients'][client_id] = {
                 'name': client_name,
                 'queue': q,
-                'last_seen': time.time()
+                'last_seen': time.time(),
+                'is_admin': is_admin
             }
             
             # Broadcast join event to all other clients
             join_msg = {
                 'type': 'peer_joined',
                 'client_id': client_id,
-                'name': client_name
+                'name': client_name,
+                'is_admin': is_admin
             }
             for c_id, client in party_state['clients'].items():
                 if c_id != client_id:
@@ -1941,10 +2043,13 @@ def stream_watch_party(party_id):
             q.put({
                 'type': 'init',
                 'playback_state': party_state['playback_state'],
-                'peers': [{'client_id': c_id, 'name': c['name']} for c_id, c in party_state['clients'].items() if c_id != client_id]
+                'playback_locked': party_state.get('playback_locked', False),
+                'slow_mode': party_state.get('slow_mode', False),
+                'is_admin': is_admin,
+                'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id]
             })
             
-        logger.info(f"Client {client_name} ({client_id}) connected to watch party {party_id}")
+        logger.info(f"Client {client_name} ({client_id}) connected to watch party {party_id} (is_admin: {is_admin})")
         
         try:
             while True:
@@ -2001,6 +2106,13 @@ def sync_watch_party(party_id):
             
         party_state = watch_parties_state[party_id]
         
+        # Check if playback is locked to admin only
+        if party_state.get('playback_locked', False):
+            client_info = party_state['clients'].get(client_id)
+            is_admin = client_info.get('is_admin', False) if client_info else False
+            if not is_admin:
+                return jsonify({'status': 'ignored', 'message': 'Playback is locked by admin'}), 200
+                
         # Update playback state
         party_state['playback_state'] = {
             'filename': filename,
@@ -2041,19 +2153,445 @@ def chat_watch_party(party_id):
             
         party_state = watch_parties_state[party_id]
         
+        # Check if client was kicked
+        if client_id in party_state.get('kicked_clients', []):
+            return jsonify({'status': 'error', 'message': 'You have been kicked from this party'}), 403
+            
+        client_info = party_state['clients'].get(client_id)
+        is_admin = client_info.get('is_admin', False) if client_info else False
+        
+        # Enforce slow mode cooldown for non-admin
+        if party_state.get('slow_mode', False) and not is_admin:
+            now = time.time()
+            cooldowns = party_state.setdefault('cooldowns', {})
+            last_chat_time = cooldowns.get(client_id, 0)
+            if now - last_chat_time < 10.0:
+                remaining = int(10.0 - (now - last_chat_time))
+                return jsonify({'status': 'error', 'message': f'Slow mode active. Please wait {remaining}s.'}), 429
+            cooldowns[client_id] = now
+            
+        message_id = str(uuid.uuid4())
         chat_msg = {
             'type': 'chat',
+            'message_id': message_id,
             'sender_id': client_id,
             'sender_name': client_name,
             'message': message,
-            'time': time.strftime('%H:%M')
+            'time': time.strftime('%H:%M'),
+            'is_admin': is_admin
         }
         
         for c_id, client in party_state['clients'].items():
             if c_id != client_id:
                 client['queue'].put(chat_msg)
                 
-    return jsonify({'status': 'success'})
+    return jsonify({'status': 'success', 'message_id': message_id})
+
+
+@app.route('/api/watch-party/<party_id>/is-admin', methods=['POST'])
+def check_watch_party_admin(party_id):
+    """Checks if the provided token matches the admin token of the watch party."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            try:
+                from utils.models import WatchParty
+                party = WatchParty.query.get(party_id)
+                if not party or party.expires_at < datetime.utcnow():
+                    return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+                
+                watch_parties_state[party_id] = {
+                    'admin_token': party.admin_token,
+                    'clients': {},
+                    'playback_state': {
+                        'filename': None,
+                        'position': 0.0,
+                        'playing': False,
+                        'last_updated': time.time()
+                    },
+                    'playback_locked': False,
+                    'slow_mode': False,
+                    'kicked_clients': [],
+                    'cooldowns': {}
+                }
+            except Exception as e:
+                return jsonify({'status': 'error', 'message': f'DB error: {e}'}), 500
+                
+        party_state = watch_parties_state[party_id]
+        is_admin = party_state.get('admin_token') == admin_token
+        
+    return jsonify({'status': 'success', 'is_admin': is_admin})
+
+
+@app.route('/api/watch-party/<party_id>/change-folder', methods=['POST'])
+def change_watch_party_folder(party_id):
+    """Changes the active folder of the watch party (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    new_folder_name = data.get('folder_name')
+    
+    if not admin_token or not new_folder_name:
+        return jsonify({'status': 'error', 'message': 'admin_token and folder_name are required'}), 400
+        
+    if '..' in new_folder_name or '/' in new_folder_name or '\\' in new_folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        party.folder_name = new_folder_name
+        db.session.commit()
+        
+        from utils.cache import EmbeddingCache
+        from modules.profile_manager import get_profile_media
+        
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        cache_db = EmbeddingCache(cache_dir)
+        new_media_files = get_profile_media(new_folder_name, cache_db, current_config)
+        
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                watch_parties_state[party_id] = {
+                    'admin_token': party.admin_token,
+                    'clients': {},
+                    'playback_state': {
+                        'filename': None,
+                        'position': 0.0,
+                        'playing': False,
+                        'last_updated': time.time()
+                    },
+                    'playback_locked': False,
+                    'slow_mode': False,
+                    'kicked_clients': [],
+                    'cooldowns': {}
+                }
+            
+            party_state = watch_parties_state[party_id]
+            party_state['playback_state'] = {
+                'filename': new_media_files[0]['filename'] if new_media_files else None,
+                'position': 0.0,
+                'playing': False,
+                'last_updated': time.time()
+            }
+            
+            change_msg = {
+                'type': 'folder_changed',
+                'folder_name': new_folder_name,
+                'files': new_media_files,
+                'sender_id': 'system'
+            }
+            for c_id, client in party_state['clients'].items():
+                client['queue'].put(change_msg)
+                
+        logger.info(f"Watch party {party_id} active folder changed to {new_folder_name} by admin")
+        return jsonify({'status': 'success', 'files': new_media_files})
+        
+    except Exception as e:
+        logger.error(f"Error changing folder for watch party {party_id}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/kick', methods=['POST'])
+def kick_watch_party_client(party_id):
+    """Kicks a client from the watch party (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    target_client_id = data.get('client_id')
+    
+    if not admin_token or not target_client_id:
+        return jsonify({'status': 'error', 'message': 'admin_token and client_id are required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+                
+            party_state = watch_parties_state[party_id]
+            kicked_clients = party_state.setdefault('kicked_clients', [])
+            if target_client_id not in kicked_clients:
+                kicked_clients.append(target_client_id)
+                
+            if target_client_id in party_state['clients']:
+                target_client = party_state['clients'][target_client_id]
+                target_client['queue'].put({'type': 'kicked'})
+                
+        logger.info(f"Client {target_client_id} kicked from watch party {party_id} by admin")
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error kicking client: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/force-mute', methods=['POST'])
+def force_mute_watch_party_client(party_id):
+    """Force-mutes a client's audio (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    target_client_id = data.get('client_id')
+    
+    if not admin_token or not target_client_id:
+        return jsonify({'status': 'error', 'message': 'admin_token and client_id are required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+                
+            party_state = watch_parties_state[party_id]
+            if target_client_id in party_state['clients']:
+                party_state['clients'][target_client_id]['queue'].put({'type': 'force_mute'})
+                
+        logger.info(f"Client {target_client_id} force muted in watch party {party_id} by admin")
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error force muting client: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/playback-lock', methods=['POST'])
+def toggle_playback_lock(party_id):
+    """Enables or disables playback sync locking for non-admins (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    locked = data.get('locked', False)
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+                
+            party_state = watch_parties_state[party_id]
+            party_state['playback_locked'] = locked
+            
+            # Broadcast the change in locking status
+            lock_msg = {
+                'type': 'playback_locked',
+                'locked': locked
+            }
+            for c_id, client in party_state['clients'].items():
+                client['queue'].put(lock_msg)
+                
+        logger.info(f"Playback lock in watch party {party_id} set to {locked} by admin")
+        return jsonify({'status': 'success', 'locked': locked})
+    except Exception as e:
+        logger.error(f"Error toggling playback lock: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/delete-message', methods=['POST'])
+def delete_chat_message(party_id):
+    """Deletes a message from the chat logs across all connected clients (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    message_id = data.get('message_id')
+    
+    if not admin_token or not message_id:
+        return jsonify({'status': 'error', 'message': 'admin_token and message_id are required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+                
+            party_state = watch_parties_state[party_id]
+            delete_msg = {
+                'type': 'chat_delete',
+                'message_id': message_id
+            }
+            for c_id, client in party_state['clients'].items():
+                client['queue'].put(delete_msg)
+                
+        logger.info(f"Message {message_id} deleted in watch party {party_id} by admin")
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error deleting chat message: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/settings', methods=['POST'])
+def update_watch_party_settings(party_id):
+    """Updates watch party chat modes (slow mode, clear chat, password settings) (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        slow_mode = data.get('slow_mode')
+        clear_chat = data.get('clear_chat', False)
+        new_password = data.get('password')
+        
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+                
+            party_state = watch_parties_state[party_id]
+            
+            if slow_mode is not None:
+                party_state['slow_mode'] = slow_mode
+                settings_msg = {
+                    'type': 'settings_changed',
+                    'slow_mode': slow_mode
+                }
+                for c_id, client in party_state['clients'].items():
+                    client['queue'].put(settings_msg)
+                    
+            if clear_chat:
+                clear_msg = {
+                    'type': 'chat_clear'
+                }
+                for c_id, client in party_state['clients'].items():
+                    client['queue'].put(clear_msg)
+                    
+        if new_password is not None:
+            if new_password == '':
+                party.password_hash = None
+                logger.info(f"Watch party {party_id} password removed by admin")
+            else:
+                party.password_hash = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+                logger.info(f"Watch party {party_id} password changed by admin")
+            db.session.commit()
+            
+        return jsonify({
+            'status': 'success',
+            'slow_mode': party_state.get('slow_mode', False),
+            'password_protected': party.password_hash is not None
+        })
+    except Exception as e:
+        logger.error(f"Error updating settings: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/extend', methods=['POST'])
+def extend_watch_party(party_id):
+    """Extends watch party expiry duration (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    hours = data.get('hours', 6)
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        party.expires_at = party.expires_at + timedelta(hours=hours)
+        db.session.commit()
+        
+        expires_str = party.expires_at.strftime('%Y-%m-%d %H:%M:%S')
+        with watch_parties_lock:
+            if party_id in watch_parties_state:
+                party_state = watch_parties_state[party_id]
+                extend_msg = {
+                    'type': 'settings_changed',
+                    'expires_at': expires_str
+                }
+                for c_id, client in party_state['clients'].items():
+                    client['queue'].put(extend_msg)
+                    
+        logger.info(f"Watch party {party_id} extended by {hours} hours (new expiry: {expires_str})")
+        return jsonify({'status': 'success', 'expires_at': expires_str})
+    except Exception as e:
+        logger.error(f"Error extending watch party: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/end', methods=['POST'])
+def end_watch_party(party_id):
+    """Immediately ends watch party and disconnects all clients (admin only)."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        party.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        db.session.commit()
+        
+        with watch_parties_lock:
+            if party_id in watch_parties_state:
+                party_state = watch_parties_state[party_id]
+                end_msg = {
+                    'type': 'party_ended'
+                }
+                for c_id, client in party_state['clients'].items():
+                    client['queue'].put(end_msg)
+                    
+        logger.info(f"Watch party {party_id} ended by admin")
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error ending watch party: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/watch-party/<party_id>/signal', methods=['POST'])
@@ -2185,6 +2723,55 @@ except ValueError:
     # elsewhere, we fail gracefully.
     pass
 
+# Register Windows Console Control Handler to exit cleanly on Ctrl+C and Close Events
+if os.name == 'nt':
+    try:
+        import ctypes
+        import sys
+        PHANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint32)
+        
+        def win_ctrl_handler(dwCtrlType):
+            if dwCtrlType in (0, 1, 2, 6):
+                sys.stderr.write("\nCtrl+C or terminal close detected. Terminating SSH tunnel and exiting...\n")
+                sys.stderr.flush()
+                cleanup_tunnel()
+                os._exit(0)
+            return False
+            
+        # Store global reference to avoid GC
+        win_ctrl_callback = PHANDLER_ROUTINE(win_ctrl_handler)
+        ctypes.windll.kernel32.SetConsoleCtrlHandler(win_ctrl_callback, True)
+    except Exception as e:
+        logger.warning(f"Failed to register Windows Console Control Handler: {e}")
+
+def monitor_parent_process():
+    """Monitors the parent process (reloader) and terminates the child process if the parent dies."""
+    if os.name != 'nt' or os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        return
+        
+    try:
+        import ctypes
+        import time
+        SYNCHRONIZE = 0x00100000
+        ppid = os.getppid()
+        h_parent = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, ppid)
+        if not h_parent:
+            return
+            
+        try:
+            while True:
+                # Wait 1000ms. If signaled, it returns 0 (WAIT_OBJECT_0).
+                res = ctypes.windll.kernel32.WaitForSingleObject(h_parent, 1000)
+                if res == 0:
+                    logger.info("Parent process (reloader) has exited. Shutting down child process...")
+                    cleanup_tunnel()
+                    os._exit(0)
+                time.sleep(1)
+        finally:
+            ctypes.windll.kernel32.CloseHandle(h_parent)
+    except Exception as e:
+        logger.warning(f"Error in parent process monitor thread: {e}")
+
 def start_localhost_run_tunnel():
     """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
     global public_tunnel_url, active_tunnel_proc, tunnel_should_run, windows_job_handle
@@ -2252,6 +2839,10 @@ if __name__ == '__main__':
     
     # Start background tunnel to make watch parties shareable online
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        if os.name == 'nt' and os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+            monitor_t = threading.Thread(target=monitor_parent_process, daemon=True)
+            monitor_t.start()
+            
         t = threading.Thread(target=start_localhost_run_tunnel, daemon=True)
         t.start()
         

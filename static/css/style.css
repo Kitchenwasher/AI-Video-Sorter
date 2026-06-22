@@ -1837,6 +1837,37 @@ body.modal-open {
 
 .tab-content-panel.active {
     display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.metadata-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.queue-controls-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+}
+
+#playlist-queue-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
 }
 
 /* Queue items */
@@ -2592,6 +2623,12 @@ body.modal-open {
 .search-result-card.hovering-video .video-play-indicator {
     opacity: 0;
     transition: opacity 0.2s ease;
+}
+
+.gallery-item.hovering-video .gallery-item-hover-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(10, 10, 12, 0.25) !important;
 }
 
 /* ===== Duplicate Finder Section ===== */
