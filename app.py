@@ -2056,9 +2056,66 @@ def signal_watch_party(party_id):
 public_tunnel_url = None
 active_tunnel_proc = None
 tunnel_should_run = True
+windows_job_handle = None
+
+# Job Object definitions for Windows child process cleanup on exit/crash
+if os.name == 'nt':
+    import ctypes
+    
+    class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", ctypes.c_uint32),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", ctypes.c_uint32),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", ctypes.c_uint32),
+            ("SchedulingClass", ctypes.c_uint32),
+        ]
+
+    class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+            ("IoInfo", ctypes.c_ubyte * 48),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+def setup_windows_job_object():
+    global windows_job_handle
+    if os.name != 'nt':
+        return
+    try:
+        h_job = ctypes.windll.kernel32.CreateJobObjectW(None, None)
+        if not h_job:
+            return
+        
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+        JobObjectExtendedLimitInformation = 9
+        
+        limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        
+        res = ctypes.windll.kernel32.SetInformationJobObject(
+            h_job,
+            JobObjectExtendedLimitInformation,
+            ctypes.byref(limits),
+            ctypes.sizeof(limits)
+        )
+        if res:
+            windows_job_handle = h_job
+            logger.info("Successfully configured Windows Job Object for SSH tunnel auto-termination.")
+        else:
+            ctypes.windll.kernel32.CloseHandle(h_job)
+    except Exception as e:
+        logger.warning(f"Could not setup Windows Job Object: {e}")
 
 def cleanup_tunnel():
-    global tunnel_should_run, active_tunnel_proc
+    global tunnel_should_run, active_tunnel_proc, windows_job_handle
     tunnel_should_run = False
     if active_tunnel_proc:
         try:
@@ -2070,12 +2127,19 @@ def cleanup_tunnel():
                 active_tunnel_proc.kill()
         except Exception as e:
             logger.error(f"Error terminating tunnel process: {e}")
+            
+    if os.name == 'nt' and windows_job_handle:
+        try:
+            ctypes.windll.kernel32.CloseHandle(windows_job_handle)
+            windows_job_handle = None
+        except Exception:
+            pass
 
 atexit.register(cleanup_tunnel)
 
 def start_localhost_run_tunnel():
     """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
-    global public_tunnel_url, active_tunnel_proc, tunnel_should_run
+    global public_tunnel_url, active_tunnel_proc, tunnel_should_run, windows_job_handle
     import re
     
     logger.info("Starting localhost.run SSH tunnel for Watch Party sharing...")
@@ -2085,6 +2149,9 @@ def start_localhost_run_tunnel():
     if os.name == 'nt':
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        
+        if not windows_job_handle:
+            setup_windows_job_object()
         
     try:
         while tunnel_should_run:
@@ -2096,6 +2163,16 @@ def start_localhost_run_tunnel():
                 startupinfo=startupinfo,
                 bufsize=1
             )
+            
+            if os.name == 'nt' and windows_job_handle:
+                try:
+                    res = ctypes.windll.kernel32.AssignProcessToJobObject(windows_job_handle, int(active_tunnel_proc._handle))
+                    if res:
+                        logger.info("Assigned SSH tunnel subprocess to Windows Job Object.")
+                    else:
+                        logger.warning("Failed to assign SSH tunnel subprocess to Windows Job Object.")
+                except Exception as e:
+                    logger.warning(f"Error assigning process to Job Object: {e}")
             
             for line in active_tunnel_proc.stdout:
                 if not tunnel_should_run:
