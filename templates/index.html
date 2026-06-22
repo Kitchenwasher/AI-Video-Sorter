@@ -43,6 +43,10 @@
                     <i class="fa-solid fa-bolt"></i>
                     <span>Pipeline</span>
                 </a>
+                <a href="#duplicates" class="nav-item" id="btn-nav-duplicates">
+                    <i class="fa-solid fa-clone"></i>
+                    <span>Duplicates</span>
+                </a>
                 <a href="#configuration" class="nav-item" id="btn-nav-config">
                     <i class="fa-solid fa-sliders"></i>
                     <span>Settings</span>
@@ -325,6 +329,52 @@
                         </div>
                         <div class="console-output" id="console-logs">
                             <div class="log-line info">System initialized. Awaiting user commands...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION: DUPLICATES -->
+            <section id="sec-duplicates" class="content-section">
+                <div class="duplicates-container">
+                    <div class="dashboard-card glass duplicates-control-card">
+                        <div class="duplicates-control-header">
+                            <div class="control-text">
+                                <h3>Duplicate Finder</h3>
+                                <p class="card-subtitle">Scan library folders using perceptual hashing to group duplicate photos and videos.</p>
+                            </div>
+                            <div class="control-actions">
+                                <button class="btn btn-primary" id="btn-scan-duplicates">
+                                    <i class="fa-solid fa-clone"></i> Scan For Duplicates
+                                </button>
+                                <button class="btn btn-success" id="btn-resolve-all-duplicates" style="display: none;">
+                                    <i class="fa-solid fa-trash-can"></i> Resolve All Selected
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar (shown when scanning) -->
+                        <div class="duplicates-scan-progress" id="duplicates-progress-container" style="display: none; margin-top: 1.5rem;">
+                            <div class="progress-details" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                                <span class="progress-file" id="duplicates-progress-file" style="color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 70%;">Ready...</span>
+                                <span class="progress-percent" id="duplicates-progress-percent" style="font-weight: 600; color: var(--color-primary);">0%</span>
+                            </div>
+                            <div class="progress-bar-container" style="background: rgba(255, 255, 255, 0.05); height: 8px; border-radius: 4px; overflow: hidden; position: relative;">
+                                <div class="progress-bar-fill" id="duplicates-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); transition: width 0.2s ease;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Bar (shown when loaded) -->
+                        <div class="duplicates-stats-bar" id="duplicates-stats-container" style="display: none; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;">
+                            <span class="stats-text" id="duplicates-stats-text" style="font-size: 0.9rem; color: var(--text-muted);">0 duplicate groups found.</span>
+                        </div>
+                    </div>
+
+                    <!-- Duplicates list -->
+                    <div class="duplicates-list-container" id="duplicates-list" style="margin-top: 1.5rem;">
+                        <div class="no-duplicates-placeholder">
+                            <i class="fa-solid fa-copy placeholder-icon"></i>
+                            <p>No duplicate scan performed yet. Click the "Scan For Duplicates" button above to scan your sorted library folders.</p>
                         </div>
                     </div>
                 </div>

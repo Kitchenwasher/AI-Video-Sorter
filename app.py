@@ -528,6 +528,91 @@ def merge_folders():
         logger.error(f"Merge error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/duplicates/scan', methods=['POST'])
+def start_duplicate_scan():
+    """Triggers background duplicate finder scan."""
+    from modules.duplicate_detector import DuplicateDetector
+    success = DuplicateDetector.start_scan(app, current_config)
+    if success:
+        return jsonify({'status': 'success', 'message': 'Duplicate scan started.'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Scan already in progress.'}), 400
+
+@app.route('/api/duplicates/status', methods=['GET'])
+def get_duplicate_status():
+    """Queries duplicate finder scan status."""
+    from modules.duplicate_detector import DuplicateDetector
+    return jsonify(DuplicateDetector.state)
+
+@app.route('/api/duplicates', methods=['GET'])
+def get_duplicates():
+    """Retrieves cached duplicate groups."""
+    from modules.duplicate_detector import DuplicateDetector
+    groups = DuplicateDetector.get_cached_duplicates()
+    return jsonify({'status': 'success', 'groups': groups})
+
+@app.route('/api/duplicates/resolve', methods=['POST'])
+def resolve_duplicates():
+    """Deletes specified duplicate files physically and metadata DB entries."""
+    data = request.json
+    if not data or 'files_to_delete' not in data:
+        return jsonify({'status': 'error', 'message': 'No files specified.'}), 400
+        
+    files_to_delete = data.get('files_to_delete', [])
+    deleted_count = 0
+    errors = []
+    
+    from utils.models import ProcessedFile, WatchHistory
+    from modules.duplicate_detector import DuplicateDetector
+    
+    for file_path in files_to_delete:
+        # Resolve path safely
+        abs_path = os.path.abspath(file_path)
+        if not abs_path.startswith(os.path.abspath(current_config.output_dir)):
+            errors.append(f"Permission denied: {os.path.basename(file_path)} is outside output directory")
+            continue
+            
+        if not os.path.exists(abs_path):
+            errors.append(f"File not found: {os.path.basename(file_path)}")
+            continue
+            
+        try:
+            # 1. Delete from DB (cascade removes faces)
+            db_file = ProcessedFile.query.filter_by(file_path=abs_path).first()
+            if db_file:
+                db.session.delete(db_file)
+                
+            # Delete from WatchHistory (using relative path schema)
+            rel_path = os.path.relpath(abs_path, current_config.output_dir).replace('\\', '/')
+            history_item = WatchHistory.query.filter_by(file_path=rel_path).first()
+            if history_item:
+                db.session.delete(history_item)
+                
+            # 2. Delete physically from disk
+            os.remove(abs_path)
+            deleted_count += 1
+            
+        except Exception as e:
+            logger.error(f"Failed to delete {abs_path}: {e}")
+            errors.append(f"Failed to delete {os.path.basename(abs_path)}: {str(e)}")
+            
+    try:
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Failed to commit database deletions: {e}")
+        db.session.rollback()
+        errors.append(f"Database commit error: {str(e)}")
+        
+    # Re-read cached duplicates to heal list and return updated groups
+    groups = DuplicateDetector.get_cached_duplicates()
+    
+    return jsonify({
+        'status': 'success' if not errors else ('partial' if deleted_count > 0 else 'error'),
+        'deleted_count': deleted_count,
+        'errors': errors,
+        'groups': groups
+    })
+
 @app.route('/api/video-thumbnail/<folder_name>/<filename>')
 def get_video_thumbnail(folder_name, filename):
     """Generates or retrieves a cached video thumbnail frame using FFmpeg."""

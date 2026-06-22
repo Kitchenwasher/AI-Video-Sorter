@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'sec-results': { title: 'Library', sub: 'View identified profiles and sorted media folders' },
         'sec-profiles': { title: 'Face Profiles', sub: 'Manage detected identities, assign images, and merge duplicates' },
         'sec-dashboard': { title: 'Pipeline', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
+        'sec-duplicates': { title: 'Duplicate Finder', sub: 'Scan library folders using perceptual hashing to group duplicate photos and videos' },
         'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
         'sec-gallery': { title: 'Profile Gallery', sub: 'Browse media files and correct sorting' }
     };
@@ -123,6 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadLibrary();
         } else if (targetId === 'sec-profiles') {
             loadProfiles();
+        } else if (targetId === 'sec-duplicates') {
+            loadDuplicates();
         } else if (targetId === 'sec-dashboard') {
             if (typeof checkInitialStatus === 'function') {
                 checkInitialStatus();
@@ -3264,6 +3267,347 @@ document.addEventListener('DOMContentLoaded', () => {
     // Trigger indexer status check and watch history loading immediately after DOM parsing
     setTimeout(checkIndexerStatus, 100);
     setTimeout(loadRecentlyWatched, 100);
+
+    // ===== DUPLICATE FINDER CONTROLLER =====
+    const btnScanDuplicates = document.getElementById('btn-scan-duplicates');
+    const btnResolveAllDuplicates = document.getElementById('btn-resolve-all-duplicates');
+    const duplicatesProgressContainer = document.getElementById('duplicates-progress-container');
+    const duplicatesProgressFile = document.getElementById('duplicates-progress-file');
+    const duplicatesProgressPercent = document.getElementById('duplicates-progress-percent');
+    const duplicatesProgressBar = document.getElementById('duplicates-progress-bar');
+    const duplicatesStatsContainer = document.getElementById('duplicates-stats-container');
+    const duplicatesStatsText = document.getElementById('duplicates-stats-text');
+    const duplicatesList = document.getElementById('duplicates-list');
+
+    let duplicatesScanInterval = null;
+
+    const renderDuplicatesList = (groups) => {
+        duplicatesList.innerHTML = '';
+        
+        if (!groups || groups.length === 0) {
+            duplicatesList.innerHTML = `
+                <div class="no-duplicates-placeholder">
+                    <i class="fa-solid fa-circle-check placeholder-icon" style="color: var(--color-success);"></i>
+                    <p>Clean Library! No duplicate or near-duplicate files detected.</p>
+                </div>
+            `;
+            if (btnResolveAllDuplicates) btnResolveAllDuplicates.style.display = 'none';
+            if (duplicatesStatsContainer) {
+                duplicatesStatsContainer.style.display = 'block';
+                duplicatesStatsText.textContent = '0 duplicate groups found.';
+            }
+            return;
+        }
+
+        if (duplicatesStatsContainer) {
+            duplicatesStatsContainer.style.display = 'block';
+            duplicatesStatsText.textContent = `${groups.length} duplicate groups found.`;
+        }
+        if (btnResolveAllDuplicates) btnResolveAllDuplicates.style.display = 'inline-flex';
+
+        groups.forEach((group, groupIdx) => {
+            const groupCard = document.createElement('div');
+            groupCard.className = 'duplicate-group-card';
+            groupCard.dataset.groupIdx = groupIdx;
+
+            const isVideo = group.file_type === 'video';
+            const groupHeaderHtml = `
+                <div class="duplicate-group-header">
+                    <div class="duplicate-group-title">
+                        <i class="${isVideo ? 'fa-solid fa-video' : 'fa-solid fa-image'}"></i>
+                        <span>Set ${groupIdx + 1}: ${isVideo ? 'Video' : 'Photo'} Duplicates (${group.files.length} files)</span>
+                    </div>
+                    <button class="btn btn-secondary btn-resolve-group" style="padding: 0.4rem 1rem; font-size: 0.8rem;" data-group-idx="${groupIdx}">
+                        <i class="fa-solid fa-trash-can"></i> Resolve Set
+                    </button>
+                </div>
+            `;
+
+            let filesHtml = '';
+            group.files.forEach((file, fileIdx) => {
+                const isBest = file.is_best;
+                const sizeHuman = file.size > 1024*1024*1024 
+                    ? (file.size / (1024*1024*1024)).toFixed(2) + ' GB'
+                    : (file.size / (1024*1024)).toFixed(2) + ' MB';
+
+                let mediaElementHtml = '';
+                const fileUrl = `/media/${encodeURIComponent(file.rel_path)}`;
+                if (isVideo) {
+                    const thumbUrl = `/api/video-thumbnail/${encodeURIComponent(file.folder)}/${encodeURIComponent(file.name)}?t=${Date.now()}`;
+                    mediaElementHtml = `
+                        <div class="duplicate-media-wrapper thumbnail-container" 
+                             data-folder="${file.folder}" 
+                             data-filename="${file.name}" 
+                             data-is-video="true" 
+                             data-is-native="true">
+                            <img src="${thumbUrl}" alt="Video thumbnail" loading="lazy">
+                            <div class="duplicate-video-overlay"><i class="fa-solid fa-play"></i></div>
+                        </div>
+                    `;
+                } else {
+                    mediaElementHtml = `
+                        <div class="duplicate-media-wrapper">
+                            <img src="${fileUrl}" alt="Duplicate image" loading="lazy">
+                        </div>
+                    `;
+                }
+
+                const resolution = file.width && file.height ? `${file.width}x${file.height}` : 'Unknown';
+                const durationHtml = isVideo && file.duration
+                    ? `<tr><td class="label">Duration</td><td class="value">${formatDuration(file.duration)}</td></tr>`
+                    : '';
+
+                const displayName = file.name.replace(/_/g, ' ').trim();
+
+                filesHtml += `
+                    <div class="duplicate-file-card ${isBest ? 'to-keep' : 'to-delete'}" data-file-idx="${fileIdx}" data-path="${file.path}">
+                        <span class="quality-badge ${isBest ? 'best' : 'copy'}">${isBest ? 'Keep (Best)' : 'Duplicate'}</span>
+                        ${mediaElementHtml}
+                        <div class="duplicate-file-details">
+                            <h4 style="font-size: 0.9rem; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.2rem;" title="${file.name}">${displayName}</h4>
+                            <div class="duplicate-file-meta" style="margin-bottom: 0.4rem;">Folder: ${file.folder}</div>
+                            <table class="duplicate-comparison-table">
+                                <tr>
+                                    <td class="label">Resolution</td>
+                                    <td class="value">${resolution}</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">File Size</td>
+                                    <td class="value">${sizeHuman}</td>
+                                </tr>
+                                ${durationHtml}
+                            </table>
+                            
+                            <div class="duplicate-action-selector">
+                                <input type="radio" 
+                                       name="dup-action-group-${groupIdx}" 
+                                       id="dup-action-keep-${groupIdx}-${fileIdx}" 
+                                       class="duplicate-action-input" 
+                                       value="keep" 
+                                       ${isBest ? 'checked' : ''}
+                                       data-path="${file.path}">
+                                <label for="dup-action-keep-${groupIdx}-${fileIdx}" class="duplicate-action-btn keep">Keep</label>
+                                
+                                <input type="radio" 
+                                       name="dup-action-group-${groupIdx}" 
+                                       id="dup-action-del-${groupIdx}-${fileIdx}" 
+                                       class="duplicate-action-input" 
+                                       value="delete" 
+                                       ${!isBest ? 'checked' : ''}
+                                       data-path="${file.path}">
+                                <label for="dup-action-del-${groupIdx}-${fileIdx}" class="duplicate-action-btn delete">Delete</label>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            groupCard.innerHTML = `
+                ${groupHeaderHtml}
+                <div class="duplicate-group-files">
+                    ${filesHtml}
+                </div>
+            `;
+
+            const videoCards = groupCard.querySelectorAll('.thumbnail-container');
+            videoCards.forEach(card => {
+                if (typeof attachHoverPreview === 'function') {
+                    attachHoverPreview(card);
+                }
+                
+                card.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const folder = card.dataset.folder;
+                    const filename = card.dataset.filename;
+                    if (typeof playVideoInLightbox === 'function') {
+                        playVideoInLightbox(folder, filename);
+                    }
+                });
+            });
+
+            const fileCards = groupCard.querySelectorAll('.duplicate-file-card');
+            const radios = groupCard.querySelectorAll('.duplicate-action-input');
+            radios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    fileCards.forEach(card => {
+                        const cardPath = card.dataset.path;
+                        const keepChecked = groupCard.querySelector(`.duplicate-action-input[value="keep"][data-path="${cardPath}"]`).checked;
+                        if (keepChecked) {
+                            card.classList.add('to-keep');
+                            card.classList.remove('to-delete');
+                        } else {
+                            card.classList.add('to-delete');
+                            card.classList.remove('to-keep');
+                        }
+                    });
+                });
+            });
+
+            duplicatesList.appendChild(groupCard);
+        });
+
+        const resolveGroupBtns = duplicatesList.querySelectorAll('.btn-resolve-group');
+        resolveGroupBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const groupIdx = btn.dataset.groupIdx;
+                const groupCard = duplicatesList.querySelector(`.duplicate-group-card[data-group-idx="${groupIdx}"]`);
+                if (!groupCard) return;
+
+                const deleteInputs = groupCard.querySelectorAll('.duplicate-action-input[value="delete"]:checked');
+                const filesToDelete = Array.from(deleteInputs).map(inp => inp.dataset.path);
+
+                if (filesToDelete.length === 0) {
+                    showToast('No files are marked for deletion in this set.', true);
+                    return;
+                }
+
+                if (confirm(`Are you sure you want to permanently delete these ${filesToDelete.length} duplicate file(s)?`)) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving...';
+                    await resolveSelectedFiles(filesToDelete);
+                }
+            });
+        });
+    };
+
+    const formatDuration = (sec) => {
+        if (!sec || isNaN(sec)) return '0:00';
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        const padS = s.toString().padStart(2, '0');
+        if (h > 0) {
+            const padM = m.toString().padStart(2, '0');
+            return `${h}:${padM}:${padS}`;
+        }
+        return `${m}:${padS}`;
+    };
+
+    const loadDuplicates = async () => {
+        try {
+            const res = await fetch(`/api/duplicates?t=${Date.now()}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                renderDuplicatesList(data.groups);
+            }
+        } catch (err) {
+            console.error('Failed to load duplicates:', err);
+            duplicatesList.innerHTML = `
+                <div class="no-duplicates-placeholder">
+                    <i class="fa-solid fa-circle-exclamation placeholder-icon" style="color: var(--color-danger);"></i>
+                    <p>Failed to load duplicates list: ${err.message}</p>
+                </div>
+            `;
+        }
+    };
+
+    const resolveSelectedFiles = async (filesToDelete) => {
+        try {
+            const res = await fetch('/api/duplicates/resolve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files_to_delete: filesToDelete })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                showToast(`Successfully deleted ${data.deleted_count} duplicate file(s).`);
+                renderDuplicatesList(data.groups);
+            } else if (data.status === 'partial') {
+                showToast(`Deleted ${data.deleted_count} files with errors: ${data.errors.join(', ')}`, true);
+                renderDuplicatesList(data.groups);
+            } else {
+                showToast(`Failed to delete files: ${data.errors.join(', ')}`, true);
+            }
+        } catch (err) {
+            console.error('Failed to resolve duplicates:', err);
+            showToast(`HTTP Error resolving duplicates: ${err.message}`, true);
+        }
+    };
+
+    if (btnResolveAllDuplicates) {
+        btnResolveAllDuplicates.addEventListener('click', async () => {
+            const deleteInputs = duplicatesList.querySelectorAll('.duplicate-action-input[value="delete"]:checked');
+            const filesToDelete = Array.from(deleteInputs).map(inp => inp.dataset.path);
+
+            if (filesToDelete.length === 0) {
+                showToast('No files are marked for deletion across any duplicate sets.', true);
+                return;
+            }
+
+            if (confirm(`Are you sure you want to permanently delete ALL selected duplicates (${filesToDelete.length} files)?`)) {
+                btnResolveAllDuplicates.disabled = true;
+                btnResolveAllDuplicates.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+                await resolveSelectedFiles(filesToDelete);
+                btnResolveAllDuplicates.disabled = false;
+                btnResolveAllDuplicates.innerHTML = '<i class="fa-solid fa-trash-can"></i> Resolve All Selected';
+            }
+        });
+    }
+
+    const startDuplicatesPolling = () => {
+        if (duplicatesScanInterval) clearInterval(duplicatesScanInterval);
+        
+        duplicatesScanInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/duplicates/status?t=${Date.now()}`);
+                const data = await res.json();
+                
+                if (data.running) {
+                    if (btnScanDuplicates) {
+                        btnScanDuplicates.disabled = true;
+                        btnScanDuplicates.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
+                    }
+                    if (duplicatesProgressContainer) duplicatesProgressContainer.style.display = 'block';
+                    if (duplicatesProgressFile) duplicatesProgressFile.textContent = `Scanning: ${data.current_file}`;
+                    if (duplicatesProgressPercent) duplicatesProgressPercent.textContent = `${data.percent}%`;
+                    if (duplicatesProgressBar) duplicatesProgressBar.style.width = `${data.percent}%`;
+                    if (duplicatesStatsContainer) duplicatesStatsContainer.style.display = 'none';
+                    if (btnResolveAllDuplicates) btnResolveAllDuplicates.style.display = 'none';
+                } else {
+                    clearInterval(duplicatesScanInterval);
+                    duplicatesScanInterval = null;
+                    
+                    if (btnScanDuplicates) {
+                        btnScanDuplicates.disabled = false;
+                        btnScanDuplicates.innerHTML = '<i class="fa-solid fa-clone"></i> Scan For Duplicates';
+                    }
+                    if (duplicatesProgressContainer) duplicatesProgressContainer.style.display = 'none';
+                    
+                    loadDuplicates();
+                }
+            } catch (err) {
+                console.error('Error polling duplicate status:', err);
+            }
+        }, 1000);
+    };
+
+    if (btnScanDuplicates) {
+        btnScanDuplicates.addEventListener('click', async () => {
+            try {
+                btnScanDuplicates.disabled = true;
+                btnScanDuplicates.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting scan...';
+                
+                const res = await fetch('/api/duplicates/scan', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    showToast('Background duplicate scan started.');
+                    startDuplicatesPolling();
+                } else {
+                    showToast(data.message || 'Failed to start scan.', true);
+                    btnScanDuplicates.disabled = false;
+                    btnScanDuplicates.innerHTML = '<i class="fa-solid fa-clone"></i> Scan For Duplicates';
+                }
+            } catch (err) {
+                console.error(err);
+                showToast(`Error starting duplicate scan: ${err.message}`, true);
+                btnScanDuplicates.disabled = false;
+                btnScanDuplicates.innerHTML = '<i class="fa-solid fa-clone"></i> Scan For Duplicates';
+            }
+        });
+    }
 
     // ===== WATCH PARTY LAUNCHER =====
     const btnCreateWatchParty = document.getElementById('btn-create-watch-party');
