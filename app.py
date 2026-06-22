@@ -2159,7 +2159,7 @@ def start_localhost_run_tunnel():
     import re
     
     logger.info("Starting localhost.run SSH tunnel for Watch Party sharing...")
-    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-R', '80:localhost:5000', 'nokey@localhost.run']
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:5000', 'nokey@localhost.run']
     
     startupinfo = None
     if os.name == 'nt':
