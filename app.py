@@ -2024,6 +2024,38 @@ def sync_watch_party(party_id):
     return jsonify({'status': 'success'})
 
 
+@app.route('/api/watch-party/<party_id>/chat', methods=['POST'])
+def chat_watch_party(party_id):
+    """Receives a chat message from a client and broadcasts it to all other clients in the party."""
+    data = request.json or {}
+    client_id = data.get('client_id')
+    client_name = data.get('client_name')
+    message = data.get('message')
+    
+    if not client_id or not client_name or not message:
+        return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
+            
+        party_state = watch_parties_state[party_id]
+        
+        chat_msg = {
+            'type': 'chat',
+            'sender_id': client_id,
+            'sender_name': client_name,
+            'message': message,
+            'time': time.strftime('%H:%M')
+        }
+        
+        for c_id, client in party_state['clients'].items():
+            if c_id != client_id:
+                client['queue'].put(chat_msg)
+                
+    return jsonify({'status': 'success'})
+
+
 @app.route('/api/watch-party/<party_id>/signal', methods=['POST'])
 def signal_watch_party(party_id):
     """Relays WebRTC connection signaling messages (offers, answers, ICE candidates) to a targeted peer."""

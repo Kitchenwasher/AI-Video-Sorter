@@ -260,25 +260,165 @@
             box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
         }
 
-        /* Peers List */
-        .peers-list {
+        /* Chat & Sidebar UI styling */
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .sidebar-header {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            padding: 0.75rem 1.25rem 0.25rem 1.25rem;
+            text-transform: uppercase;
+        }
+
+        .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 1.25rem;
+            padding: 0.75rem 1.25rem;
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
+        }
+
+        .chat-entry {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            max-width: 85%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            word-break: break-word;
+            position: relative;
+        }
+
+        .chat-entry.incoming {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            align-self: flex-start;
+            border-top-left-radius: 2px;
+        }
+
+        .chat-entry.outgoing {
+            background: var(--color-primary);
+            color: white;
+            align-self: flex-end;
+            border-top-right-radius: 2px;
+        }
+
+        .chat-entry.system {
+            background: rgba(236, 72, 153, 0.08);
+            border: 1px solid rgba(236, 72, 153, 0.15);
+            color: var(--color-primary);
+            align-self: center;
+            font-size: 0.75rem;
+            text-align: center;
+            max-width: 100%;
+            width: 100%;
+            border-radius: 6px;
+            padding: 0.35rem 0.6rem;
+        }
+
+        .chat-sender {
+            font-weight: 700;
+            font-size: 0.72rem;
+            display: block;
+            margin-bottom: 0.15rem;
+            color: var(--color-primary);
+        }
+
+        .chat-entry.outgoing .chat-sender {
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .chat-time {
+            font-size: 0.62rem;
+            color: var(--text-muted);
+            float: right;
+            margin-top: 0.22rem;
+            margin-left: 0.5rem;
+        }
+
+        .chat-entry.outgoing .chat-time {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .chat-input-container {
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(10, 10, 12, 0.4);
+            border-top: 1px solid var(--border-glass);
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 0.6rem 0.85rem;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-glass);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--color-primary);
+        }
+
+        .btn-send {
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .btn-send:hover {
+            box-shadow: 0 0 10px var(--color-primary-glow);
+            transform: translateY(-1px);
+        }
+
+        /* Bottom Section: Participants list */
+        .bottom-section {
+            max-height: 180px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-bottom: 0.75rem;
+        }
+
+        .peers-list-compact {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.4rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
         }
 
         .peer-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(255,255,255,0.02);
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border-glass);
-            padding: 0.65rem 0.85rem;
-            border-radius: 10px;
-            font-size: 0.9rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
         }
 
         .peer-name {
@@ -289,10 +429,10 @@
         }
 
         .voice-indicator {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: #6b7280; /* Gray when silent/muted */
+            background: #6b7280;
             transition: background 0.2s, box-shadow 0.2s;
         }
 
@@ -306,24 +446,8 @@
         }
 
         /* System Logs list */
-        .logs-section {
-            height: 180px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .logs-container {
-            flex: 1;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            padding: 0.65rem;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            border: 1px solid var(--border-glass);
+        .logs-container-compact {
+            display: none; /* Hide standard system logs to make room for chat */
         }
 
         .log-entry {
@@ -441,7 +565,7 @@
             </div>
         </div>
         
-        <!-- Right: Side Panel (Peers, Mic, Logs) -->
+        <!-- Right: Side Panel (Mic, Chat, Peers) -->
         <div class="sidebar-pane">
             <!-- Mic Controller -->
             <div class="sidebar-section">
@@ -455,18 +579,31 @@
                     </button>
                 </div>
             </div>
-            
-            <!-- Peers list -->
-            <div class="peers-list" id="wp-peers-list">
-                <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 0.25rem;">PARTICIPANTS</div>
-                <!-- Pees will load here -->
+
+            <!-- Live Chat Section -->
+            <div class="chat-section">
+                <div class="sidebar-header">LIVE CHAT</div>
+                <div class="chat-messages" id="wp-chat-messages">
+                    <div class="chat-entry system">
+                        Welcome to the Watch Party! Type a message below to chat live.
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" class="chat-input" id="wp-chat-input" placeholder="Type a message...">
+                    <button class="btn-send" id="btn-chat-send" title="Send Message">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
             </div>
             
-            <!-- Real-time logs -->
-            <div class="sidebar-section logs-section">
-                <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 0.5rem;">PARTY EVENTS</div>
-                <div class="logs-container" id="wp-logs-container">
-                    <div class="log-entry"><span class="log-time">System</span>Watch party initialized. Waiting for connection...</div>
+            <!-- Participants list -->
+            <div class="sidebar-section bottom-section">
+                <div class="sidebar-header">PARTICIPANTS (<span id="wp-participant-count">1</span>)</div>
+                <div class="peers-list-compact" id="wp-peers-list">
+                    <!-- Loaded dynamically -->
+                </div>
+                <div class="logs-container-compact" id="wp-logs-container">
+                    <!-- Standard logs wrapper hidden but preserved for SSE setup compatibility -->
                 </div>
             </div>
         </div>

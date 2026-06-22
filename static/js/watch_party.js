@@ -175,6 +175,7 @@
 
             // Start the SSE loop and load playlist
             startWatchParty();
+            initChat();
         };
 
         submitBtn.onclick = handleNicknameSubmit;
@@ -399,6 +400,7 @@
 
             case 'peer_joined':
                 addLogEntry('System', `${data.name} joined the watch party.`);
+                addSystemChatMessage(`${data.name} joined the room.`);
                 activePeers[data.client_id] = { name: data.name };
                 updatePeersUI();
 
@@ -408,6 +410,7 @@
 
             case 'peer_left':
                 addLogEntry('System', `${data.name} left the watch party.`);
+                addSystemChatMessage(`${data.name} left the room.`);
                 
                 // Cleanup peer connection
                 if (peerConnections[data.client_id]) {
@@ -440,6 +443,11 @@
                 }
                 
                 handleIncomingSync(data.action, data.position, data.filename);
+                break;
+
+            case 'chat':
+                if (data.sender_id === clientId) return;
+                addChatMessage(data.sender_name, data.message, data.time, false);
                 break;
 
             case 'signal':
@@ -716,7 +724,12 @@
         const peersList = document.getElementById('wp-peers-list');
         if (!peersList) return;
 
-        peersList.innerHTML = '<div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 0.25rem;">PARTICIPANTS</div>';
+        peersList.innerHTML = '';
+
+        const countSpan = document.getElementById('wp-participant-count');
+        if (countSpan) {
+            countSpan.innerText = Object.keys(activePeers).length + 1;
+        }
 
         Object.keys(activePeers).forEach(peerId => {
             const peer = activePeers[peerId];
@@ -724,7 +737,6 @@
             peerItem.className = 'peer-item';
             peerItem.id = `peer-${peerId}`;
 
-            // Check if connection is active for styling
             const pc = peerConnections[peerId];
             const isMuted = !pc || pc.connectionState !== 'connected';
 
@@ -739,6 +751,84 @@
         });
     }
 
+    function initChat() {
+        const chatInput = document.getElementById('wp-chat-input');
+        const sendBtn = document.getElementById('btn-chat-send');
+
+        if (!chatInput || !sendBtn) return;
+
+        const sendMessage = () => {
+            const msgText = chatInput.value.trim();
+            if (!msgText) return;
+
+            chatInput.value = '';
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            addChatMessage(clientName, msgText, timeStr, true);
+
+            fetch(`/api/watch-party/${window.PARTY_ID}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_id: clientId,
+                    client_name: clientName,
+                    message: msgText
+                })
+            }).catch(err => {
+                console.error('Failed to send chat message:', err);
+                addSystemChatMessage('Error sending message.');
+            });
+        };
+
+        sendBtn.onclick = sendMessage;
+        chatInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        };
+    }
+
+    function addChatMessage(sender, text, timeStr, isSelf) {
+        const messagesContainer = document.getElementById('wp-chat-messages');
+        if (!messagesContainer) return;
+
+        const entry = document.createElement('div');
+        entry.className = `chat-entry ${isSelf ? 'outgoing' : 'incoming'}`;
+        
+        entry.innerHTML = `
+            <span class="chat-sender">${sender}</span>
+            <span>${escapeHTML(text)}</span>
+            <span class="chat-time">${timeStr}</span>
+        `;
+        
+        messagesContainer.appendChild(entry);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function addSystemChatMessage(text) {
+        const messagesContainer = document.getElementById('wp-chat-messages');
+        if (!messagesContainer) return;
+
+        const entry = document.createElement('div');
+        entry.className = 'chat-entry system';
+        entry.innerText = text;
+        
+        messagesContainer.appendChild(entry);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>'"]/g, 
+            tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag] || tag)
+        );
+    }
+
     function addLogEntry(sender, message) {
         const container = document.getElementById('wp-logs-container');
         if (!container) return;
@@ -749,7 +839,6 @@
         entry.innerHTML = `<span class="log-time">${sender}</span> ${message}`;
         container.appendChild(entry);
 
-        // Keep scrolled to bottom
         container.scrollTop = container.scrollHeight;
     }
 
