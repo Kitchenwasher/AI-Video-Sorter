@@ -733,9 +733,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // Defer status check until after page is fully loaded to prevent browser tab loading spinner from getting stuck
-    window.addEventListener('load', () => {
+    // NOTE: By the time DOMContentLoaded finishes executing ~3400 lines of JS, the window 'load' event
+    // may have already fired (especially with cached assets). We must check readyState first.
+    if (document.readyState === 'complete') {
         setTimeout(checkInitialStatus, 100);
-    });
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(checkInitialStatus, 100);
+        });
+    }
 
     // ===== MERGE FOLDERS FEATURE =====
     const mergeModal = document.getElementById('merge-modal');
@@ -3264,10 +3270,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Defer recently watched load until after page is fully loaded to prevent browser tab loading spinner from getting stuck
-    window.addEventListener('load', () => {
+    if (document.readyState === 'complete') {
         setTimeout(checkIndexerStatus, 100);
         setTimeout(loadRecentlyWatched, 100);
-    });
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(checkIndexerStatus, 100);
+            setTimeout(loadRecentlyWatched, 100);
+        });
+    }
 
     // ===== WATCH PARTY LAUNCHER =====
     const btnCreateWatchParty = document.getElementById('btn-create-watch-party');
