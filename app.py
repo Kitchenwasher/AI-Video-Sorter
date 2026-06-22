@@ -2198,6 +2198,10 @@ def start_localhost_run_tunnel():
 
 
 if __name__ == '__main__':
+    # Explicitly set debug mode before the thread check so that app.debug evaluates to True
+    # in the parent process, preventing it from spawning a second tunnel thread.
+    app.debug = True
+    
     # Start background tunnel to make watch parties shareable online
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
         t = threading.Thread(target=start_localhost_run_tunnel, daemon=True)
