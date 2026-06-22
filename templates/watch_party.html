@@ -19,6 +19,12 @@
             --border-glass: rgba(255, 255, 255, 0.08);
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
+            
+            /* Plyr customization */
+            --plyr-color-main: var(--color-primary);
+            --plyr-video-control-color-hover: #fff;
+            --plyr-video-control-background-hover: #a855f7;
+            --plyr-control-radius: 12px;
         }
 
         * {
@@ -122,10 +128,33 @@
             overflow: hidden;
             border: 1px solid var(--border-glass);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            aspect-ratio: 16/9;
             width: 100%;
             max-width: 1100px;
             align-self: center;
+        }
+
+        /* Plyr Aspect Ratio and Scale overrides */
+        .plyr {
+            width: 100%;
+            background: #000;
+        }
+
+        .plyr video,
+        .plyr .plyr__video-wrapper video,
+        .plyr--video .plyr__video-wrapper video {
+            object-fit: contain !important;
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: 75vh !important;
+        }
+
+        .plyr__video-wrapper,
+        .plyr--video .plyr__video-wrapper {
+            height: auto !important;
+            padding-bottom: 0 !important;
+            position: relative !important;
+            overflow: visible !important;
         }
 
         /* Playlist underneath */
