@@ -13,7 +13,7 @@
     <!-- Plyr custom video player stylesheet -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
     <!-- Custom stylesheet -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.8">
 </head>
 <body>
     <div class="background-glows">
@@ -31,17 +31,17 @@
             </div>
             
             <nav class="nav-menu">
-                <a href="#dashboard" class="nav-item active" id="btn-nav-dashboard">
-                    <i class="fa-solid fa-chart-pie"></i>
-                    <span>Dashboard</span>
+                <a href="#results" class="nav-item active" id="btn-nav-results">
+                    <i class="fa-solid fa-photo-film"></i>
+                    <span>Library</span>
+                </a>
+                <a href="#dashboard" class="nav-item" id="btn-nav-dashboard">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Pipeline</span>
                 </a>
                 <a href="#configuration" class="nav-item" id="btn-nav-config">
                     <i class="fa-solid fa-sliders"></i>
                     <span>Settings</span>
-                </a>
-                <a href="#results" class="nav-item" id="btn-nav-results">
-                    <i class="fa-solid fa-folder-tree"></i>
-                    <span>Sorted Library</span>
                 </a>
             </nav>
 
@@ -62,22 +62,158 @@
 
         <!-- Main Content Area -->
         <main class="main-content">
-            <!-- Header -->
-            <header class="top-bar" style="display: flex; justify-content: space-between; align-items: center; gap: 2rem;">
+            <header class="top-bar">
                 <div class="page-title">
-                    <h1 id="page-heading">Dashboard</h1>
-                    <p id="page-subheading">Orchestrate face recognition, gender classification, and clustering pipeline</p>
+                    <h1 id="page-heading">Library</h1>
+                    <p id="page-subheading">View identified profiles and sorted media folders</p>
                 </div>
-                <div class="global-search-trigger-container" style="display: flex; align-items: center;">
-                    <div style="position: relative; display: flex; align-items: center; cursor: pointer;" id="header-search-trigger">
-                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; color: var(--text-muted); font-size: 0.9rem;"></i>
-                        <input type="text" placeholder="Search library... (Ctrl+K or /)" readonly style="padding: 0.5rem 1rem 0.5rem 2.5rem; width: 280px; border-radius: 20px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.88rem; outline: none; cursor: pointer; backdrop-filter: blur(10px); transition: all 0.3s;">
+                <div class="global-search-trigger-container">
+                    <div id="header-search-trigger">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" placeholder="Search library... (Ctrl+K or /)" readonly>
                     </div>
                 </div>
             </header>
 
-            <!-- SECTION 1: DASHBOARD -->
-            <section id="sec-dashboard" class="content-section active">
+            <!-- SECTION 1: LIBRARY (HOME) -->
+            <section id="sec-results" class="content-section active">
+                <div class="results-container">
+                    <!-- Recently Played -->
+                    <div class="dashboard-card glass" id="recently-watched-card" style="margin-bottom: 2rem; display: none;">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <h3><i class="fa-solid fa-clock-rotate-left" style="color: var(--color-primary); margin-right: 0.5rem;"></i>Recently Played</h3>
+                            <button class="btn btn-secondary" id="btn-clear-recent" style="padding: 0.3rem 0.7rem; font-size: 0.75rem;"><i class="fa-solid fa-trash-can"></i> Clear History</button>
+                        </div>
+                        <div id="recently-watched-list" class="recent-list-scrollable" style="display: flex; gap: 1rem; overflow-x: auto; padding: 0.5rem 0 1rem; margin-top: 1rem;">
+                            <!-- Loaded dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Header/Title Meta -->
+                    <div class="results-meta-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; margin-bottom: 1.5rem;">
+                        <div>
+                            <h3 id="library-count-title">No library processed yet</h3>
+                            <p class="results-info-text">Folders contain reference crops. Check them below.</p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" id="btn-merge-folders">
+                                <i class="fa-solid fa-object-group"></i> Merge Folders
+                            </button>
+                            <button class="btn btn-secondary" id="btn-manual-auto-name">
+                                <i class="fa-solid fa-tags"></i> Auto-Name Folders
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Library Toolbar -->
+                    <div class="library-toolbar">
+                        <div class="toolbar-left">
+                            <button class="filter-pill active" data-filter="all">All Profiles</button>
+                            <button class="filter-pill" data-filter="named">Named Only</button>
+                            <button class="filter-pill" data-filter="unnamed">Unnamed Only</button>
+                            <button class="filter-pill" data-filter="rated">Has Rating</button>
+                        </div>
+                        <div class="toolbar-right">
+                            <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 0.5rem;" id="library-stats-label">Loading stats...</span>
+                            <select class="toolbar-select" id="sort-select">
+                                <option value="most">Most Files</option>
+                                <option value="least">Least Files</option>
+                                <option value="a-z">Name (A-Z)</option>
+                                <option value="z-a">Name (Z-A)</option>
+                                <option value="rating">Highest Rated</option>
+                            </select>
+                            <button class="view-toggle-btn active" id="btn-view-grid" title="Grid View">
+                                <i class="fa-solid fa-grip"></i>
+                            </button>
+                            <button class="view-toggle-btn" id="btn-view-list" title="List View">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="library-grid" id="library-grid">
+                        <div class="no-results-placeholder">
+                            <i class="fa-solid fa-folder-open placeholder-icon"></i>
+                            <p>No sorted directories found. Start sorting from the Pipeline tab.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: GALLERY (SPA FULL-PAGE VIEW) -->
+            <section id="sec-gallery" class="content-section">
+                <!-- Hero Header -->
+                <div class="gallery-hero">
+                    <button class="btn-back" id="btn-back-library">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Library
+                    </button>
+                    <div class="gallery-hero-info">
+                        <div class="gallery-hero-details">
+                            <img id="gallery-hero-face" class="hero-avatar" src="" onerror="this.src='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/user-astronaut.svg';">
+                            <div class="hero-text-content">
+                                <div class="hero-title-row">
+                                    <!-- Normal View -->
+                                    <div id="gallery-title-container" style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <h2 id="gallery-title" style="margin: 0;">Identity Gallery</h2>
+                                        <button class="btn-icon-hover" id="btn-rename-gallery-folder" title="Rename Identity" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; transition: color 0.2s; padding: 0.25rem; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Edit View (Initially Hidden) -->
+                                    <div id="gallery-rename-container" style="display: none; align-items: center; gap: 0.5rem; width: 300px;">
+                                        <input type="text" id="gallery-rename-input" style="padding: 0.4rem 0.7rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%; outline: none; transition: border-color 0.2s;">
+                                        <button class="btn btn-primary" id="btn-rename-save" style="padding: 0.4rem 0.7rem; font-size: 0.85rem;" title="Save new name">
+                                            <i class="fa-solid fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-secondary" id="btn-rename-cancel" style="padding: 0.4rem 0.7rem; font-size: 0.85rem; background: rgba(255,255,255,0.05); color: var(--text-main);" title="Cancel">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                    <span class="badge" id="gallery-count-badge" style="background: rgba(236,72,153,0.15); color: var(--color-primary); padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">0 items</span>
+                                </div>
+                                <p class="gallery-hero-stats" id="gallery-info-subtitle">Metadata stats are loaded dynamically</p>
+                            </div>
+                        </div>
+                        <div class="gallery-hero-actions">
+                            <button class="btn btn-secondary" id="btn-open-explorer" title="Open in Windows File Explorer">
+                                <i class="fa-solid fa-folder-open"></i> Open Folder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gallery Page Layout (Main Pane + Collapsible Drawer Sidebar) -->
+                <div class="gallery-layout-wrapper">
+                    <!-- Main Pane: Media Grid -->
+                    <div class="gallery-main-pane">
+                        <div class="gallery-grid" id="gallery-media-grid" style="overflow-y: auto; max-height: 75vh;">
+                            <!-- Media items will be rendered here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Sidebar Drawer Pane: Clustering Corrector -->
+                    <div class="gallery-drawer-pane" id="gallery-corrector-drawer">
+                        <div class="sidebar-header-section" style="padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 0.25rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-arrows-up-down-left-right"></i> Clustering Corrector
+                            </span>
+                            <span style="font-size: 0.7rem; color: var(--text-muted);">
+                                Drag media files here to correct sorting.
+                            </span>
+                        </div>
+                        <div style="position: relative; margin-top: 0.25rem;">
+                            <input type="text" id="gallery-sidebar-search" placeholder="Search folders..." style="width: 100%; padding: 0.35rem 0.5rem 0.35rem 1.8rem; font-size: 0.8rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.03); color: var(--text-main); outline: none;">
+                            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.75rem;"></i>
+                        </div>
+                        <div id="gallery-sidebar-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
+                            <!-- Folder items will be rendered here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: PIPELINE (PREVIOUSLY DASHBOARD) -->
+            <section id="sec-dashboard" class="content-section">
                 <div class="dashboard-grid">
                     <!-- Progress Card -->
                     <div class="dashboard-card main-progress-card glass">
@@ -376,32 +512,6 @@
                 </div>
             </section>
 
-            <!-- SECTION 3: RESULTS -->
-            <section id="sec-results" class="content-section">
-                <div class="results-container">
-                    <div class="results-meta-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%;">
-                        <div>
-                            <h3 id="library-count-title">No library processed yet</h3>
-                            <p class="results-info-text">Folders contain reference crops. Check them below.</p>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary" id="btn-merge-folders">
-                                <i class="fa-solid fa-object-group"></i> Merge Folders
-                            </button>
-                            <button class="btn btn-secondary" id="btn-manual-auto-name">
-                                <i class="fa-solid fa-tags"></i> Auto-Name Folders
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="library-grid" id="library-grid">
-                        <div class="no-results-placeholder">
-                            <i class="fa-solid fa-folder-open placeholder-icon"></i>
-                            <p>No sorted directories found. Start sorting from the Dashboard tab.</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
         </main>
     </div>
 
@@ -456,10 +566,10 @@
 
     <!-- Global Media Search Modal -->
     <div class="modal-overlay" id="global-search-modal" style="z-index: 1200; background: rgba(10,10,10,0.85); backdrop-filter: blur(15px);">
-        <div class="modal-box" style="max-width: 90%; width: 950px; max-height: 85vh; display: flex; flex-direction: column; background: rgba(20,20,20,0.6); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+        <div class="modal-box modal-box-large">
             <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; position: relative;">
-                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; color: var(--color-primary); font-size: 1.1rem;"></i>
+                <div class="modal-search-bar">
+                    <i class="fa-solid fa-magnifying-glass modal-search-icon"></i>
                     <input type="text" id="modal-search-input" placeholder="Search filenames, identities, or person names..." style="width: 100%; padding: 0.8rem 1rem 0.8rem 3rem; font-size: 1.1rem; border-radius: 12px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.25); color: var(--text-main); outline: none; transition: border-color 0.2s;" autocomplete="off">
                     <span id="search-spinner" style="display: none; position: absolute; right: 1rem; color: var(--color-primary);"><i class="fa-solid fa-spinner fa-spin"></i></span>
                 </div>
@@ -487,99 +597,38 @@
         </div>
     </div>
     
-    <!-- Media Gallery Modal -->
-    <div class="modal-overlay" id="gallery-modal">
-        <div class="modal-box" style="max-width: 90%; width: 1000px; max-height: 90vh;">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
-                    <!-- Normal View -->
-                    <div id="gallery-title-container" style="display: flex; align-items: center; gap: 0.75rem;">
-                        <h3 id="gallery-title" style="margin: 0;">Identity Gallery</h3>
-                        <button class="btn-icon-hover" id="btn-rename-gallery-folder" title="Rename Identity" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; transition: color 0.2s; padding: 0.25rem; display: flex; align-items: center; justify-content: center;">
-                            <i class="fa-solid fa-pen-to-square"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Edit View (Initially Hidden) -->
-                    <div id="gallery-rename-container" style="display: none; align-items: center; gap: 0.5rem; flex: 1; max-width: 400px;">
-                        <input type="text" id="gallery-rename-input" style="padding: 0.4rem 0.7rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%; outline: none; transition: border-color 0.2s;">
-                        <button class="btn btn-primary" id="btn-rename-save" style="padding: 0.4rem 0.7rem; font-size: 0.85rem;" title="Save new name">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
-                        <button class="btn btn-secondary" id="btn-rename-cancel" style="padding: 0.4rem 0.7rem; font-size: 0.85rem; background: rgba(255,255,255,0.05); color: var(--text-main);" title="Cancel">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
 
-                    <span class="badge" id="gallery-count-badge" style="background: rgba(236,72,153,0.15); color: var(--color-primary); padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; flex-shrink: 0;">0 items</span>
-                </div>
-                <div style="display: flex; gap: 0.75rem;">
-                    <button class="btn btn-secondary" id="btn-open-explorer" title="Open in Windows File Explorer">
-                        <i class="fa-solid fa-folder-open"></i> Open Folder
-                    </button>
-                    <button class="modal-close-btn" id="gallery-modal-close"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-            </div>
-            <div class="modal-body" style="padding-top: 0.5rem; display: flex; flex-direction: row; gap: 1.5rem; height: 70vh; overflow: hidden;">
-                <!-- Left Pane: Folder Sidebar for drag drop destination -->
-                <div class="gallery-sidebar" style="width: 260px; display: flex; flex-direction: column; gap: 0.75rem; border-right: 1px solid var(--border-glass); padding-right: 1rem; height: 100%; overflow: hidden;">
-                    <div class="sidebar-header-section" style="padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fa-solid fa-arrows-up-down-left-right"></i> Clustering Corrector
-                        </span>
-                        <span style="font-size: 0.7rem; color: var(--text-muted);">
-                            Drag media files here to correct sorting.
-                        </span>
-                    </div>
-                    <div style="position: relative; margin-top: 0.25rem;">
-                        <input type="text" id="gallery-sidebar-search" placeholder="Search folders..." style="width: 100%; padding: 0.35rem 0.5rem 0.35rem 1.8rem; font-size: 0.8rem; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(255,255,255,0.03); color: var(--text-main); outline: none;">
-                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.75rem;"></i>
-                    </div>
-                    <div id="gallery-sidebar-list" style="flex: 1; overflow-y: auto; max-height: calc(70vh - 130px); display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
-                        <!-- Folder items will be rendered here dynamically -->
-                    </div>
-                </div>
-                
-                <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; min-height: 0;">
-                    <div class="gallery-grid" id="gallery-media-grid" style="flex: 1; overflow-y: auto; max-height: calc(70vh - 30px);">
-                                <div class="gallery-grid" id="gallery-media-grid" style="flex: 1; overflow-y: auto; max-height: calc(70vh - 30px);">
-                        <!-- Media items will be rendered here dynamically -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Lightbox Modal -->
-    <div class="modal-overlay" id="lightbox-modal" style="z-index: 1100; background: rgba(0,0,0,0.92); backdrop-filter: blur(8px);">
-        <div class="lightbox-controls" style="position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 1rem; z-index: 1200;">
+    <div class="modal-overlay" id="lightbox-modal">
+        <div class="lightbox-controls">
             <button id="lightbox-info-toggle" class="lightbox-control-btn" title="File Info"><i class="fa-solid fa-circle-info"></i></button>
-            <button class="modal-close-btn" id="lightbox-close" style="position: static; color: white; font-size: 2.2rem; background: none; border: none; cursor: pointer; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
+            <button class="modal-close-btn" id="lightbox-close"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="lightbox-container" style="display: flex; width: 100%; height: 100%; overflow: hidden; position: relative;">
-            <div class="lightbox-media-wrapper" style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; position: relative; transition: padding-right 0.35s cubic-bezier(0.16, 1, 0.3, 1);">
+        <div class="lightbox-container">
+            <div class="lightbox-media-wrapper lightbox-media-wrapper-large" id="lightbox-media-wrapper">
                 <button id="lightbox-prev-btn" class="lightbox-nav-arrow-btn left" title="Previous Video" style="display: none;"><i class="fa-solid fa-chevron-left"></i></button>
-                <img id="lightbox-img" style="max-width: 100%; max-height: 90vh; object-fit: contain; display: none;">
-                <video id="lightbox-video" controls style="max-width: 100%; max-height: 90vh; object-fit: contain; display: none;"></video>
+                <img id="lightbox-img">
+                <video id="lightbox-video" controls></video>
                 <button id="lightbox-next-btn" class="lightbox-nav-arrow-btn right" title="Next Video" style="display: none;"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
             
             <!-- Metadata Panel (Tabbed) -->
-            <div id="lightbox-metadata-panel" class="metadata-panel">
-                <div class="metadata-header-tabs" style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.15); border-top-left-radius: inherit; border-top-right-radius: inherit; align-items: center; justify-content: space-between;">
+            <div id="lightbox-metadata-panel" class="metadata-panel metadata-panel-large">
+                <div class="metadata-tabs-bar">
                     <div style="display: flex; flex: 1;">
-                        <button id="tab-btn-info" class="panel-tab-btn active" style="flex: 1; padding: 1rem 0.5rem; background: none; border: none; color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; border-bottom: 2px solid var(--color-primary, #ec4899);"><i class="fa-solid fa-circle-info"></i> Info</button>
-                        <button id="tab-btn-queue" class="panel-tab-btn" style="flex: 1; padding: 1rem 0.5rem; background: none; border: none; color: var(--text-muted, #9ca3af); cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; border-bottom: 2px solid transparent; display: flex; align-items: center; justify-content: center; gap: 0.35rem;"><i class="fa-solid fa-list-ul"></i> Queue <span id="queue-count-label" class="badge" style="background: rgba(255,255,255,0.1); color: var(--text-main, #f3f4f6); font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 10px;">0</span></button>
+                        <button id="tab-btn-info" class="panel-tab-btn active"><i class="fa-solid fa-circle-info"></i> Info</button>
+                        <button id="tab-btn-queue" class="panel-tab-btn" style="display: flex; align-items: center; justify-content: center; gap: 0.35rem;"><i class="fa-solid fa-list-ul"></i> Queue <span id="queue-count-label" class="badge" style="background: rgba(255,255,255,0.1); color: var(--text-main, #f3f4f6); font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 10px;">0</span></button>
                     </div>
-                    <button id="metadata-panel-close" style="background: none; border: none; color: var(--text-muted, #9ca3af); cursor: pointer; font-size: 1.2rem; padding: 1rem;"><i class="fa-solid fa-xmark"></i></button>
+                    <button id="metadata-panel-close"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 
                 <!-- Info tab content container -->
-                <div id="panel-content-info" class="tab-content-panel active" style="flex: 1; display: flex; flex-direction: column; overflow-y: auto;">
-                    <div class="metadata-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                <div id="panel-content-info" class="tab-content-panel active">
+                    <div class="metadata-body">
                         <div class="meta-section">
                             <span class="meta-label">File Name</span>
-                            <span id="meta-val-filename" class="meta-value" style="font-weight: 600;">-</span>
+                            <span id="meta-val-filename" class="meta-value">-</span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div class="meta-section">
@@ -636,21 +685,21 @@
                         </div>
                         <div class="meta-section">
                             <span class="meta-label">Rating</span>
-                            <div id="meta-val-rating" class="meta-value" style="color: #fbbf24; display: flex; gap: 2px;">-</div>
+                            <div id="meta-val-rating" class="meta-value">-</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Queue tab content container -->
-                <div id="panel-content-queue" class="tab-content-panel" style="flex: 1; display: none; flex-direction: column; overflow-y: auto;">
-                    <div class="queue-controls-bar" style="padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <div id="panel-content-queue" class="tab-content-panel">
+                    <div class="queue-controls-bar">
                         <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted, #9ca3af);">PLAYLIST CONTROLS</span>
                         <div style="display: flex; gap: 0.5rem;">
-                            <button id="playlist-shuffle-btn" class="lightbox-control-btn" title="Toggle Shuffle" style="width: 32px; height: 32px; font-size: 0.9rem; background: rgba(255,255,255,0.05);"><i class="fa-solid fa-shuffle"></i></button>
-                            <button id="playlist-loop-btn" class="lightbox-control-btn" title="Cycle Loop Modes" style="width: 32px; height: 32px; font-size: 0.9rem; background: rgba(255,255,255,0.05);"><i class="fa-solid fa-repeat"></i></button>
+                            <button id="playlist-shuffle-btn" class="lightbox-control-btn" title="Toggle Shuffle"><i class="fa-solid fa-shuffle"></i></button>
+                            <button id="playlist-loop-btn" class="lightbox-control-btn" title="Cycle Loop Modes"><i class="fa-solid fa-repeat"></i></button>
                         </div>
                     </div>
-                    <div id="playlist-queue-list" style="flex: 1; overflow-y: auto; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div id="playlist-queue-list">
                         <!-- Queue items will be loaded dynamically -->
                     </div>
                 </div>
@@ -660,6 +709,6 @@
 
     <!-- Plyr custom video player JS -->
     <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=1.8"></script>
 </body>
 </html>

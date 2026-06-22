@@ -8,34 +8,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageSubheading = document.getElementById('page-subheading');
 
     const headings = {
-        'sec-dashboard': { title: 'Dashboard', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
-        'sec-configuration': { title: 'Pipeline Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
-        'sec-results': { title: 'Sorted Library', sub: 'View identified profiles and sorted media folders' }
+        'sec-results': { title: 'Library', sub: 'View identified profiles and sorted media folders' },
+        'sec-dashboard': { title: 'Pipeline', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
+        'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
+        'sec-gallery': { title: 'Profile Gallery', sub: 'Browse media files and correct sorting' }
+    };
+
+    window.switchSection = (targetId) => {
+        sections.forEach(sec => sec.classList.remove('active'));
+        
+        // Find if this is a main nav item
+        const navHref = targetId.replace('sec-', '#');
+        navItems.forEach(nav => {
+            if (nav.getAttribute('href') === navHref) {
+                nav.classList.add('active');
+            } else {
+                nav.classList.remove('active');
+            }
+        });
+        
+        const targetSec = document.getElementById(targetId);
+        if (targetSec) {
+            targetSec.classList.add('active');
+        }
+
+        // Update page header text
+        if (headings[targetId]) {
+            pageHeading.textContent = headings[targetId].title;
+            pageSubheading.textContent = headings[targetId].sub;
+        }
+        
+        if (targetId === 'sec-results') {
+            loadLibrary();
+        } else if (targetId === 'sec-dashboard') {
+            if (typeof checkInitialStatus === 'function') {
+                checkInitialStatus();
+            }
+        }
     };
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetId = item.getAttribute('href').replace('#', 'sec-');
-            
-            navItems.forEach(nav => nav.classList.remove('active'));
-            sections.forEach(sec => sec.classList.remove('active'));
-            
-            item.classList.add('active');
-            const targetSec = document.getElementById(targetId);
-            if (targetSec) {
-                targetSec.classList.add('active');
-            }
-
-            // Update page header text
-            if (headings[targetId]) {
-                pageHeading.textContent = headings[targetId].title;
-                pageSubheading.textContent = headings[targetId].sub;
-            }
-            
-            if (targetId === 'sec-results') {
-                loadLibrary();
-            }
+            window.switchSection(targetId);
         });
     });
 
@@ -335,82 +351,285 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Load dynamic library from filesystem (replaces static renderResults)
-    const loadLibrary = async () => {
+    // ===== LIBRARY HOME PAGE STATE & CONTROLLERS =====
+    window.libraryFolders = [];
+    let currentFilter = 'all';
+    let currentSort = 'most';
+    let currentView = localStorage.getItem('libraryViewPref') || 'grid';
+
+    // Skeleton loader function
+    const showLibrarySkeletons = () => {
+        libraryGrid.innerHTML = '';
+        for (let i = 0; i < 6; i++) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'skeleton-card skeleton';
+            libraryGrid.appendChild(skeleton);
+        }
+    };
+
+    const sortLibraryFolders = (folders, criteria) => {
+        const sorted = [...folders];
+        switch (criteria) {
+            case 'a-z':
+                sorted.sort((a, b) => {
+                    const nameA = (a.name === '_unsorted' ? 'Unsorted' : a.name).toLowerCase();
+                    const nameB = (b.name === '_unsorted' ? 'Unsorted' : b.name).toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+                break;
+            case 'z-a':
+                sorted.sort((a, b) => {
+                    const nameA = (a.name === '_unsorted' ? 'Unsorted' : a.name).toLowerCase();
+                    const nameB = (b.name === '_unsorted' ? 'Unsorted' : b.name).toLowerCase();
+                    return nameB.localeCompare(nameA);
+                });
+                break;
+            case 'most':
+                sorted.sort((a, b) => b.file_count - a.file_count);
+                break;
+            case 'least':
+                sorted.sort((a, b) => a.file_count - b.file_count);
+                break;
+            case 'rating':
+                sorted.sort((a, b) => (b.avg_rating || 0.0) - (a.avg_rating || 0.0));
+                break;
+        }
+        return sorted;
+    };
+
+    const filterLibraryFolders = (folders, filter) => {
+        switch (filter) {
+            case 'named':
+                return folders.filter(f => f.name !== '_unsorted' && !f.name.startsWith('female_'));
+            case 'unnamed':
+                return folders.filter(f => f.name.startsWith('female_'));
+            case 'rated':
+                return folders.filter(f => (f.avg_rating || 0.0) > 0);
+            default:
+                return folders;
+        }
+    };
+
+    const renderLibraryCards = (folders) => {
+        libraryGrid.innerHTML = '';
+        
+        if (folders.length === 0) {
+            libraryGrid.innerHTML = `
+                <div class="no-results-placeholder" style="grid-column: 1/-1;">
+                    <i class="fa-solid fa-folder-open placeholder-icon"></i>
+                    <p>No profiles match the active filter. Try resetting filters.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Apply view class
+        libraryGrid.className = `library-grid ${currentView === 'list' ? 'list-view' : ''}`;
+
+        folders.forEach((folder, index) => {
+            const card = document.createElement('div');
+            card.className = 'identity-card';
+            card.style.animationDelay = `${index * 0.03}s`;
+            
+            const isUnsorted = folder.name === '_unsorted';
+            const displayName = isUnsorted ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim();
+            const imgUrl = `/api/thumbnail/${encodeURIComponent(folder.name)}?t=${Date.now()}`;
+            
+            // Thumbnail markup
+            const thumbHtml = folder.has_thumbnail
+                ? `<img class="identity-thumb" src="${imgUrl}" loading="lazy" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${imgUrl}&retry=' + Date.now(); }, 1000); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
+                : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
+            
+            // Watch progress bar logic
+            let progressHtml = '';
+            if (folder.watched_count > 0 && folder.file_count > 0) {
+                const percent = Math.min(100, Math.round((folder.watched_count / folder.file_count) * 100));
+                progressHtml = `
+                    <div class="identity-watch-progress" title="${folder.watched_count} of ${folder.file_count} files watched">
+                        <div class="identity-watch-bar" style="width: ${percent}%"></div>
+                    </div>
+                `;
+            }
+            
+            // Rating label
+            const ratingText = folder.avg_rating > 0 ? `★ ${folder.avg_rating.toFixed(1)}` : 'Unrated';
+            const sizeText = folder.total_size_human || '';
+            const metaInfo = sizeText ? `${folder.file_count} files • ${sizeText} • ${ratingText}` : `${folder.file_count} files • ${ratingText}`;
+
+            card.innerHTML = `
+                <div class="identity-card-cover">
+                    ${thumbHtml}
+                    <div class="identity-card-gradient"></div>
+                    <div class="identity-card-overlay">
+                        <div class="overlay-stats">
+                            <span><i class="fa-solid fa-film"></i> ${folder.file_count} files</span>
+                            ${folder.avg_rating > 0 ? `<span><i class="fa-solid fa-star"></i> ${folder.avg_rating.toFixed(1)}</span>` : ''}
+                        </div>
+                        <button class="btn-open-gallery"><i class="fa-solid fa-play"></i> Browse</button>
+                    </div>
+                    ${progressHtml}
+                </div>
+                <div class="identity-card-footer">
+                    <h4 class="identity-name" title="${displayName}">${displayName}</h4>
+                    <span class="identity-meta">${metaInfo}</span>
+                </div>
+            `;
+            
+            card.addEventListener('click', () => {
+                openGallery(folder.name);
+            });
+            
+            libraryGrid.appendChild(card);
+        });
+    };
+
+    const applyLibraryView = () => {
+        let items = filterLibraryFolders(window.libraryFolders, currentFilter);
+        items = sortLibraryFolders(items, currentSort);
+        renderLibraryCards(items);
+    };
+
+    async function loadLibrary() {
+        showLibrarySkeletons();
         try {
             const res = await fetch('/api/list-folders');
             const data = await res.json();
             
-            libraryGrid.innerHTML = '';
-            
             if (!data.folders || data.folders.length === 0) {
                 libraryGrid.innerHTML = `
-                    <div class="no-results-placeholder">
+                    <div class="no-results-placeholder" style="grid-column: 1/-1;">
                         <i class="fa-solid fa-folder-open placeholder-icon"></i>
-                        <p>No sorted directories found. Start sorting from the Dashboard tab.</p>
+                        <p>No sorted directories found. Start sorting from the Pipeline tab.</p>
                     </div>
                 `;
                 libraryCountTitle.textContent = 'No library processed yet';
                 statFemales.textContent = '-';
                 statVideos.textContent = '-';
                 statUnsorted.textContent = '-';
+                const statsLabel = document.getElementById('library-stats-label');
+                if (statsLabel) statsLabel.textContent = '0 profiles';
                 return;
             }
 
+            window.libraryFolders = data.folders;
+            
+            // Compute overall stats
             let totalFiles = 0;
             let unsortedCount = 0;
-            const validFolders = data.folders.filter(f => f.name !== '_unsorted');
+            const validFolders = window.libraryFolders.filter(f => f.name !== '_unsorted');
             const numClusters = validFolders.length;
             
-            const unsortedFolder = data.folders.find(f => f.name === '_unsorted');
+            const unsortedFolder = window.libraryFolders.find(f => f.name === '_unsorted');
             if (unsortedFolder) {
                 unsortedCount = unsortedFolder.file_count;
             }
 
-            data.folders.forEach(folder => {
+            window.libraryFolders.forEach(folder => {
                 if (folder.name !== '_unsorted') {
                     totalFiles += folder.file_count;
                 }
-                
-                const card = document.createElement('div');
-                card.className = 'library-card';
-                card.style.cursor = 'pointer'; // Ensure cursor shows it is clickable
-                
-                const imgUrl = `/api/thumbnail/${encodeURIComponent(folder.name)}?t=${Date.now()}`;
-                
-                const isUnsorted = folder.name === '_unsorted';
-                const thumbHtml = folder.has_thumbnail
-                    ? `<img src="${imgUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${imgUrl}&retry=' + Date.now(); }, 1000); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${folder.name}"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
-                    : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
-                
-                card.innerHTML = `
-                    <div class="thumbnail-container">
-                        ${thumbHtml}
-                    </div>
-                    <div class="card-details">
-                        <span class="cluster-name">${folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim()}</span>
-                        <span class="cluster-count">${folder.file_count} media items</span>
-                    </div>
-                `;
-                
-                card.addEventListener('click', () => {
-                    openGallery(folder.name);
-                });
-                
-                libraryGrid.appendChild(card);
             });
 
-            // Update stats
+            // Update stats labels
             statFemales.textContent = numClusters;
             statVideos.textContent = totalFiles;
             statUnsorted.textContent = unsortedCount;
             libraryCountTitle.textContent = `${numClusters} Distinct Identities Grouped`;
+            
+            const statsLabel = document.getElementById('library-stats-label');
+            if (statsLabel) {
+                statsLabel.textContent = `${window.libraryFolders.length} profiles • ${totalFiles} sorted files`;
+            }
+
+            // Apply sort, filter, and render
+            applyLibraryView();
+            
+            // Load recently watched list
+            loadRecentlyWatched();
             
         } catch (err) {
             console.error('Failed to load library:', err);
             appendLog('error', `Failed to load library: ${err.message}`);
         }
     };
+
+    // Register Toolbar Event Listeners
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect) {
+        sortSelect.addEventListener('change', (e) => {
+            currentSort = e.target.value;
+            applyLibraryView();
+        });
+    }
+
+    const filterPills = document.querySelectorAll('.filter-pill');
+    filterPills.forEach(pill => {
+        pill.addEventListener('click', (e) => {
+            filterPills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            currentFilter = pill.getAttribute('data-filter');
+            applyLibraryView();
+        });
+    });
+
+    const btnViewGrid = document.getElementById('btn-view-grid');
+    const btnViewList = document.getElementById('btn-view-list');
+    
+    if (btnViewGrid && btnViewList) {
+        const updateViewButtons = () => {
+            if (currentView === 'list') {
+                btnViewList.classList.add('active');
+                btnViewGrid.classList.remove('active');
+            } else {
+                btnViewGrid.classList.add('active');
+                btnViewList.classList.remove('active');
+            }
+        };
+
+        btnViewGrid.addEventListener('click', () => {
+            currentView = 'grid';
+            localStorage.setItem('libraryViewPref', 'grid');
+            updateViewButtons();
+            applyLibraryView();
+        });
+
+        btnViewList.addEventListener('click', () => {
+            currentView = 'list';
+            localStorage.setItem('libraryViewPref', 'list');
+            updateViewButtons();
+            applyLibraryView();
+        });
+
+        updateViewButtons();
+    }
+
+    // Back to library button in gallery hero
+    const btnBackLibrary = document.getElementById('btn-back-library');
+    if (btnBackLibrary) {
+        btnBackLibrary.addEventListener('click', () => {
+            window.switchSection('sec-results');
+        });
+    }
+
+    // Clear recently watched button
+    const btnClearRecent = document.getElementById('btn-clear-recent');
+    if (btnClearRecent) {
+        btnClearRecent.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear your recently played history?')) {
+                try {
+                    const res = await fetch('/api/recently-watched/clear', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        loadRecentlyWatched();
+                        showToast('Watch history cleared successfully.');
+                    }
+                } catch (e) {
+                    console.error('Failed to clear watch history', e);
+                }
+            }
+        });
+    }
+
     
     // Check initial status on load to sync UI if server restarted or was running
     const checkInitialStatus = async () => {
@@ -1459,7 +1678,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        galleryModal.classList.add('active');
+        if (!isRefresh) {
+            window.switchSection('sec-gallery');
+        } else if (galleryModal) {
+            galleryModal.classList.add('active');
+        }
+
+        // Set hero avatar thumbnail
+        const heroAvatar = document.getElementById('gallery-hero-face');
+        if (heroAvatar) {
+            heroAvatar.src = `/api/thumbnail/${encodeURIComponent(folderName)}?t=${Date.now()}`;
+        }
 
         // Load target folders in sidebar
         await loadSidebarFolders();
@@ -1480,10 +1709,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!data.files || data.files.length === 0) {
                 galleryMediaGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;">No media files inside this folder.</p>';
                 galleryCountBadge.textContent = '0 items';
+                const subtitleEl = document.getElementById('gallery-info-subtitle');
+                if (subtitleEl) subtitleEl.textContent = '0 items';
                 return;
             }
 
             galleryCountBadge.textContent = `${data.files.length} items`;
+            
+            // Dynamic subtitle stats calculation
+            const folderInfo = (window.libraryFolders || []).find(f => f.name === folderName);
+            const sizeStr = folderInfo ? folderInfo.total_size_human : '';
+            const ratingVal = folderInfo ? folderInfo.avg_rating : 0;
+            const ratingStr = ratingVal > 0 ? `★ ${ratingVal.toFixed(1)}` : '';
+            
+            const subtitleParts = [];
+            if (playlistQueue.length > 0) subtitleParts.push(`${playlistQueue.length} videos`);
+            const imgCount = data.files.length - playlistQueue.length;
+            if (imgCount > 0) subtitleParts.push(`${imgCount} images`);
+            if (sizeStr) subtitleParts.push(sizeStr);
+            if (ratingStr) subtitleParts.push(ratingStr);
+            
+            const subtitleEl = document.getElementById('gallery-info-subtitle');
+            if (subtitleEl) {
+                subtitleEl.textContent = subtitleParts.join(' • ');
+            }
 
             data.files.forEach(file => {
                 const isSelected = selectedFilenames.has(file.name);
@@ -1910,12 +2159,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Close Modals events
-    galleryModalClose.addEventListener('click', () => {
-        galleryModal.classList.remove('active');
-    });
-    galleryModal.addEventListener('click', (e) => {
-        if (e.target === galleryModal) galleryModal.classList.remove('active');
-    });
+    if (galleryModalClose && galleryModal) {
+        galleryModalClose.addEventListener('click', () => {
+            galleryModal.classList.remove('active');
+        });
+    }
+    if (galleryModal) {
+        galleryModal.addEventListener('click', (e) => {
+            if (e.target === galleryModal) galleryModal.classList.remove('active');
+        });
+    }
 
     // Automatically manage body scroll lock when modals are opened/closed
     const modalObserver = new MutationObserver(() => {
@@ -2024,7 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const loadRecentlyWatched = async () => {
+    async function loadRecentlyWatched() {
         const container = document.getElementById('recently-watched-card');
         const list = document.getElementById('recently-watched-list');
         if (!container || !list) return;
@@ -2060,7 +2313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.innerHTML = `
                         <div style="position: relative; aspect-ratio: 16/9; overflow: hidden; background: rgba(0,0,0,0.2);">
                             ${badgeHtml}
-                            <img src="${videoThumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='/static/img/placeholder.jpg';">
+                            <img src="${videoThumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/video.svg';">
                             <div class="play-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;">
                                 <i class="fa-solid fa-play" style="color: white; font-size: 1.5rem;"></i>
                             </div>
@@ -2096,7 +2349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     list.appendChild(card);
                 });
                 
-                container.style.display = 'flex';
+                container.style.display = 'block';
             } else {
                 container.style.display = 'none';
                 list.innerHTML = '';

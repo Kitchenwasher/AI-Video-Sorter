@@ -262,7 +262,7 @@ def handle_config():
 
 @app.route('/api/start', methods=['POST'])
 def start_pipeline():
-    global pipeline_state
+    global pipeline_state, pipeline_thread
     
     with state_lock:
         if pipeline_state['running']:
@@ -293,27 +293,68 @@ def start_pipeline():
             'default_video_player': current_config.default_video_player
         }
         
-        # Trigger Celery task asynchronously
-        from tasks import run_sorting_task
-        task = run_sorting_task.delay(config_dict, WORKSPACE_DIR)
-        
-        # Reset state with task ID
-        pipeline_state['running'] = True
-        pipeline_state['stage'] = 'starting'
-        pipeline_state['percent'] = 0.0
-        pipeline_state['message'] = 'Sorting pipeline task triggered...'
-        pipeline_state['task_id'] = task.id
-        pipeline_state['detail'] = None
-        pipeline_state['report'] = None
-        
-        # Clear log history so UI starts fresh
-        ui_log_handler.logs.clear()
-        
-    return jsonify({
-        'status': 'accepted',
-        'message': 'Pipeline started asynchronously.',
-        'task_id': task.id
-    }), 202
+        # Check if Redis is running before attempting to use Celery
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        use_celery = False
+        try:
+            import redis
+            r = redis.Redis.from_url(redis_url, socket_timeout=1.0, socket_connect_timeout=1.0)
+            r.ping()
+            use_celery = True
+        except Exception as e:
+            logger.warning(f"Redis is not available ({e}). Falling back to local background thread.")
+
+        if use_celery:
+            try:
+                # Trigger Celery task asynchronously
+                from tasks import run_sorting_task
+                task = run_sorting_task.delay(config_dict, WORKSPACE_DIR)
+                
+                # Reset state with task ID
+                pipeline_state['running'] = True
+                pipeline_state['stage'] = 'starting'
+                pipeline_state['percent'] = 0.0
+                pipeline_state['message'] = 'Sorting pipeline task triggered via Celery...'
+                pipeline_state['task_id'] = task.id
+                pipeline_state['detail'] = None
+                pipeline_state['report'] = None
+                
+                # Clear log history so UI starts fresh
+                ui_log_handler.logs.clear()
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Pipeline started via Celery.',
+                    'task_id': task.id
+                })
+            except Exception as e:
+                logger.error(f"Failed to start Celery task: {e}. Falling back to local background thread.")
+                use_celery = False
+
+        if not use_celery:
+            # Fallback to local background thread
+            pipeline_state['running'] = True
+            pipeline_state['stage'] = 'starting'
+            pipeline_state['percent'] = 0.0
+            pipeline_state['message'] = 'Sorting pipeline task triggered locally...'
+            pipeline_state['task_id'] = None
+            pipeline_state['detail'] = None
+            pipeline_state['report'] = None
+            
+            # Clear log history so UI starts fresh
+            ui_log_handler.logs.clear()
+            
+            pipeline_thread = threading.Thread(
+                target=run_pipeline_thread,
+                args=(current_config,),
+                daemon=True
+            )
+            pipeline_thread.start()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Pipeline started in background thread.'
+            })
 
 @app.route('/api/auto-name', methods=['POST'])
 def start_auto_name():
@@ -405,24 +446,67 @@ def clear_cache():
 
 @app.route('/api/list-folders', methods=['GET'])
 def list_folders():
-    """Lists all sorted folders in the output directory with their file counts."""
+    """Lists all sorted folders in the output directory with their file counts and enriched metadata."""
     output_dir = current_config.output_dir
     if not os.path.exists(output_dir):
         return jsonify({'folders': []})
     
+    histories_by_folder = {}
+    try:
+        from utils.models import WatchHistory
+        all_histories = WatchHistory.query.all()
+        for h in all_histories:
+            parts = h.file_path.split('/', 1)
+            if len(parts) == 2:
+                f_name = parts[0]
+                if f_name not in histories_by_folder:
+                    histories_by_folder[f_name] = []
+                histories_by_folder[f_name].append(h)
+    except Exception as e:
+        logger.error(f"Error loading watch history in list_folders: {e}")
+
+    def format_size(bytes):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if bytes < 1024.0:
+                return f"{bytes:.1f} {unit}" if unit != 'B' else f"{int(bytes)} B"
+            bytes /= 1024.0
+        return f"{bytes:.1f} TB"
+
     folders = []
     for name in sorted(os.listdir(output_dir), key=lambda s: s.lower()):
         folder_path = os.path.join(output_dir, name)
         if os.path.isdir(folder_path) and not name.startswith('.'):
-            file_count = len([f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')])
+            # Calculate total files and sizes
+            files_in_folder = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')]
+            file_count = len(files_in_folder)
+            
+            total_size_bytes = 0
+            for f in files_in_folder:
+                try:
+                    total_size_bytes += os.path.getsize(os.path.join(folder_path, f))
+                except Exception:
+                    pass
+            
             has_thumbnail = os.path.exists(os.path.join(folder_path, '_reference_face.jpg'))
+            
+            # Aggregate watch stats
+            folder_histories = histories_by_folder.get(name, [])
+            ratings = [h.rating for h in folder_histories if h.rating is not None]
+            avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+            watched_count = len(folder_histories)
+            
             folders.append({
                 'name': name,
                 'file_count': file_count,
-                'has_thumbnail': has_thumbnail
+                'has_thumbnail': has_thumbnail,
+                'avg_rating': avg_rating,
+                'watched_count': watched_count,
+                'total_size_bytes': total_size_bytes,
+                'total_size_human': format_size(total_size_bytes)
             })
     
     return jsonify({'folders': folders})
+
 
 @app.route('/api/merge-folders', methods=['POST'])
 def merge_folders():
