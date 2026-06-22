@@ -2137,6 +2137,22 @@ def cleanup_tunnel():
 
 atexit.register(cleanup_tunnel)
 
+import signal
+
+def handle_sigint(signum, frame):
+    logger.info("SIGINT/Ctrl+C or SIGTERM received. Cleaning up and exiting process immediately...")
+    cleanup_tunnel()
+    os._exit(0)
+
+# Register signal handlers for clean terminal termination
+try:
+    signal.signal(signal.SIGINT, handle_sigint)
+    signal.signal(signal.SIGTERM, handle_sigint)
+except ValueError:
+    # signal.signal only works in the main thread. In case this gets imported
+    # elsewhere, we fail gracefully.
+    pass
+
 def start_localhost_run_tunnel():
     """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
     global public_tunnel_url, active_tunnel_proc, tunnel_should_run, windows_job_handle
