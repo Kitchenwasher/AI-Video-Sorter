@@ -1826,12 +1826,17 @@ def create_watch_party():
             }
             
         logger.info(f"Watch party {party_id} created for folder {folder_name} (expires: {expires_at})")
-        return jsonify({
+        # Check if public tunnel is active, return absolute public URL if so
+        res_data = {
             'status': 'success',
             'party_id': party_id,
             'url': f"/watch-party/{party_id}",
             'password_protected': password is not None and len(password) > 0
-        })
+        }
+        if public_tunnel_url:
+            res_data['public_url'] = f"{public_tunnel_url}/watch-party/{party_id}"
+            
+        return jsonify(res_data)
     except Exception as e:
         logger.error(f"Error creating watch party: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -2046,6 +2051,53 @@ def signal_watch_party(party_id):
             return jsonify({'status': 'error', 'message': 'Target peer not found'}), 404
 
 
+public_tunnel_url = None
+
+def start_localhost_run_tunnel():
+    """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
+    global public_tunnel_url
+    import subprocess
+    import re
+    
+    logger.info("Starting localhost.run SSH tunnel for Watch Party sharing...")
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-R', '80:localhost:5000', 'nokey@localhost.run']
+    
+    startupinfo = None
+    if os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        
+    try:
+        while True:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                startupinfo=startupinfo,
+                bufsize=1
+            )
+            
+            for line in proc.stdout:
+                # Find the https URL in the stdout line
+                match = re.search(r'(https://[a-zA-Z0-9-]+\.lhr\.life)', line)
+                if match:
+                    public_tunnel_url = match.group(1)
+                    logger.info(f"Watch Party public sharing URL initialized: {public_tunnel_url}")
+                    
+            proc.wait()
+            public_tunnel_url = None
+            logger.warning("Localhost.run SSH tunnel disconnected. Reconnecting in 5 seconds...")
+            time.sleep(5)
+    except Exception as e:
+        logger.error(f"Failed to run localhost.run tunnel: {e}")
+
+
 if __name__ == '__main__':
+    # Start background tunnel to make watch parties shareable online
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        t = threading.Thread(target=start_localhost_run_tunnel, daemon=True)
+        t.start()
+        
     logger.info("Starting Face Sorter Web Interface...")
     app.run(host='127.0.0.1', port=5000, debug=True)

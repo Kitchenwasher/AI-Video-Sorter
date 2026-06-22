@@ -3677,9 +3677,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.status === 'success') {
                     createdPartyId = data.party_id;
                     
-                    // Construct absolute URL
-                    const port = window.location.port ? `:${window.location.port}` : '';
-                    createdPartyUrl = `${window.location.protocol}//${window.location.hostname}${port}${data.url}`;
+                    // Construct absolute URL (use public tunnel URL if provided by backend)
+                    if (data.public_url) {
+                        createdPartyUrl = data.public_url;
+                    } else {
+                        const port = window.location.port ? `:${window.location.port}` : '';
+                        createdPartyUrl = `${window.location.protocol}//${window.location.hostname}${port}${data.url}`;
+                    }
                     
                     if (wpShareUrl) {
                         wpShareUrl.value = createdPartyUrl;
