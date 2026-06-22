@@ -1803,18 +1803,40 @@ body.modal-open {
 
 /* Panel Tab Button styles */
 .panel-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted, #9ca3af);
+    padding: 0.8rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease-in-out;
     outline: none;
-    border-bottom: 2px solid transparent !important;
+    border-radius: 0;
 }
 
 .panel-tab-btn:hover {
-    color: white !important;
-    background: rgba(255, 255, 255, 0.03) !important;
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .panel-tab-btn.active {
-    color: white !important;
-    border-bottom-color: var(--color-primary, #ec4899) !important;
+    color: white;
+    border-bottom: 2px solid var(--color-primary, #ec4899);
+}
+
+/* Tab content panel display states */
+.tab-content-panel {
+    display: none !important;
+}
+
+.tab-content-panel.active {
+    display: flex !important;
 }
 
 /* Queue items */
@@ -2494,11 +2516,80 @@ body.modal-open {
     box-shadow: 0 12px 30px rgba(236, 72, 153, 0.6);
 }
 
+/* ===== Profiles Section ===== */
+.profiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1.5rem;
+}
 
+.profile-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1.25rem;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s;
+    user-select: none;
+    border: 1px solid var(--border-glass);
+}
 
+.profile-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(236, 72, 153, 0.15);
+    border-color: rgba(236, 72, 153, 0.4);
+}
 
+.profile-card.drag-over {
+    background: rgba(236, 72, 153, 0.15) !important;
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 20px rgba(236, 72, 153, 0.4) !important;
+    transform: scale(1.05) !important;
+}
 
+.profile-card.dragging {
+    opacity: 0.4;
+    border-style: dashed;
+    border-color: var(--color-primary);
+}
 
+.avatar-refresh-btn:hover {
+    background: rgba(236, 72, 153, 0.2) !important;
+    color: var(--color-primary) !important;
+}
 
+/* Video Preview on Hover */
+.hover-preview-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: inherit;
+}
 
+.gallery-item.hovering-video .hover-preview-video,
+.recent-video-card.hovering-video .hover-preview-video,
+.search-result-card.hovering-video .thumbnail-container .hover-preview-video {
+    opacity: 1;
+}
 
+.gallery-item.hovering-video img,
+.gallery-item.hovering-video .video-placeholder,
+.recent-video-card.hovering-video img,
+.search-result-card.hovering-video .thumbnail-container img,
+.search-result-card.hovering-video .thumbnail-container .video-placeholder {
+    opacity: 0.15;
+    transition: opacity 0.3s ease;
+}
+
+.search-result-card.hovering-video .video-play-indicator {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}

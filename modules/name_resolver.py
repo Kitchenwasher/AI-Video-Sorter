@@ -36,6 +36,9 @@ NON_NAME_WORDS = {
     'youtube', 'tiktok', 'instagram', 'twitter', 'facebook', 'social', 'media', 'profile',
     'pin', 'di', 'mail', 'ru', 'let', 'sporn', 'porrfilm', 'spankbang', 'eyeshadow', 'fuji', 
     'mug', 'it', 'two', 'sock', 'stark', 'frida', 'metart', 'bible',
+    'preview', 'promo', 'sample', 'short', 'uncut', 'leak', 'leaked', 'bonus', 'update', 'vlog',
+    'story', 'post', 'feed', 'live', 'show', 'performance', 'stage', 'event', 'raw', 'extra',
+    'exclusive', 'onlyfans', 'patreon', 'fansly', 'leaks',
     
     # Common English prepositions, pronouns and small junk words
     'in', 'on', 'at', 'of', 'to', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 
@@ -76,11 +79,11 @@ class FilenameParser:
             if cleaned and len(cleaned) > 1 and cleaned.lower() not in NON_NAME_WORDS:
                 cleaned_tokens.append(cleaned)
                 
-        # Look for 2 or 3 capitalized tokens
+        # Look for 1, 2 or 3 capitalized tokens
         # Title case them to normalize
         cleaned_tokens = [t.capitalize() for t in cleaned_tokens]
         
-        if 2 <= len(cleaned_tokens) <= 3:
+        if 1 <= len(cleaned_tokens) <= 3:
             # Reconstruct name
             candidate = " ".join(cleaned_tokens)
             return candidate

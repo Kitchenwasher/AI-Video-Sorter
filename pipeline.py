@@ -1,5 +1,6 @@
 import os
 import cv2
+import time
 import numpy as np
 from config import Config
 from utils.logger import logger
@@ -205,7 +206,7 @@ class SortingPipeline:
                     try:
                         faces_in_img = self.analyzer.analyze_image(img_path, frame_index=0)
                         # Cache it
-                        if self.cache and self.config.use_cache:
+                        if self.cache:
                             self.cache.cache_faces(img_path, 'image', faces_in_img)
                     except Exception as e:
                         logger.error(f"Error processing image {img_path}: {e}")
@@ -266,10 +267,11 @@ class SortingPipeline:
                                     for face in faces_in_kf:
                                         face['keyframe_path'] = kf['path']
                                         faces_in_video.append(face)
+                                    time.sleep(0.015)  # yield GPU slice to prevent TDR reset
                                 except Exception as e:
                                     logger.error(f"Error analyzing keyframe {kf['path']}: {e}")
                                     
-                        if self.cache and self.config.use_cache:
+                        if self.cache:
                             self.cache.cache_faces(video_path, 'video', faces_in_video)
                             
                         # Cleanup temp frames
@@ -384,12 +386,46 @@ class SortingPipeline:
                         final_cid = next_cluster_id
                         raw_to_final_label[raw_cid] = final_cid
                         
-                        folder_name = f"female_{final_cid + 1:03d}"
-                        out_dir = self.config.output_dir
-                        while os.path.exists(os.path.join(out_dir, folder_name)) or folder_name in cluster_to_folder.values():
-                            final_cid += 1
-                            folder_name = f"female_{final_cid + 1:03d}"
+                        from modules.name_resolver import FilenameParser
+                        import re
+                        
+                        # Find all files belonging to this raw cluster
+                        cluster_files = []
+                        for idx, label in enumerate(raw_labels):
+                            if label == raw_cid:
+                                face_idx = female_indices[idx]
+                                src_file = all_faces[face_idx]['source_file']
+                                cluster_files.append(os.path.basename(src_file))
+                                
+                        # Parse filenames
+                        candidates = []
+                        for fn in cluster_files:
+                            name = FilenameParser.parse_filename(fn)
+                            if name:
+                                candidates.append(name)
+                                
+                        detected_name = None
+                        if candidates:
+                            from collections import Counter
+                            counter = Counter(candidates)
+                            best_name, count = counter.most_common(1)[0]
+                            detected_name = best_name
                             
+                        out_dir = self.config.output_dir
+                        if detected_name:
+                            # Sanitize folder name
+                            folder_name = re.sub(r'[\\/*?:"<>|]', '', detected_name).strip()
+                            base_name = folder_name
+                            suffix = 2
+                            while os.path.exists(os.path.join(out_dir, folder_name)) or folder_name in cluster_to_folder.values():
+                                folder_name = f"{base_name}_{suffix}"
+                                suffix += 1
+                        else:
+                            folder_name = f"female_{final_cid + 1:03d}"
+                            while os.path.exists(os.path.join(out_dir, folder_name)) or folder_name in cluster_to_folder.values():
+                                final_cid += 1
+                                folder_name = f"female_{final_cid + 1:03d}"
+                                
                         cluster_to_folder[final_cid] = folder_name
                         cluster_to_profile_id[final_cid] = None
                         next_cluster_id = final_cid + 1

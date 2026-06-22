@@ -1134,17 +1134,38 @@ def move_media():
                 dest_file = os.path.join(dest_dir, dest_filename)
                 
             try:
-                # Move the physical file
-                os.rename(src_file, dest_file)
-                logger.info(f"Moved physical file: {src_file} -> {dest_file}")
+                # Move the physical file (try rename first)
+                moved_successfully = False
+                try:
+                    os.rename(src_file, dest_file)
+                    logger.info(f"Moved physical file: {src_file} -> {dest_file}")
+                    moved_successfully = True
+                except Exception as rename_err:
+                    logger.warning(f"Rename failed for {filename}: {rename_err}. Trying copy + delete fallback...")
+                    import shutil
+                    try:
+                        shutil.copy2(src_file, dest_file)
+                        logger.info(f"Copied physical file: {src_file} -> {dest_file}")
+                        moved_successfully = True
+                        
+                        # Try to remove original
+                        try:
+                            os.remove(src_file)
+                            logger.info(f"Deleted source file after copy: {src_file}")
+                        except Exception as del_err:
+                            logger.warning(f"Could not delete source file {src_file} immediately: {del_err}. It will remain for manual cleanup.")
+                    except Exception as copy_err:
+                        logger.error(f"Copy + delete fallback failed for {filename}: {copy_err}")
+                        raise copy_err
                 
-                # file_path in DB is absolute path
-                abs_src_path = os.path.abspath(src_file)
-                abs_dest_path = os.path.abspath(dest_file)
-                
-                cache_db.update_file_path(abs_src_path, abs_dest_path)
-                logger.info(f"Updated SQLite cache for path: {abs_src_path} -> {abs_dest_path}")
-                successes.append({'original': filename, 'new': dest_filename})
+                if moved_successfully:
+                    # file_path in DB is absolute path
+                    abs_src_path = os.path.abspath(src_file)
+                    abs_dest_path = os.path.abspath(dest_file)
+                    
+                    cache_db.update_file_path(abs_src_path, abs_dest_path)
+                    logger.info(f"Updated SQLite cache for path: {abs_src_path} -> {abs_dest_path}")
+                    successes.append({'original': filename, 'new': dest_filename})
             except Exception as item_err:
                 logger.error(f"Failed to move file {filename}: {item_err}")
                 failures.append({'filename': filename, 'reason': str(item_err)})
@@ -1181,6 +1202,16 @@ def move_media():
         if failures and not successes:
             return jsonify({'status': 'error', 'message': 'All moves failed', 'failures': failures}), 500
             
+        if successes:
+            try:
+                from modules.profile_manager import auto_extract_avatar
+                if os.path.exists(os.path.join(current_config.output_dir, from_folder)):
+                    auto_extract_avatar(from_folder, cache_db, current_config)
+                if os.path.exists(os.path.join(current_config.output_dir, to_folder)):
+                    auto_extract_avatar(to_folder, cache_db, current_config)
+            except Exception as avatar_err:
+                logger.error(f"Failed to auto-update avatars after move: {avatar_err}")
+
         return jsonify({
             'status': 'success',
             'message': f'Successfully moved {len(successes)} file(s).',
@@ -1358,6 +1389,299 @@ def global_search():
         return jsonify({'status': 'success', 'results': sorted_results[:100]})
     except Exception as e:
         logger.error(f"Error in global search endpoint: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/search-by-image', methods=['POST'])
+def search_by_image():
+    """Detects faces in the uploaded image, matches them to database profiles, and returns matched folders."""
+    if 'image' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No image file uploaded'}), 400
+        
+    image_file = request.files['image']
+    if image_file.filename == '':
+        return jsonify({'status': 'error', 'message': 'Empty file selected'}), 400
+        
+    try:
+        # Save temp file
+        temp_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, "temp_search_query.jpg")
+        image_file.save(temp_path)
+        
+        # Analyze face
+        from modules.face_analyzer import FaceAnalyzer
+        analyzer = FaceAnalyzer(current_config)
+        faces = analyzer.analyze_image(temp_path)
+        
+        # Clean up temp file
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+            
+        if not faces:
+            return jsonify({'status': 'error', 'message': 'No faces detected in the uploaded image.'}), 400
+            
+        # Get the largest face
+        faces.sort(key=lambda f: (f['bbox'][2] - f['bbox'][0]) * (f['bbox'][3] - f['bbox'][1]), reverse=True)
+        query_face = faces[0]
+        query_emb = query_face['embedding']
+        
+        # Retrieve all persistent profiles
+        from utils.models import PersistentProfile, WatchHistory
+        import numpy as np
+        
+        db_profiles = PersistentProfile.query.all()
+        matches = []
+        for p in db_profiles:
+            p_emb = np.frombuffer(p.embedding_blob, dtype=np.float32)
+            dist = np.linalg.norm(query_emb - p_emb)
+            # Normalize to 0-1 similarity percentage
+            similarity = max(0.0, 1.0 - (dist / 2.0))
+            matches.append({
+                'folder_name': p.folder_name,
+                'display_folder_name': p.folder_name.replace('_', ' ').strip(),
+                'distance': float(dist),
+                'similarity_score': float(similarity)
+            })
+            
+        # Sort matches by similarity score descending (distance ascending)
+        matches.sort(key=lambda m: m['distance'])
+        
+        # Filter matches (e.g. similarity >= 0.4, or just return top 5)
+        top_matches = matches[:5]
+        
+        # Pull files from the top match (if similarity is strong enough)
+        results = []
+        if top_matches and top_matches[0]['distance'] <= 1.2:
+            top_folder = top_matches[0]['folder_name']
+            output_dir = os.path.abspath(current_config.output_dir)
+            top_folder_path = os.path.join(output_dir, top_folder)
+            
+            if os.path.exists(top_folder_path):
+                try:
+                    for filename in os.listdir(top_folder_path):
+                        if filename.startswith('.') or filename.startswith('_'):
+                            continue
+                        file_path = os.path.join(top_folder_path, filename)
+                        if os.path.isfile(file_path):
+                            ext = os.path.splitext(filename)[1].lower()
+                            is_video = ext in {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v', '.mpg', '.mpeg'}
+                            
+                            item = {
+                                'filename': filename,
+                                'folder_name': top_folder,
+                                'display_folder_name': top_folder.replace('_', ' ').strip(),
+                                'file_type': 'video' if is_video else 'image',
+                                'is_video': is_video,
+                                'ext': ext,
+                                'watch_progress': {
+                                    'playback_position': 0.0,
+                                    'duration': 0.0,
+                                    'is_completed': False,
+                                    'progress_percent': 0
+                                },
+                                'has_thumbnail': is_video or ext in {'.jpg', '.jpeg', '.png', '.webp'}
+                            }
+                            
+                            # Inject watch progress
+                            key = f"{top_folder}/{filename}"
+                            watch_record = WatchHistory.query.filter_by(file_path=key).first()
+                            if watch_record:
+                                watch_info = item['watch_progress']
+                                watch_info['playback_position'] = watch_record.playback_position
+                                watch_info['duration'] = watch_record.duration
+                                watch_info['is_completed'] = watch_record.is_completed
+                                if watch_record.duration > 0:
+                                    watch_info['progress_percent'] = int((watch_record.playback_position / watch_record.duration) * 100)
+                                    
+                            results.append(item)
+                except Exception as scan_ex:
+                    logger.error(f"Error scanning matching folder {top_folder}: {scan_ex}")
+                    
+        return jsonify({
+            'status': 'success',
+            'matches': top_matches,
+            'results': sorted(results, key=lambda r: r['filename'])[:100]
+        })
+    except Exception as e:
+        logger.error(f"Error in search-by-image endpoint: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profiles', methods=['GET'])
+def list_profiles():
+    """Lists all face profiles, synchronized from output folder and DB."""
+    try:
+        from pipeline import SortingPipeline
+        from utils.cache import EmbeddingCache
+        
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        cache_db = EmbeddingCache(cache_dir)
+        
+        # Load and sync profiles using pipeline's sync mechanism
+        pipeline = SortingPipeline(current_config, WORKSPACE_DIR)
+        db_profiles = pipeline._load_and_sync_profiles()
+        
+        profiles = []
+        for p in db_profiles:
+            folder_name = p['folder_name']
+            profile_id = p['profile_id']
+            
+            # Count files in output folder physically
+            folder_path = os.path.join(current_config.output_dir, folder_name)
+            media_count = 0
+            has_thumbnail = False
+            
+            if os.path.exists(folder_path):
+                files_in_folder = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')]
+                media_count = len(files_in_folder)
+                has_thumbnail = os.path.exists(os.path.join(folder_path, '_reference_face.jpg'))
+            
+            # Try to get gender guess
+            gender = 'female' # default
+            try:
+                from utils.models import ProcessedFile
+                pf = ProcessedFile.query.filter(ProcessedFile.file_path.like(f"%{folder_name}%")).first()
+                if pf and pf.faces:
+                    gender = pf.faces[0].gender or 'female'
+            except Exception:
+                pass
+                
+            profiles.append({
+                'id': profile_id,
+                'folder_name': folder_name,
+                'display_name': folder_name.replace('_', ' ').strip(),
+                'media_count': media_count,
+                'has_thumbnail': has_thumbnail,
+                'gender': gender,
+                'avatar_url': f"/api/thumbnail/{folder_name}" if has_thumbnail else None
+            })
+            
+        # Sort by profile ID
+        profiles.sort(key=lambda x: x['id'])
+        return jsonify({'status': 'success', 'profiles': profiles})
+    except Exception as e:
+        logger.error(f"Error in list_profiles: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profile/<folder_name>/media', methods=['GET'])
+def list_profile_media(folder_name):
+    """Returns all media files containing this profile's face across all folders."""
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    try:
+        from utils.cache import EmbeddingCache
+        from modules.profile_manager import get_profile_media
+        
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        cache_db = EmbeddingCache(cache_dir)
+        
+        media_files = get_profile_media(folder_name, cache_db, current_config)
+        return jsonify({'status': 'success', 'files': media_files})
+    except Exception as e:
+        logger.error(f"Error in list_profile_media for {folder_name}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profile/extract-avatar', methods=['POST'])
+def extract_profile_avatar_api():
+    """Triggers auto-avatar extraction based on highest confidence face detection."""
+    data = request.json
+    folder_name = data.get('folder_name')
+    if not folder_name:
+        return jsonify({'status': 'error', 'message': 'Missing folder_name'}), 400
+        
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    try:
+        from utils.cache import EmbeddingCache
+        from modules.profile_manager import auto_extract_avatar
+        
+        folder_path = os.path.join(current_config.output_dir, folder_name)
+        if not os.path.exists(folder_path):
+            return jsonify({'status': 'error', 'message': f'Profile folder "{folder_name}" does not exist.'}), 404
+            
+        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')]
+        if not files:
+            return jsonify({'status': 'error', 'message': 'Profile folder is empty. Drop files into this profile first to set an avatar.'}), 400
+            
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        cache_db = EmbeddingCache(cache_dir)
+        
+        success = auto_extract_avatar(folder_name, cache_db, current_config, force=True)
+        if success:
+            return jsonify({'status': 'success', 'message': f'Avatar updated successfully for {folder_name}'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to extract avatar. Make sure the folder contains valid, uncorrupted video or image files.'}), 400
+    except Exception as e:
+        logger.error(f"Error in extract_profile_avatar_api: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profiles/index', methods=['POST'])
+def start_library_indexing():
+    """Starts background library indexing of output folder for face cache."""
+    try:
+        from utils.cache import EmbeddingCache
+        from modules.profile_manager import LibraryIndexer
+        
+        cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+        cache_db = EmbeddingCache(cache_dir)
+        
+        started = LibraryIndexer.start_indexing(app, cache_db, current_config)
+        if started:
+            return jsonify({'status': 'success', 'message': 'Library indexing started in background.'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Library indexing is already running.'}), 400
+    except Exception as e:
+        logger.error(f"Error starting library indexing: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profiles/index/status', methods=['GET'])
+def get_library_indexing_status():
+    """Returns status of library indexing background task."""
+    try:
+        from modules.profile_manager import LibraryIndexer
+        return jsonify({'status': 'success', 'state': LibraryIndexer.state})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/profiles/merge', methods=['POST'])
+def merge_profiles_api():
+    """Merges two face profiles together, physically merging folders and regenerating average embedding."""
+    data = request.json
+    source_folder = data.get('source_folder')
+    target_folder = data.get('target_folder')
+    
+    if not source_folder or not target_folder:
+        return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
+        
+    if '..' in source_folder or '/' in source_folder or '\\' in source_folder or \
+       '..' in target_folder or '/' in target_folder or '\\' in target_folder:
+        return jsonify({'status': 'error', 'message': 'Invalid paths'}), 400
+        
+    try:
+        from modules.name_resolver import merge_folders_manual
+        result = merge_folders_manual(current_config.output_dir, [source_folder, target_folder], target_folder)
+        
+        if result.get('status') == 'success':
+            from utils.cache import EmbeddingCache
+            from modules.profile_manager import auto_extract_avatar
+            
+            cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
+            cache_db = EmbeddingCache(cache_dir)
+            auto_extract_avatar(target_folder, cache_db, current_config)
+            
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error merging profiles {source_folder} -> {target_folder}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

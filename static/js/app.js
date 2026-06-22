@@ -1,6 +1,86 @@
 // AURA SORT — FRONTEND JAVASCRIPT
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Hover video preview helpers
+    let hoverPreviewTimeout = null;
+    let activeHoverVideo = null;
+    let activeHoverCard = null;
+
+    const attachHoverPreview = (card) => {
+        if (card.dataset.isVideo !== 'true' || card.dataset.isNative !== 'true') return;
+
+        card.addEventListener('mouseenter', () => {
+            if (hoverPreviewTimeout) clearTimeout(hoverPreviewTimeout);
+            
+            hoverPreviewTimeout = setTimeout(() => {
+                const folder = card.dataset.folder;
+                const filename = card.dataset.filename;
+                if (!folder || !filename) return;
+
+                const videoUrl = `/media/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
+                cleanupHoverPreview();
+
+                const video = document.createElement('video');
+                video.className = 'hover-preview-video';
+                video.muted = true;
+                video.loop = true;
+                video.setAttribute('playsinline', '');
+                video.src = videoUrl;
+
+                const thumbContainer = card.querySelector('.thumbnail-container');
+                if (thumbContainer) {
+                    thumbContainer.appendChild(video);
+                } else {
+                    card.appendChild(video);
+                }
+
+                activeHoverVideo = video;
+                activeHoverCard = card;
+                
+                video.play().then(() => {
+                    card.classList.add('hovering-video');
+                }).catch(err => {
+                    console.error('Hover preview play failed:', err);
+                });
+            }, 350);
+        });
+
+        const handleLeave = () => {
+            if (hoverPreviewTimeout) {
+                clearTimeout(hoverPreviewTimeout);
+                hoverPreviewTimeout = null;
+            }
+            if (activeHoverCard === card) {
+                cleanupHoverPreview();
+            }
+        };
+
+        card.addEventListener('mouseleave', handleLeave);
+        card.addEventListener('dragstart', handleLeave);
+    };
+
+    const cleanupHoverPreview = () => {
+        if (hoverPreviewTimeout) {
+            clearTimeout(hoverPreviewTimeout);
+            hoverPreviewTimeout = null;
+        }
+        if (activeHoverCard) {
+            activeHoverCard.classList.remove('hovering-video');
+            activeHoverCard = null;
+        }
+        if (activeHoverVideo) {
+            try {
+                activeHoverVideo.pause();
+                activeHoverVideo.src = '';
+                activeHoverVideo.load();
+                activeHoverVideo.remove();
+            } catch (err) {
+                console.error('Error cleaning up hover video:', err);
+            }
+            activeHoverVideo = null;
+        }
+    };
+
     // Navigation Tabs
     const navItems = document.querySelectorAll('.nav-item');
     const sections = document.querySelectorAll('.content-section');
@@ -9,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const headings = {
         'sec-results': { title: 'Library', sub: 'View identified profiles and sorted media folders' },
+        'sec-profiles': { title: 'Face Profiles', sub: 'Manage detected identities, assign images, and merge duplicates' },
         'sec-dashboard': { title: 'Pipeline', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
         'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
         'sec-gallery': { title: 'Profile Gallery', sub: 'Browse media files and correct sorting' }
@@ -40,6 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (targetId === 'sec-results') {
             loadLibrary();
+        } else if (targetId === 'sec-profiles') {
+            loadProfiles();
         } else if (targetId === 'sec-dashboard') {
             if (typeof checkInitialStatus === 'function') {
                 checkInitialStatus();
@@ -649,7 +732,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    checkInitialStatus();
+    // Defer status check until after page is fully loaded to prevent browser tab loading spinner from getting stuck
+    window.addEventListener('load', () => {
+        setTimeout(checkInitialStatus, 100);
+    });
 
     // ===== MERGE FOLDERS FEATURE =====
     const mergeModal = document.getElementById('merge-modal');
@@ -909,6 +995,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const playlistQueueList = document.getElementById('playlist-queue-list');
     const queueCountLabel = document.getElementById('queue-count-label');
 
+    // Clean up any potential legacy inline styles on tab buttons to let CSS classes take over
+    if (tabBtnInfo) {
+        tabBtnInfo.style.borderBottom = '';
+        tabBtnInfo.style.color = '';
+    }
+    if (tabBtnQueue) {
+        tabBtnQueue.style.borderBottom = '';
+        tabBtnQueue.style.color = '';
+    }
+
     // Playlist Functions
     const generateShuffledIndices = () => {
         shuffledIndices = Array.from({ length: playlistQueue.length }, (_, i) => i);
@@ -966,6 +1062,8 @@ document.addEventListener('DOMContentLoaded', () => {
         playlistQueueList.innerHTML = '';
         
         playlistQueue.forEach((file, index) => {
+            file.name = file.name || file.filename;
+            file.filename = file.filename || file.name;
             const isActive = index === playlistCurrentIndex;
             const thumbUrl = `/api/video-thumbnail/${encodeURIComponent(currentGalleryFolder)}/${encodeURIComponent(file.name)}`;
             
@@ -1167,29 +1265,19 @@ document.addEventListener('DOMContentLoaded', () => {
         tabBtnInfo.addEventListener('click', (e) => {
             e.stopPropagation();
             tabBtnInfo.classList.add('active');
-            tabBtnInfo.style.borderBottom = '2px solid var(--color-primary, #ec4899)';
-            tabBtnInfo.style.color = 'white';
-            
             tabBtnQueue.classList.remove('active');
-            tabBtnQueue.style.borderBottom = '2px solid transparent';
-            tabBtnQueue.style.color = 'var(--text-muted, #9ca3af)';
             
-            if (panelContentInfo) panelContentInfo.style.display = 'flex';
-            if (panelContentQueue) panelContentQueue.style.display = 'none';
+            if (panelContentInfo) panelContentInfo.classList.add('active');
+            if (panelContentQueue) panelContentQueue.classList.remove('active');
         });
         
         tabBtnQueue.addEventListener('click', (e) => {
             e.stopPropagation();
             tabBtnQueue.classList.add('active');
-            tabBtnQueue.style.borderBottom = '2px solid var(--color-primary, #ec4899)';
-            tabBtnQueue.style.color = 'white';
-            
             tabBtnInfo.classList.remove('active');
-            tabBtnInfo.style.borderBottom = '2px solid transparent';
-            tabBtnInfo.style.color = 'var(--text-muted, #9ca3af)';
             
-            if (panelContentQueue) panelContentQueue.style.display = 'flex';
-            if (panelContentInfo) panelContentInfo.style.display = 'none';
+            if (panelContentQueue) panelContentQueue.classList.add('active');
+            if (panelContentInfo) panelContentInfo.classList.remove('active');
             renderQueueUI();
         });
     }
@@ -1200,7 +1288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playlistIsShuffle = !playlistIsShuffle;
             updateShuffleBtnUI();
             generateShuffledIndices();
-            if (panelContentQueue && panelContentQueue.style.display === 'flex') {
+            if (panelContentQueue && panelContentQueue.classList.contains('active')) {
                 renderQueueUI();
             }
         });
@@ -1254,6 +1342,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentVideoPath = null;
     let currentLightboxFile = null;
     let lastSavedTime = 0;
+
+    const handleVideoEnded = () => {
+        saveWatchProgress(true);
+        if (playlistQueue.length > 0) {
+            skipToNext();
+        }
+    };
 
     const saveWatchProgress = async (force = false) => {
         if (!currentVideoPath) return;
@@ -1608,34 +1703,70 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!dragDataRaw) return;
                             
                             const dragData = JSON.parse(dragDataRaw);
-                            const filenames = dragData.filenames || (dragData.filename ? [dragData.filename] : null);
-                            if (!filenames || filenames.length === 0) return;
+                            
+                            let filesToMove = [];
+                            if (dragData.files) {
+                                filesToMove = dragData.files;
+                            } else {
+                                const filenames = dragData.filenames || (dragData.filename ? [dragData.filename] : []);
+                                filesToMove = filenames.map(name => ({ name: name, folder: currentGalleryFolder }));
+                            }
+                            
+                            if (filesToMove.length === 0) return;
 
-                            const moveRes = await fetch('/api/move-media', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    from_folder: currentGalleryFolder,
-                                    to_folder: folder.name,
-                                    filenames: filenames
-                                })
+                            // Group by source folder
+                            const groups = {};
+                            filesToMove.forEach(f => {
+                                if (!groups[f.folder]) {
+                                    groups[f.folder] = [];
+                                }
+                                groups[f.folder].push(f.name);
                             });
-                            const moveData = await moveRes.json();
 
-                            if (moveData.status === 'success') {
+                            let overallSuccess = true;
+                            let totalMoved = 0;
+                            let errorMsg = '';
+
+                            for (const [fromFolder, filenames] of Object.entries(groups)) {
+                                const moveRes = await fetch('/api/move-media', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        from_folder: fromFolder,
+                                        to_folder: folder.name,
+                                        filenames: filenames
+                                    })
+                                });
+                                const moveData = await moveRes.json();
+                                if (moveData.status === 'success') {
+                                    totalMoved += filenames.length;
+                                } else {
+                                    overallSuccess = false;
+                                    errorMsg = moveData.message;
+                                }
+                            }
+
+                            if (totalMoved > 0) {
                                 const targetDisplayName = folder.name === '_unsorted' ? 'Unsorted' : folder.name.replace(/_/g, ' ').trim();
-                                const fileCountStr = filenames.length === 1 ? filenames[0] : `${filenames.length} files`;
-                                appendLog('info', `Successfully moved ${fileCountStr} to ${targetDisplayName}`);
+                                appendLog('info', `Successfully moved ${totalMoved} file(s) to ${targetDisplayName}`);
                                 
                                 // Reset selection
                                 clearAllSelections();
                                 
-                                // Refresh current gallery (preserving search query and re-filtering targets)
+                                // Refresh current gallery
                                 await openGallery(currentGalleryFolder, true);
                                 // Refresh library page details & counts
                                 await loadLibrary();
-                            } else {
-                                alert(`Failed to move: ${moveData.message}`);
+                                
+                                // If profiles tab is active, refresh profiles list
+                                const secProfiles = document.getElementById('sec-profiles');
+                                if (secProfiles && secProfiles.classList.contains('active')) {
+                                    loadProfiles();
+                                }
+                            }
+                            
+                            if (!overallSuccess) {
+                                alert(`Some moves failed: ${errorMsg}`);
                             }
                         } catch (err) {
                             console.error('Error handling dropped media:', err);
@@ -1694,8 +1825,17 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadSidebarFolders();
 
         try {
-            const res = await fetch(`/api/list-media/${encodeURIComponent(folderName)}`);
+            const res = await fetch(`/api/profile/${encodeURIComponent(folderName)}/media`);
             const data = await res.json();
+            
+            // Normalize filenames for profile media API responses
+            if (data.files) {
+                data.files.forEach(f => {
+                    if (!f.name && f.filename) {
+                        f.name = f.filename;
+                    }
+                });
+            }
             
             // Filter video files to populate playlistQueue
             playlistQueue = (data.files || []).filter(f => f.is_video);
@@ -1735,12 +1875,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             data.files.forEach(file => {
+                const actualFolder = file.folder_name || folderName;
                 const isSelected = selectedFilenames.has(file.name);
                 const item = document.createElement('div');
                 item.className = `gallery-item${isSelected ? ' selected' : ''}`;
                 item.setAttribute('draggable', 'true');
                 
-                const fileUrl = `/media/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}`;
+                item.dataset.folder = actualFolder;
+                item.dataset.filename = file.name;
+                item.dataset.isVideo = file.is_video ? "true" : "false";
+                const isNative = file.ext === '.mp4' || file.ext === '.webm';
+                item.dataset.isNative = isNative ? "true" : "false";
+                
+                attachHoverPreview(item);
+
+                const fileUrl = `/media/${encodeURIComponent(actualFolder)}/${encodeURIComponent(file.name)}`;
                 
                 // Drag and drop event listeners on gallery items
                 item.addEventListener('dragstart', (e) => {
@@ -1748,16 +1897,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     let dragFiles = [];
                     if (selectedFilenames.has(file.name)) {
-                        dragFiles = Array.from(selectedFilenames);
+                        const checkedItems = galleryMediaGrid.querySelectorAll('.gallery-item-checkbox:checked');
+                        checkedItems.forEach(cb => {
+                            const parentItem = cb.closest('.gallery-item');
+                            const fFolder = parentItem ? parentItem.dataset.folder : folderName;
+                            dragFiles.push({ name: cb.dataset.filename, folder: fFolder });
+                        });
+                        
                         // Add dragging class to all selected cards
                         galleryMediaGrid.querySelectorAll('.gallery-item.selected').forEach(el => {
                             el.classList.add('dragging');
                         });
                     } else {
-                        dragFiles = [file.name];
+                        dragFiles = [{ name: file.name, folder: actualFolder }];
                     }
                     
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ filenames: dragFiles }));
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ files: dragFiles }));
                     e.dataTransfer.effectAllowed = 'move';
                 });
 
@@ -1769,8 +1924,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (file.is_video) {
-                    const isNative = file.ext === '.mp4' || file.ext === '.webm';
-                    const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(folderName)}/${encodeURIComponent(file.name)}?t=${Date.now()}`;
+                    const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(actualFolder)}/${encodeURIComponent(file.name)}?t=${Date.now()}`;
                     
                     // Check user preference from DOM
                     const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
@@ -1796,7 +1950,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         badgeHtml = `<span class="watch-badge unwatched"><i class="fa-solid fa-circle-play"></i> Unwatched</span>`;
                     }
-
+ 
                     item.innerHTML = `
                         <input type="checkbox" class="gallery-item-checkbox" data-filename="${file.name}" ${isSelected ? 'checked' : ''}>
                         <button class="item-info-btn" data-filename="${file.name}" title="View Info"><i class="fa-solid fa-circle-info"></i></button>
@@ -1817,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const handlePlay = (e) => {
                         if (e) e.stopPropagation();
                         if (useVLC) {
-                            playFileNatively(folderName, file.name);
+                            playFileNatively(actualFolder, file.name);
                         } else {
                             playVideoInLightbox(fileUrl, file.name);
                         }
@@ -1894,7 +2048,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const isNative = file.ext === '.mp4' || file.ext === '.webm';
                             const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
                             if (!isNative || defaultPlayer === 'vlc') {
-                                playFileNatively(folderName, file.name);
+                                playFileNatively(actualFolder, file.name);
                             } else {
                                 playVideoInLightbox(fileUrl, file.name);
                             }
@@ -1982,12 +2136,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let resumeTime = 0;
         
         // Fetch folder media list in the background if playlist is not for the current folder or is empty or doesn't have filename
-        if (playlistFolder !== currentGalleryFolder || !playlistQueue || playlistQueue.length === 0 || !playlistQueue.some(f => f.name === filename)) {
+        if (playlistFolder !== currentGalleryFolder || !playlistQueue || playlistQueue.length === 0 || !playlistQueue.some(f => (f.name || f.filename) === filename)) {
             try {
                 const folder = encodeURIComponent(currentGalleryFolder);
                 const res = await fetch(`/api/list-media/${folder}`);
                 const data = await res.json();
                 playlistQueue = (data.files || []).filter(f => f.is_video);
+                playlistQueue.forEach(f => {
+                    f.name = f.name || f.filename;
+                    f.filename = f.filename || f.name;
+                });
                 playlistFolder = currentGalleryFolder;
                 if (queueCountLabel) {
                     queueCountLabel.textContent = playlistQueue.length;
@@ -2017,7 +2175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Update the queue list UI if it's currently visible
-        if (panelContentQueue && panelContentQueue.style.display === 'flex') {
+        if (panelContentQueue && panelContentQueue.classList.contains('active')) {
             renderQueueUI();
         }
         
@@ -2290,8 +2448,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 list.innerHTML = '';
                 
                 data.items.forEach(item => {
+                    item.filename = item.filename || item.name;
+                    item.name = item.name || item.filename;
                     const card = document.createElement('div');
                     card.className = 'recent-video-card';
+                    
+                    card.dataset.folder = item.folder_name;
+                    card.dataset.filename = item.filename;
+                    card.dataset.isVideo = "true";
+                    const isNative = item.ext === '.mp4' || item.ext === '.webm';
+                    card.dataset.isNative = isNative ? "true" : "false";
+                    
+                    attachHoverPreview(card);
+
                     card.style.flex = '0 0 200px';
                     card.style.position = 'relative';
                     card.style.borderRadius = '12px';
@@ -2403,6 +2572,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchNoResults = document.getElementById('search-no-results');
     const searchQueryHighlight = document.getElementById('search-query-highlight');
     const searchResultsGrid = document.getElementById('search-results-grid');
+    const searchModalBox = document.getElementById('search-modal-box');
+    const searchDropOverlay = document.getElementById('search-drop-overlay');
+    const btnImageSearch = document.getElementById('btn-image-search');
+    const imageSearchUpload = document.getElementById('image-search-upload');
 
     const openSearchModal = () => {
         if (!globalSearchModal) return;
@@ -2428,6 +2601,7 @@ document.addEventListener('DOMContentLoaded', () => {
             searchResultsGrid.innerHTML = '';
         }
         if (searchSpinner) searchSpinner.style.display = 'none';
+        if (imageSearchUpload) imageSearchUpload.value = '';
     };
 
     if (globalSearchTrigger) {
@@ -2554,6 +2728,112 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const handleImageFile = async (file) => {
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please select or drop an image file.');
+            return;
+        }
+
+        if (modalSearchInput) {
+            modalSearchInput.value = `Image: ${file.name}`;
+        }
+
+        if (searchSpinner) searchSpinner.style.display = 'inline-block';
+        if (searchInitialPlaceholder) searchInitialPlaceholder.style.display = 'none';
+        if (searchNoResults) searchNoResults.style.display = 'none';
+        if (searchResultsGrid) {
+            searchResultsGrid.style.display = 'none';
+            searchResultsGrid.innerHTML = '';
+        }
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            const res = await fetch('/api/search-by-image', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (searchSpinner) searchSpinner.style.display = 'none';
+
+            if (data.status === 'success') {
+                if (data.results && data.results.length > 0) {
+                    renderSearchResults(data.results);
+                } else {
+                    if (searchQueryHighlight) {
+                        let msg = `Image: ${file.name}`;
+                        if (data.matches && data.matches.length > 0) {
+                            const topMatch = data.matches[0];
+                            msg += ` (Best match: ${topMatch.display_folder_name} - ${Math.round(topMatch.similarity_score * 100)}% match, but folder empty)`;
+                        } else {
+                            msg += ` (No matching model profiles found in database)`;
+                        }
+                        searchQueryHighlight.textContent = msg;
+                    }
+                    if (searchNoResults) searchNoResults.style.display = 'flex';
+                }
+            } else {
+                if (searchQueryHighlight) searchQueryHighlight.textContent = data.message || 'Error processing image search';
+                if (searchNoResults) searchNoResults.style.display = 'flex';
+            }
+        } catch (err) {
+            console.error('Image search error:', err);
+            if (searchSpinner) searchSpinner.style.display = 'none';
+            if (searchQueryHighlight) searchQueryHighlight.textContent = `Error: ${err.message}`;
+            if (searchNoResults) searchNoResults.style.display = 'flex';
+        }
+    };
+
+    if (btnImageSearch && imageSearchUpload) {
+        btnImageSearch.addEventListener('click', (e) => {
+            e.preventDefault();
+            imageSearchUpload.click();
+        });
+
+        imageSearchUpload.addEventListener('change', () => {
+            if (imageSearchUpload.files && imageSearchUpload.files.length > 0) {
+                handleImageFile(imageSearchUpload.files[0]);
+            }
+        });
+    }
+
+    if (searchModalBox && searchDropOverlay) {
+        let dragCounter = 0;
+
+        searchModalBox.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.types.includes('Files')) {
+                dragCounter++;
+                searchDropOverlay.style.display = 'flex';
+            }
+        });
+
+        searchModalBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        searchModalBox.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                searchDropOverlay.style.display = 'none';
+            }
+        });
+
+        searchModalBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            searchDropOverlay.style.display = 'none';
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleImageFile(e.dataTransfer.files[0]);
+            }
+        });
+    }
+
     const renderSearchResults = (results) => {
         if (!searchResultsGrid) return;
         searchResultsGrid.innerHTML = '';
@@ -2562,11 +2842,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultPlayer = document.getElementById('default_video_player')?.value || 'browser';
 
         results.forEach(file => {
+            file.filename = file.filename || file.name;
+            file.name = file.name || file.filename;
             const card = document.createElement('div');
             card.className = 'search-result-card';
             
-            const fileUrl = `/media/${encodeURIComponent(file.folder_name)}/${encodeURIComponent(file.filename)}`;
+            card.dataset.folder = file.folder_name;
+            card.dataset.filename = file.filename;
+            card.dataset.isVideo = file.is_video ? "true" : "false";
             const isNative = file.ext === '.mp4' || file.ext === '.webm';
+            card.dataset.isNative = isNative ? "true" : "false";
+            
+            attachHoverPreview(card);
+
+            const fileUrl = `/media/${encodeURIComponent(file.folder_name)}/${encodeURIComponent(file.filename)}`;
             const useVLC = file.is_video && (!isNative || defaultPlayer === 'vlc');
 
             let thumbHtml = '';
@@ -2649,6 +2938,334 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    loadRecentlyWatched();
-});
+    // ===== FACE PROFILE MANAGER =====
+    let allProfiles = [];
+    let isIndexingPolling = false;
+    let indexerPollInterval = null;
 
+    const profilesGrid = document.getElementById('profiles-grid');
+    const profilesCountTitle = document.getElementById('profiles-count-title');
+    const profilesSearchInput = document.getElementById('profiles-search-input');
+    const btnIndexLibrary = document.getElementById('btn-index-library');
+    const indexerProgressPanel = document.getElementById('indexer-progress-panel');
+    const indexerProgressBar = document.getElementById('indexer-progress-bar');
+    const indexerPercent = document.getElementById('indexer-percent');
+    const indexerStatusText = document.getElementById('indexer-status-text');
+
+    window.loadProfiles = async () => {
+        try {
+            profilesCountTitle.textContent = "Loading profiles...";
+            const res = await fetch('/api/profiles');
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                allProfiles = data.profiles || [];
+                renderProfilesList(allProfiles);
+                
+                // Also check if indexer is running in background
+                checkIndexerStatus();
+            } else {
+                profilesGrid.innerHTML = `<p style="color: #ff6b6b; text-align: center; grid-column: 1/-1;">Failed to load profiles: ${data.message}</p>`;
+            }
+        } catch (err) {
+            console.error("Error loading profiles:", err);
+            profilesGrid.innerHTML = `<p style="color: #ff6b6b; text-align: center; grid-column: 1/-1;">Error: ${err.message}</p>`;
+        }
+    };
+
+    const renderProfilesList = (profiles) => {
+        profilesGrid.innerHTML = '';
+        const query = profilesSearchInput.value.toLowerCase().trim();
+        
+        const filtered = profiles.filter(p => 
+            p.folder_name.toLowerCase().includes(query) || 
+            p.display_name.toLowerCase().includes(query)
+        );
+        
+        profilesCountTitle.textContent = `${profiles.length} detected identities`;
+        
+        if (filtered.length === 0) {
+            profilesGrid.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-users-slash" style="font-size: 2.5rem; margin-bottom: 1rem; display: block; opacity: 0.3;"></i>
+                    <p>No matching profiles found.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        filtered.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'dashboard-card glass profile-card';
+            card.setAttribute('draggable', 'true');
+            card.dataset.folder = p.folder_name;
+            
+            const avatarUrl = p.avatar_url ? `${p.avatar_url}?t=${Date.now()}` : 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/user-astronaut.svg';
+            const genderIcon = p.gender === 'male' ? '<i class="fa-solid fa-mars" style="color: #3b82f6;" title="Male"></i>' : '<i class="fa-solid fa-venus" style="color: #ec4899;" title="Female"></i>';
+            
+            card.innerHTML = `
+                <button class="avatar-refresh-btn" title="Auto-extract best avatar" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); padding: 0.35rem; border-radius: 50%; cursor: pointer; transition: background 0.2s, color 0.2s; display: flex; align-items: center; justify-content: center; z-index: 5;">
+                    <i class="fa-solid fa-arrows-rotate" style="font-size: 0.75rem;"></i>
+                </button>
+                <div class="avatar-container" style="position: relative; margin-bottom: 0.75rem; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, var(--color-primary) 0%, #a855f7 100%); width: 86px; height: 86px;">
+                    <img class="profile-avatar-img" src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; display: block; background: rgba(0,0,0,0.3);" onerror="this.src='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/user-astronaut.svg';">
+                </div>
+                <div style="font-weight: 600; text-align: center; margin-bottom: 0.25rem; font-size: 0.9rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">
+                    ${p.display_name}
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                    ${genderIcon}
+                    <span>${p.media_count} files</span>
+                </div>
+            `;
+            
+            // Navigate to gallery on click
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.avatar-refresh-btn')) {
+                    e.stopPropagation();
+                    return;
+                }
+                openGallery(p.folder_name);
+            });
+            
+            // Refresh avatar action
+            const refreshBtn = card.querySelector('.avatar-refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    refreshBtn.querySelector('i').classList.add('fa-spin');
+                    try {
+                        const response = await fetch('/api/profile/extract-avatar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folder_name: p.folder_name })
+                        });
+                        const resData = await response.json();
+                        if (resData.status === 'success') {
+                            appendLog('info', `Successfully extracted best avatar for ${p.display_name}`);
+                            const img = card.querySelector('.profile-avatar-img');
+                            if (img) img.src = `/api/thumbnail/${encodeURIComponent(p.folder_name)}?t=${Date.now()}`;
+                        } else {
+                            alert(`Failed to extract avatar: ${resData.message}`);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert(`Error: ${err.message}`);
+                    } finally {
+                        refreshBtn.querySelector('i').classList.remove('fa-spin');
+                    }
+                });
+            }
+            
+            // Drag and Drop support on Profile Cards (for Reassignment AND Merging!)
+            card.addEventListener('dragstart', (e) => {
+                card.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', JSON.stringify({ profile_folder: p.folder_name }));
+                e.dataTransfer.effectAllowed = 'copyMove';
+            });
+            
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+                profilesGrid.querySelectorAll('.profile-card').forEach(el => el.classList.remove('dragging'));
+            });
+            
+            card.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                card.classList.add('drag-over');
+            });
+            
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                card.classList.add('drag-over');
+            });
+            
+            card.addEventListener('dragleave', () => {
+                card.classList.remove('drag-over');
+            });
+            
+            card.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                card.classList.remove('drag-over');
+                
+                try {
+                    const dragDataRaw = e.dataTransfer.getData('text/plain');
+                    if (!dragDataRaw) return;
+                    
+                    const dragData = JSON.parse(dragDataRaw);
+                    
+                    // Case A: Dragging files from gallery (Reassignment)
+                    if (dragData.files || dragData.filenames) {
+                        let filesToMove = [];
+                        if (dragData.files) {
+                            filesToMove = dragData.files;
+                        } else {
+                            const filenames = dragData.filenames || (dragData.filename ? [dragData.filename] : []);
+                            filesToMove = filenames.map(name => ({ name: name, folder: currentGalleryFolder }));
+                        }
+                        
+                        if (filesToMove.length === 0) return;
+                        
+                        // Group by source folder
+                        const groups = {};
+                        filesToMove.forEach(f => {
+                            if (!groups[f.folder]) {
+                                groups[f.folder] = [];
+                            }
+                            groups[f.folder].push(f.name);
+                        });
+                        
+                        let totalMoved = 0;
+                        let errorMsg = '';
+                        
+                        for (const [fromFolder, filenames] of Object.entries(groups)) {
+                            if (fromFolder === p.folder_name) continue;
+                            
+                            const moveRes = await fetch('/api/move-media', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    from_folder: fromFolder,
+                                    to_folder: p.folder_name,
+                                    filenames: filenames
+                                })
+                            });
+                            const moveData = await moveRes.json();
+                            if (moveData.status === 'success') {
+                                totalMoved += filenames.length;
+                            } else {
+                                errorMsg = moveData.message;
+                            }
+                        }
+                        
+                        if (totalMoved > 0) {
+                            appendLog('info', `Successfully re-assigned ${totalMoved} file(s) to profile ${p.display_name}`);
+                            loadProfiles();
+                            clearAllSelections();
+                        }
+                        if (errorMsg) {
+                            alert(`Error: ${errorMsg}`);
+                        }
+                    }
+                    // Case B: Dragging a Profile Card onto another Profile Card (Merging!)
+                    else if (dragData.profile_folder) {
+                        const sourceFolder = dragData.profile_folder;
+                        const targetFolder = p.folder_name;
+                        
+                        if (sourceFolder === targetFolder) return;
+                        
+                        const sourceProfile = allProfiles.find(prof => prof.folder_name === sourceFolder);
+                        const sourceName = sourceProfile ? sourceProfile.display_name : sourceFolder;
+                        const targetName = p.display_name;
+                        
+                        const confirmMerge = confirm(`Are you sure you want to merge "${sourceName}" into "${targetName}"?\n\nThis will physically move all files from "${sourceName}" into "${targetName}", combine their face embeddings, and delete "${sourceName}". This cannot be undone.`);
+                        
+                        if (confirmMerge) {
+                            appendLog('info', `Merging profile "${sourceName}" into "${targetName}"...`);
+                            
+                            const mergeRes = await fetch('/api/profiles/merge', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    source_folder: sourceFolder,
+                                    target_folder: targetFolder
+                                })
+                            });
+                            const mergeData = await mergeRes.json();
+                            
+                            if (mergeData.status === 'success') {
+                                appendLog('info', `Successfully merged "${sourceName}" into "${targetName}". Moved ${mergeData.files_moved} file(s).`);
+                                loadProfiles();
+                            } else {
+                                alert(`Failed to merge profiles: ${mergeData.message}`);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Drop error on profile card:", err);
+                    alert(`Error handling drop: ${err.message}`);
+                }
+            });
+            
+            profilesGrid.appendChild(card);
+        });
+    };
+
+    // Filter profiles on search input
+    if (profilesSearchInput) {
+        profilesSearchInput.addEventListener('input', () => {
+            renderProfilesList(allProfiles);
+        });
+    }
+
+    // Index Library faces in background
+    if (btnIndexLibrary) {
+        btnIndexLibrary.addEventListener('click', async () => {
+            const confirmIndex = confirm("Do you want to index all faces in the output folders?\n\nThis will scan all folders recursively, extract face embeddings for any new files, and cache them in the database. This allows complete cross-profile search and auto-avatar extraction. It will run in the background.");
+            if (!confirmIndex) return;
+            
+            try {
+                const res = await fetch('/api/profiles/index', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    appendLog('info', 'Library indexing started in the background.');
+                    startIndexerPolling();
+                } else {
+                    alert(`Failed to start indexing: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert(`Error: ${err.message}`);
+            }
+        });
+    }
+
+    const startIndexerPolling = () => {
+        if (isIndexingPolling) return;
+        isIndexingPolling = true;
+        
+        indexerProgressPanel.style.display = 'block';
+        
+        indexerPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch('/api/profiles/index/status');
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    const state = data.state;
+                    if (state.running) {
+                        indexerProgressBar.style.width = `${state.percent}%`;
+                        indexerPercent.textContent = `${state.percent.toFixed(1)}%`;
+                        indexerStatusText.textContent = `Processing file [${state.processed_files}/${state.total_files}]: ${state.current_file}`;
+                    } else {
+                        // Stopped/Complete
+                        clearInterval(indexerPollInterval);
+                        isIndexingPolling = false;
+                        indexerProgressPanel.style.display = 'none';
+                        appendLog('info', 'Library indexing complete.');
+                        loadProfiles();
+                    }
+                }
+            } catch (err) {
+                console.error("Indexer polling error:", err);
+            }
+        }, 1000);
+    };
+
+    const checkIndexerStatus = async () => {
+        try {
+            const res = await fetch('/api/profiles/index/status');
+            const data = await res.json();
+            if (data.status === 'success' && data.state.running) {
+                startIndexerPolling();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // Defer recently watched load until after page is fully loaded to prevent browser tab loading spinner from getting stuck
+    window.addEventListener('load', () => {
+        setTimeout(checkIndexerStatus, 100);
+        setTimeout(loadRecentlyWatched, 100);
+    });
+});
