@@ -326,8 +326,7 @@
                 imagePlayer = document.createElement('img');
                 imagePlayer.id = 'lightbox-image';
                 imagePlayer.style.width = '100%';
-                imagePlayer.style.maxHeight = '75vh';
-                imagePlayer.style.aspectRatio = '16/9';
+                imagePlayer.style.height = '100%';
                 imagePlayer.style.objectFit = 'contain';
                 imagePlayer.style.display = 'none';
                 const wrapper = document.querySelector('.video-wrapper');
