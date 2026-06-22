@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch Config on Load
     const loadConfig = async () => {
         try {
-            const res = await fetch('/api/config');
+            const res = await fetch(`/api/config?t=${Date.now()}`);
             const data = await res.json();
             
             // Populate form inputs
@@ -575,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadLibrary() {
         showLibrarySkeletons();
         try {
-            const res = await fetch('/api/list-folders');
+            const res = await fetch(`/api/list-folders?t=${Date.now()}`);
             const data = await res.json();
             
             if (!data.folders || data.folders.length === 0) {
@@ -717,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check initial status on load to sync UI if server restarted or was running
     const checkInitialStatus = async () => {
         try {
-            const res = await fetch('/api/status');
+            const res = await fetch(`/api/status?t=${Date.now()}`);
             const data = await res.json();
             
             if (data.running) {
@@ -775,7 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadMergeFolders() {
         mergeFolderGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folders...</p>';
         try {
-            const res = await fetch('/api/list-folders');
+            const res = await fetch(`/api/list-folders?t=${Date.now()}`);
             const data = await res.json();
             mergeFolderGrid.innerHTML = '';
 
@@ -1632,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadSidebarFolders = async () => {
         if (!gallerySidebarList) return;
         try {
-            const res = await fetch('/api/list-folders');
+            const res = await fetch(`/api/list-folders?t=${Date.now()}`);
             const data = await res.json();
             
             gallerySidebarList.innerHTML = '';
@@ -2441,7 +2441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container || !list) return;
         
         try {
-            const res = await fetch('/api/recently-watched');
+            const res = await fetch(`/api/recently-watched?t=${Date.now()}`);
             const data = await res.json();
             
             if (data.status === 'success' && data.items && data.items.length > 0) {
@@ -2955,7 +2955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loadProfiles = async () => {
         try {
             profilesCountTitle.textContent = "Loading profiles...";
-            const res = await fetch('/api/profiles');
+            const res = await fetch(`/api/profiles?t=${Date.now()}`);
             const data = await res.json();
             
             if (data.status === 'success') {
@@ -3253,7 +3253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const checkIndexerStatus = async () => {
         try {
-            const res = await fetch('/api/profiles/index/status');
+            const res = await fetch(`/api/profiles/index/status?t=${Date.now()}`);
             const data = await res.json();
             if (data.status === 'success' && data.state.running) {
                 startIndexerPolling();
