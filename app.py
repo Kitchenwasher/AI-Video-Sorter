@@ -2,6 +2,8 @@ import os
 import threading
 import json
 import time
+import atexit
+import subprocess
 from flask import Flask, render_template, jsonify, request, Response, send_from_directory
 from flask_cors import CORS
 from config import Config
@@ -2052,11 +2054,28 @@ def signal_watch_party(party_id):
 
 
 public_tunnel_url = None
+active_tunnel_proc = None
+tunnel_should_run = True
+
+def cleanup_tunnel():
+    global tunnel_should_run, active_tunnel_proc
+    tunnel_should_run = False
+    if active_tunnel_proc:
+        try:
+            logger.info("Terminating localhost.run SSH tunnel subprocess...")
+            active_tunnel_proc.terminate()
+            try:
+                active_tunnel_proc.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                active_tunnel_proc.kill()
+        except Exception as e:
+            logger.error(f"Error terminating tunnel process: {e}")
+
+atexit.register(cleanup_tunnel)
 
 def start_localhost_run_tunnel():
     """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
-    global public_tunnel_url
-    import subprocess
+    global public_tunnel_url, active_tunnel_proc, tunnel_should_run
     import re
     
     logger.info("Starting localhost.run SSH tunnel for Watch Party sharing...")
@@ -2068,8 +2087,8 @@ def start_localhost_run_tunnel():
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         
     try:
-        while True:
-            proc = subprocess.Popen(
+        while tunnel_should_run:
+            active_tunnel_proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -2078,17 +2097,25 @@ def start_localhost_run_tunnel():
                 bufsize=1
             )
             
-            for line in proc.stdout:
+            for line in active_tunnel_proc.stdout:
+                if not tunnel_should_run:
+                    break
                 # Find the https URL in the stdout line
                 match = re.search(r'(https://[a-zA-Z0-9-]+\.lhr\.life)', line)
                 if match:
                     public_tunnel_url = match.group(1)
                     logger.info(f"Watch Party public sharing URL initialized: {public_tunnel_url}")
                     
-            proc.wait()
+            active_tunnel_proc.wait()
             public_tunnel_url = None
-            logger.warning("Localhost.run SSH tunnel disconnected. Reconnecting in 5 seconds...")
-            time.sleep(5)
+            active_tunnel_proc = None
+            
+            if tunnel_should_run:
+                logger.warning("Localhost.run SSH tunnel disconnected. Reconnecting in 5 seconds...")
+                for _ in range(50):
+                    if not tunnel_should_run:
+                        break
+                    time.sleep(0.1)
     except Exception as e:
         logger.error(f"Failed to run localhost.run tunnel: {e}")
 
