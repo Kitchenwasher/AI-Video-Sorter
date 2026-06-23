@@ -415,10 +415,29 @@ def run_auto_naming_thread(config_obj):
 
 @app.before_request
 def restrict_public_access():
-    """Restricts public tunnel (localhost.run) viewers from accessing admin routes/APIs."""
+    """Restricts public tunnel (localhost.run / trycloudflare.com) viewers from accessing admin routes/APIs."""
     host = request.headers.get('Host', '')
-    if '.lhr.life' in host or 'localhost.run' in host:
+    
+    # Check if request is coming through a public tunnel
+    is_public = (
+        '.lhr.life' in host or 
+        'localhost.run' in host or 
+        'trycloudflare.com' in host or
+        (public_tunnel_url and host in public_tunnel_url)
+    )
+    
+    if is_public:
         path = request.path
+        
+        # A. Render a beautiful public landing page if they access the root url
+        if path == '/':
+            return render_template(
+                'public_landing.html',
+                title="Private Host",
+                message="This is a private AuraSort server. The administrative dashboard is only accessible from the local host machine.",
+                icon="fa-shield-halved",
+                is_danger=False
+            )
         
         # 1. Allow static files
         if path.startswith('/static/'):
@@ -473,9 +492,19 @@ def restrict_public_access():
                         pass
             return jsonify({'status': 'error', 'message': 'Access denied: Admin authentication required.'}), 403
 
-        # For all other routes, block access
+        # 7. Allow Socket.IO connections for real-time sync and chat
+        if path.startswith('/socket.io/'):
+            return
+
+        # For all other routes, block access with a premium Access Denied page
         if 'text/html' in request.headers.get('Accept', ''):
-            return '<div style="font-family: sans-serif; text-align: center; margin-top: 10%; color: #ef4444;"><h1>Access Denied</h1><p>Public viewers are only permitted to access Watch Party rooms via their direct links.</p></div>', 403
+            return render_template(
+                'public_landing.html',
+                title="Access Denied",
+                message="Public viewers are only permitted to access Watch Party rooms via their direct links.",
+                icon="fa-circle-xmark",
+                is_danger=True
+            ), 403
             
         return jsonify({'status': 'error', 'message': 'Access denied: Public viewers are only permitted to access watch parties.'}), 403
 
