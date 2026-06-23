@@ -296,7 +296,65 @@
         };
     }
 
+    async function setupVoiceAndStart() {
+        // Request microphone permission for P2P voice chat
+        try {
+            addLogEntry('System', 'Requesting microphone access...');
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            localStream = stream;
+            
+            // Mute microphone by default to prevent sudden feedback/noise
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = false;
+            });
+            
+            updateMicUI(false);
+            const btnMic = document.getElementById('btn-mic-toggle');
+            btnMic.disabled = false;
+            document.getElementById('local-voice-status').innerText = 'Muted';
+        } catch (err) {
+            console.warn('Microphone access denied or not available:', err);
+            addLogEntry('System', 'Voice chat in receive-only mode (mic not allowed).');
+            updateMicUI(false);
+            const btnMic = document.getElementById('btn-mic-toggle');
+            btnMic.disabled = true;
+            document.getElementById('local-voice-status').innerText = 'Listen only';
+        }
+
+        // Bind mic toggle action
+        const btnMic = document.getElementById('btn-mic-toggle');
+        btnMic.onclick = () => {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                updateMicUI(audioTrack.enabled);
+                document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
+            }
+        };
+
+        // Start watch party connection and load playlist
+        startWatchParty();
+        initChat();
+    }
+
     function showNicknameModal() {
+        // Automatically retrieve and bypass nickname modal if already saved/provided
+        const storedName = sessionStorage.getItem('wp_client_name') || localStorage.getItem('wp_nickname');
+        if (storedName && storedName.trim() !== '' && storedName !== 'Viewer') {
+            clientName = storedName.trim();
+            sessionStorage.setItem('wp_client_name', clientName);
+            
+            // Setup local nickname display
+            const nameDisplay = document.getElementById('local-display-name');
+            if (nameDisplay) {
+                nameDisplay.innerText = `${clientName} (You)`;
+            }
+            
+            setupVoiceAndStart();
+            return;
+        }
+
         const overlay = document.getElementById('wp-nickname-overlay');
         overlay.classList.add('active');
 
@@ -315,47 +373,12 @@
             overlay.classList.remove('active');
 
             // Setup local nickname display
-            document.getElementById('local-display-name').innerText = `${clientName} (You)`;
-
-            // Request microphone permission for P2P voice chat
-            try {
-                addLogEntry('System', 'Requesting microphone access...');
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                localStream = stream;
-                
-                // Mute microphone by default to prevent sudden feedback/noise
-                localStream.getAudioTracks().forEach(track => {
-                    track.enabled = false;
-                });
-                
-                updateMicUI(false);
-                const btnMic = document.getElementById('btn-mic-toggle');
-                btnMic.disabled = false;
-                document.getElementById('local-voice-status').innerText = 'Muted';
-            } catch (err) {
-                console.warn('Microphone access denied or not available:', err);
-                addLogEntry('System', 'Voice chat in receive-only mode (mic not allowed).');
-                updateMicUI(false);
-                const btnMic = document.getElementById('btn-mic-toggle');
-                btnMic.disabled = true;
-                document.getElementById('local-voice-status').innerText = 'Listen only';
+            const nameDisplay = document.getElementById('local-display-name');
+            if (nameDisplay) {
+                nameDisplay.innerText = `${clientName} (You)`;
             }
 
-            // Bind mic toggle action
-            const btnMic = document.getElementById('btn-mic-toggle');
-            btnMic.onclick = () => {
-                if (!localStream) return;
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (audioTrack) {
-                    audioTrack.enabled = !audioTrack.enabled;
-                    updateMicUI(audioTrack.enabled);
-                    document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
-                }
-            };
-
-            // Start the SSE loop and load playlist
-            startWatchParty();
-            initChat();
+            setupVoiceAndStart();
         };
 
         submitBtn.onclick = handleNicknameSubmit;
@@ -697,12 +720,6 @@
                         resolve();
                     });
                 }
-            }
-        });
-    }
-
-                // Fallback in case Plyr ready is delayed
-                setTimeout(resolve, 800);
             }
         });
     }
