@@ -491,7 +491,15 @@ After nickname submit, `navigator.mediaDevices.getUserMedia({ audio: true })` is
   { urls: 'stun:stun2.l.google.com:19302' }
 ]
 ```
-No TURN is configured. This means the connection works as long as both peers can be reached directly by STUN-discovered IP. Behind symmetric NATs the audio will fail silently.
+An inbuilt, lightweight TURN/STUN server (`utils/turn_server.py`) is fully integrated into the application. When enabled, it runs in a background thread to facilitate media relay for users behind symmetric NATs or cellular networks without relying on third-party paid services.
+
+**Key Features of the Inbuilt TURN Server:**
+1. **SSDP/UPnP Auto Port Mapping:** On startup, the server uses a pure-Python SSDP multicast `M-SEARCH` request to discover the network's gateway router (IGD) and issues XML SOAP `AddPortMapping` commands to automatically open and forward port `3478` (UDP and TCP).
+2. **Public IP Resolution:** Automatically resolves the host's public IP address via `https://api.ipify.org` (with local caching) to advertise correct external relay paths to remote clients.
+3. **Dynamic Time-Limited Authentication (TURN REST API):** To prevent unauthorized relay usage, the server employs the standard long-term credential mechanism. When clients join, the Flask backend uses a Shared Secret to generate an ephemeral username containing a future timestamp (`<expiry_timestamp>:<client_name>`) and signs it using HMAC-SHA1 to produce a time-limited password.
+4. **Relay Protocol Support (RFC 5766 / RFC 5389):** Custom implementation of STUN Binding requests, TURN Allocate requests, Refresh requests, CreatePermission requests, ChannelBind requests, and fast UDP-to-UDP packet relaying loops.
+
+If the inbuilt TURN server is disabled, the WebRTC configuration falls back to either direct P2P connections (using public Google STUN servers) or any custom external TURN server configured in the dashboard.
 
 **Initiator vs answerer:**
 - When `peer_joined` arrives, the **existing** client calls `createPeerConnection(peerId, isInitiator=true)` and sends an offer.

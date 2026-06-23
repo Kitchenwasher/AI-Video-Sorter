@@ -52,6 +52,10 @@ class Config:
     wp_turn_server: str = ""
     wp_turn_username: str = ""
     wp_turn_credential: str = ""
+    wp_run_local_turn: bool = False
+    wp_local_turn_port: int = 3478
+    wp_turn_secret: str = ""
+    wp_enable_upnp: bool = True
     wp_use_hls: bool = False
     wp_hls_bitrate: str = "2500k"
     wp_hls_resolution: str = "1280x720"

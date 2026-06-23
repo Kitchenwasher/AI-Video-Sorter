@@ -126,6 +126,10 @@ def load_settings():
                     wp_turn_server=data.get('wp_turn_server', ''),
                     wp_turn_username=data.get('wp_turn_username', ''),
                     wp_turn_credential=data.get('wp_turn_credential', ''),
+                    wp_run_local_turn=data.get('wp_run_local_turn', False),
+                    wp_local_turn_port=data.get('wp_local_turn_port', 3478),
+                    wp_turn_secret=data.get('wp_turn_secret', ''),
+                    wp_enable_upnp=data.get('wp_enable_upnp', True),
                     wp_use_hls=data.get('wp_use_hls', False),
                     wp_hls_bitrate=data.get('wp_hls_bitrate', '2500k'),
                     wp_hls_resolution=data.get('wp_hls_resolution', '1280x720')
@@ -169,6 +173,10 @@ def save_settings(config_obj):
             'wp_turn_server': config_obj.wp_turn_server,
             'wp_turn_username': config_obj.wp_turn_username,
             'wp_turn_credential': config_obj.wp_turn_credential,
+            'wp_run_local_turn': config_obj.wp_run_local_turn,
+            'wp_local_turn_port': config_obj.wp_local_turn_port,
+            'wp_turn_secret': config_obj.wp_turn_secret,
+            'wp_enable_upnp': config_obj.wp_enable_upnp,
             'wp_use_hls': config_obj.wp_use_hls,
             'wp_hls_bitrate': config_obj.wp_hls_bitrate,
             'wp_hls_resolution': config_obj.wp_hls_resolution
@@ -327,6 +335,28 @@ def handle_join_event(data):
             'is_admin': is_admin
         }, to=party_id, include_self=False)
         
+        # Determine TURN server configuration
+        turn_server = current_config.wp_turn_server
+        turn_username = current_config.wp_turn_username
+        turn_credential = current_config.wp_turn_credential
+        
+        if current_config.wp_run_local_turn:
+            try:
+                from utils.turn_server import get_public_ip, get_local_ip
+                ip = get_public_ip() or get_local_ip()
+                port = current_config.wp_local_turn_port
+                turn_server = f"turn:{ip}:{port}"
+                
+                secret = current_config.wp_turn_secret.strip()
+                if secret:
+                    import time, hmac, hashlib, base64
+                    timestamp = int(time.time()) + 86400  # 24 hours expiry
+                    turn_username = f"{timestamp}:{client_name}"
+                    dig = hmac.new(secret.encode('utf-8'), turn_username.encode('utf-8'), hashlib.sha1).digest()
+                    turn_credential = base64.b64encode(dig).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Error generating dynamic TURN credentials: {e}")
+        
         # Send init payload to client
         emit('init_payload', {
             'playback_state': party_state['playback_state'],
@@ -334,9 +364,9 @@ def handle_join_event(data):
             'slow_mode': party_state.get('slow_mode', False),
             'is_admin': is_admin,
             'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
-            'turn_server': current_config.wp_turn_server,
-            'turn_username': current_config.wp_turn_username,
-            'turn_credential': current_config.wp_turn_credential
+            'turn_server': turn_server,
+            'turn_username': turn_username,
+            'turn_credential': turn_credential
         })
         
     logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
@@ -651,12 +681,17 @@ def handle_config():
         current_config.wp_turn_server = data.get('wp_turn_server', current_config.wp_turn_server)
         current_config.wp_turn_username = data.get('wp_turn_username', current_config.wp_turn_username)
         current_config.wp_turn_credential = data.get('wp_turn_credential', current_config.wp_turn_credential)
+        current_config.wp_run_local_turn = bool(data.get('wp_run_local_turn', current_config.wp_run_local_turn))
+        current_config.wp_local_turn_port = int(data.get('wp_local_turn_port', current_config.wp_local_turn_port))
+        current_config.wp_turn_secret = data.get('wp_turn_secret', current_config.wp_turn_secret)
+        current_config.wp_enable_upnp = bool(data.get('wp_enable_upnp', current_config.wp_enable_upnp))
         current_config.wp_use_hls = bool(data.get('wp_use_hls', current_config.wp_use_hls))
         current_config.wp_hls_bitrate = data.get('wp_hls_bitrate', current_config.wp_hls_bitrate)
         current_config.wp_hls_resolution = data.get('wp_hls_resolution', current_config.wp_hls_resolution)
         
         logger.info("Configuration updated.")
         save_settings(current_config)
+        manage_local_turn_server()
         return jsonify({'status': 'success', 'message': 'Configuration updated successfully.'})
     else:
         return jsonify({
@@ -694,6 +729,10 @@ def handle_config():
             'wp_turn_server': current_config.wp_turn_server,
             'wp_turn_username': current_config.wp_turn_username,
             'wp_turn_credential': current_config.wp_turn_credential,
+            'wp_run_local_turn': current_config.wp_run_local_turn,
+            'wp_local_turn_port': current_config.wp_local_turn_port,
+            'wp_turn_secret': current_config.wp_turn_secret,
+            'wp_enable_upnp': current_config.wp_enable_upnp,
             'wp_use_hls': current_config.wp_use_hls,
             'wp_hls_bitrate': current_config.wp_hls_bitrate,
             'wp_hls_resolution': current_config.wp_hls_resolution
@@ -3498,6 +3537,36 @@ def monitor_parent_process():
     except Exception as e:
         logger.warning(f"Error in parent process monitor thread: {e}")
 
+active_turn_server = None
+
+def manage_local_turn_server():
+    global active_turn_server
+    try:
+        if active_turn_server:
+            logger.info("Stopping existing inbuilt TURN server...")
+            active_turn_server.stop()
+            active_turn_server = None
+            
+        if current_config.wp_run_local_turn:
+            logger.info("Initializing inbuilt TURN server...")
+            if not current_config.wp_turn_secret.strip():
+                import secrets
+                current_config.wp_turn_secret = secrets.token_hex(16)
+                logger.info(f"Auto-generated TURN shared secret: {current_config.wp_turn_secret}")
+                save_settings(current_config)
+                
+            from utils.turn_server import LocalTurnServer
+            active_turn_server = LocalTurnServer(
+                host="0.0.0.0",
+                port=current_config.wp_local_turn_port,
+                secret=current_config.wp_turn_secret,
+                realm="local-party"
+            )
+            active_turn_server.start(enable_upnp=current_config.wp_enable_upnp)
+            logger.info(f"Inbuilt TURN server running on port {current_config.wp_local_turn_port}")
+    except Exception as e:
+        logger.error(f"Error managing inbuilt TURN server: {e}")
+
 def download_cloudflared(dest_path):
     import urllib.request
     logger.info("Downloading cloudflared.exe from Cloudflare official release...")
@@ -3657,6 +3726,9 @@ if __name__ == '__main__':
             
         t = threading.Thread(target=start_tunnel_manager, daemon=True)
         t.start()
+        
+        # Start inbuilt local TURN server if enabled
+        manage_local_turn_server()
         
     logger.info("Starting Face Sorter Web Interface...")
     socketio.run(app, host='127.0.0.1', port=5000, debug=True, allow_unsafe_werkzeug=True)

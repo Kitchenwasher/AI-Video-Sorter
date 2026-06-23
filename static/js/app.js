@@ -403,6 +403,36 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('wp_turn_server').value = data.wp_turn_server || '';
             document.getElementById('wp_turn_username').value = data.wp_turn_username || '';
             document.getElementById('wp_turn_credential').value = data.wp_turn_credential || '';
+            
+            // Inbuilt TURN fields loading
+            const runLocalCheckbox = document.getElementById('wp_run_local_turn');
+            runLocalCheckbox.checked = data.wp_run_local_turn === true;
+            document.getElementById('wp_local_turn_port').value = data.wp_local_turn_port !== undefined ? data.wp_local_turn_port : 3478;
+            document.getElementById('wp_turn_secret').value = data.wp_turn_secret || '';
+            document.getElementById('wp_enable_upnp').checked = data.wp_enable_upnp !== false;
+            
+            // Toggle visibility immediately based on loaded value
+            const inbuiltDiv = document.getElementById('inbuilt_turn_options');
+            const externalDiv = document.getElementById('external_turn_options');
+            if (data.wp_run_local_turn) {
+                inbuiltDiv.style.display = 'block';
+                externalDiv.style.display = 'none';
+            } else {
+                inbuiltDiv.style.display = 'none';
+                externalDiv.style.display = 'block';
+            }
+            
+            // Add change listener to run_local checkbox for instant toggle
+            runLocalCheckbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    inbuiltDiv.style.display = 'block';
+                    externalDiv.style.display = 'none';
+                } else {
+                    inbuiltDiv.style.display = 'none';
+                    externalDiv.style.display = 'block';
+                }
+            });
+
             document.getElementById('wp_use_hls').checked = data.wp_use_hls === true;
             document.getElementById('wp_hls_bitrate').value = data.wp_hls_bitrate || '2500k';
             document.getElementById('wp_hls_resolution').value = data.wp_hls_resolution || '1280x720';
@@ -455,6 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
             wp_turn_server: document.getElementById('wp_turn_server').value,
             wp_turn_username: document.getElementById('wp_turn_username').value,
             wp_turn_credential: document.getElementById('wp_turn_credential').value,
+            wp_run_local_turn: document.getElementById('wp_run_local_turn').checked,
+            wp_local_turn_port: parseInt(document.getElementById('wp_local_turn_port').value),
+            wp_turn_secret: document.getElementById('wp_turn_secret').value,
+            wp_enable_upnp: document.getElementById('wp_enable_upnp').checked,
             wp_use_hls: document.getElementById('wp_use_hls').checked,
             wp_hls_bitrate: document.getElementById('wp_hls_bitrate').value,
             wp_hls_resolution: document.getElementById('wp_hls_resolution').value
