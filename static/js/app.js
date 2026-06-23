@@ -1,5 +1,84 @@
 // AURA SORT — FRONTEND JAVASCRIPT
 
+// SAFE STORAGE WRAPPERS FOR BROWSER STORAGE RESTRICTIONS / TRACKING PREVENTION
+if (!window.safeLocalStorage) {
+    window.safeLocalStorage = {
+        _memDb: {},
+        getItem(key) {
+            try {
+                const storage = window.localStorage;
+                if (storage) return storage.getItem(key);
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to read ${key} from localStorage:`, e);
+            }
+            return this._memDb[key] !== undefined ? this._memDb[key] : null;
+        },
+        setItem(key, value) {
+            try {
+                const storage = window.localStorage;
+                if (storage) {
+                    storage.setItem(key, value);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to write ${key} to localStorage:`, e);
+            }
+            this._memDb[key] = String(value);
+        },
+        removeItem(key) {
+            try {
+                const storage = window.localStorage;
+                if (storage) {
+                    storage.removeItem(key);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to remove ${key} from localStorage:`, e);
+            }
+            delete this._memDb[key];
+        }
+    };
+}
+
+if (!window.safeSessionStorage) {
+    window.safeSessionStorage = {
+        _memDb: {},
+        getItem(key) {
+            try {
+                const storage = window.sessionStorage;
+                if (storage) return storage.getItem(key);
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to read ${key} from sessionStorage:`, e);
+            }
+            return this._memDb[key] !== undefined ? this._memDb[key] : null;
+        },
+        setItem(key, value) {
+            try {
+                const storage = window.sessionStorage;
+                if (storage) {
+                    storage.setItem(key, value);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to write ${key} to sessionStorage:`, e);
+            }
+            this._memDb[key] = String(value);
+        },
+        removeItem(key) {
+            try {
+                const storage = window.sessionStorage;
+                if (storage) {
+                    storage.removeItem(key);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`[SafeStorage] Failed to remove ${key} from sessionStorage:`, e);
+            }
+            delete this._memDb[key];
+        }
+    };
+}
+
 // GLOBAL TOAST NOTIFICATION SYSTEM
 (function () {
     // Dynamic CSS injection for toasts
@@ -148,6 +227,9 @@
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
+    const localStorage = window.safeLocalStorage;
+    const sessionStorage = window.safeSessionStorage;
+
     // Hover video preview helpers
     let hoverPreviewTimeout = null;
     let activeHoverVideo = null;
