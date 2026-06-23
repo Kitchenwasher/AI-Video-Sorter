@@ -821,6 +821,70 @@
             transform: scale(1.25);
             border-color: #F3F3F3;
         }
+        
+        /* Playback Buffering Overlay */
+        .buffering-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 12, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            z-index: 18;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .buffering-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .buffering-card {
+            background: rgba(25, 25, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 24px 36px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .buffering-overlay.active .buffering-card {
+            transform: scale(1);
+        }
+        
+        .buffering-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .buffering-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #F3F3F3;
+            letter-spacing: -0.1px;
+            text-align: center;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -851,6 +915,15 @@
                     <i class="fa-solid fa-lock"></i> Playback Locked by Host
                 </div>
                 <div class="emoji-overlay-container" id="emoji-overlay-container"></div>
+                
+                <!-- Playback Buffering Overlay -->
+                <div class="buffering-overlay" id="wp-buffering-overlay">
+                    <div class="buffering-card">
+                        <div class="buffering-spinner"></div>
+                        <div class="buffering-text" id="wp-buffering-text">Waiting for peers to buffer...</div>
+                    </div>
+                </div>
+                
                 <canvas class="laser-canvas" id="laser-canvas"></canvas>
                 
                 <!-- Laser & Drawing Floating Toolbar -->
@@ -1088,5 +1161,7 @@
     <script src="{{ url_for('static', filename='js/watch_party.js') }}"></script>
     <!-- Modular Laser Pointer and Drawing Canvas script -->
     <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}"></script>
+    <!-- Modular Top-Notch Playback Sync Infrastructure script -->
+    <script src="{{ url_for('static', filename='js/watch_party_sync.js') }}"></script>
 </body>
 </html>
