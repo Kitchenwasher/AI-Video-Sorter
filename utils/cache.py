@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 from utils.logger import logger
-from utils.models import db, ProcessedFile, Face, PersistentProfile
+from utils.models import db, ProcessedFile, Face, PersistentProfile, ProfileMediaMembership
 
 class EmbeddingCache:
     def __init__(self, cache_dir: str = None):
@@ -17,7 +17,7 @@ class EmbeddingCache:
             logger.error(f"Error getting file signature for {file_path}: {e}")
             return None, None
 
-    def get_cached_faces(self, file_path: str):
+    def get_cached_faces(self, file_path: str, analysis_fingerprint: str = None):
         mtime, size = self.get_file_signature(file_path)
         if mtime is None:
             return None
@@ -34,6 +34,17 @@ class EmbeddingCache:
                 db.session.delete(processed_file)
                 db.session.commit()
                 return None
+
+            if analysis_fingerprint:
+                legacy_fast_cache = (
+                    processed_file.analysis_fingerprint is None
+                    and analysis_fingerprint.startswith("scan=fast;")
+                )
+                if processed_file.analysis_fingerprint != analysis_fingerprint and not legacy_fast_cache:
+                    logger.info(f"Scan settings changed for {file_path}, refreshing cached faces.")
+                    db.session.delete(processed_file)
+                    db.session.commit()
+                    return None
                 
             # Retrieve faces
             faces = []
@@ -53,7 +64,7 @@ class EmbeddingCache:
             logger.error(f"Failed to get cached faces for {file_path}: {e}")
             return None
 
-    def cache_faces(self, file_path: str, file_type: str, faces_data: list):
+    def cache_faces(self, file_path: str, file_type: str, faces_data: list, analysis_fingerprint: str = None):
         mtime, size = self.get_file_signature(file_path)
         if mtime is None:
             return
@@ -68,7 +79,8 @@ class EmbeddingCache:
                 file_path=file_path,
                 file_type=file_type,
                 mtime=mtime,
-                size=size
+                size=size,
+                analysis_fingerprint=analysis_fingerprint
             )
             db.session.add(processed_file)
             db.session.flush()  # Populate the ID for foreign keys
@@ -95,6 +107,7 @@ class EmbeddingCache:
     def clear(self):
         try:
             Face.query.delete()
+            ProfileMediaMembership.query.delete()
             ProcessedFile.query.delete()
             db.session.commit()
             logger.info("Cache cleared.")
@@ -190,7 +203,8 @@ class EmbeddingCache:
                     file_path=abs_dest,
                     file_type=pf.file_type,
                     mtime=pf.mtime,
-                    size=pf.size
+                    size=pf.size,
+                    analysis_fingerprint=pf.analysis_fingerprint
                 )
                 db.session.add(new_pf)
                 db.session.flush()
@@ -222,6 +236,45 @@ class EmbeddingCache:
                 logger.info(f"DB update path: {abs_old} -> {abs_new}")
         except Exception as e:
             logger.error(f"Failed to update file path in DB: {e}")
+            db.session.rollback()
+
+    def get_processed_file(self, file_path: str):
+        try:
+            return ProcessedFile.query.filter_by(file_path=os.path.abspath(file_path)).first()
+        except Exception as e:
+            logger.error(f"Failed to load processed file for membership update: {e}")
+            return None
+
+    def set_profile_media_memberships(self, file_path: str, profile_ids: list, primary_profile_id=None, evidence: dict = None):
+        processed_file = self.get_processed_file(file_path)
+        if not processed_file:
+            return
+
+        normalized_profile_ids = []
+        for profile_id in profile_ids:
+            if profile_id is None:
+                continue
+            try:
+                profile_id = int(profile_id)
+            except (TypeError, ValueError):
+                continue
+            if profile_id not in normalized_profile_ids:
+                normalized_profile_ids.append(profile_id)
+
+        try:
+            ProfileMediaMembership.query.filter_by(file_id=processed_file.id).delete()
+            for profile_id in normalized_profile_ids:
+                role = 'primary' if primary_profile_id is not None and int(profile_id) == int(primary_profile_id) else 'secondary'
+                member_evidence = (evidence or {}).get(str(profile_id), (evidence or {}).get(profile_id, {}))
+                db.session.add(ProfileMediaMembership(
+                    profile_id=profile_id,
+                    file_id=processed_file.id,
+                    role=role,
+                    evidence_json=json.dumps(member_evidence)
+                ))
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Failed to set profile memberships for {file_path}: {e}")
             db.session.rollback()
 
     def update_folder_paths(self, old_folder_path: str, new_folder_path: str):

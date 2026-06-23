@@ -1324,26 +1324,7 @@ input[type="range"]::-webkit-slider-thumb {
     pointer-events: none;
 }
 
-/* ============================================
-   HOVER PREVIEW VIDEO
-   ============================================ */
-.hover-preview-video {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 2;
-    pointer-events: none;
-    opacity: 0;
-}
 
-.gallery-item.hovering-video .hover-preview-video { opacity: 1; }
-
-.gallery-item.hovering-video img,
-.gallery-item.hovering-video .video-placeholder { opacity: 0.1; }
-
-.search-result-card.hovering-video .video-play-indicator { opacity: 0; }
 
 /* ============================================
    PROFILES
@@ -1945,6 +1926,7 @@ input[type="range"]::-webkit-slider-thumb {
     align-items: center;
     gap: 0.8rem;
     z-index: 1200;
+    transition: right 0.25s ease;
 }
 
 .lightbox-control-btn {
@@ -1985,6 +1967,7 @@ input[type="range"]::-webkit-slider-thumb {
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: right 0.25s ease, left 0.25s ease, border-color 0.2s;
 }
 
 .lightbox-nav-arrow-btn:hover {
@@ -1994,6 +1977,22 @@ input[type="range"]::-webkit-slider-thumb {
 .lightbox-nav-arrow-btn.left { left: 16px; }
 .lightbox-nav-arrow-btn.right { right: 16px; }
 
+.panel-open .lightbox-controls {
+    right: 376px;
+}
+
+.panel-open .lightbox-nav-arrow-btn.right {
+    right: 376px;
+}
+
+.lightbox-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
 .lightbox-media-wrapper-large {
     flex: 1;
     display: flex;
@@ -2001,6 +2000,21 @@ input[type="range"]::-webkit-slider-thumb {
     justify-content: center;
     padding: 1.5rem;
     position: relative;
+    height: 100%;
+    width: 100%;
+}
+
+#lightbox-img,
+#lightbox-video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.lightbox-media-wrapper-large .plyr {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 /* Metadata panel */
@@ -2325,3 +2339,101 @@ input[type="range"]::-webkit-slider-thumb {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+
+
+/* ============================================
+
+   DELETION STYLES
+
+   ============================================ */
+
+.btn-danger {
+
+    background: #ef4444;
+
+    border-color: #ef4444;
+
+    color: var(--text);
+
+}
+
+
+
+.btn-danger:hover {
+
+    background: var(--bg);
+
+    color: #ef4444;
+
+    border-color: #ef4444;
+
+}
+
+
+
+.btn-danger:disabled {
+
+    opacity: 0.4;
+
+    cursor: not-allowed;
+
+}
+
+
+
+.item-delete-btn {
+
+    position: absolute;
+
+    top: 8px;
+
+    right: 38px;
+
+    z-index: 10;
+
+    width: 24px;
+
+    height: 24px;
+
+    background: var(--bg-overlay);
+
+    border: var(--bw) solid var(--border);
+
+    color: var(--text);
+
+    font-size: 0.75rem;
+
+    cursor: pointer;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    opacity: 0;
+
+    transition: opacity 0.2s, background 0.2s, color 0.2s, border-color 0.2s;
+
+}
+
+
+
+.gallery-item:hover .item-delete-btn {
+
+    opacity: 1;
+
+}
+
+
+
+.item-delete-btn:hover {
+
+    background: #ef4444;
+
+    color: var(--text);
+
+    border-color: #ef4444;
+
+}
+

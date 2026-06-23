@@ -230,94 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const localStorage = window.safeLocalStorage;
     const sessionStorage = window.safeSessionStorage;
 
-    // Hover video preview helpers
-    let hoverPreviewTimeout = null;
-    let activeHoverVideo = null;
-    let activeHoverCard = null;
-
-    const attachHoverPreview = (card) => {
-        if (card.dataset.isVideo !== 'true' || card.dataset.isNative !== 'true') return;
-
-        card.addEventListener('mouseenter', () => {
-            if (hoverPreviewTimeout) clearTimeout(hoverPreviewTimeout);
-            
-            hoverPreviewTimeout = setTimeout(() => {
-                const folder = card.dataset.folder;
-                const filename = card.dataset.filename;
-                if (!folder || !filename) return;
-
-                const videoUrl = `/media/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
-                cleanupHoverPreview();
-
-                const video = document.createElement('video');
-                video.className = 'hover-preview-video';
-                video.muted = true;
-                video.loop = true;
-                video.setAttribute('playsinline', '');
-                
-                video.addEventListener('loadedmetadata', () => {
-                    if (video.duration) {
-                        video.currentTime = video.duration * 0.5;
-                    }
-                });
-                
-                video.src = videoUrl;
-
-                const thumbContainer = card.querySelector('.thumbnail-container');
-                if (thumbContainer) {
-                    thumbContainer.appendChild(video);
-                } else {
-                    card.appendChild(video);
-                }
-
-                activeHoverVideo = video;
-                activeHoverCard = card;
-                
-                video.play().then(() => {
-                    card.classList.add('hovering-video');
-                }).catch(err => {
-                    if (err.name !== 'AbortError') {
-                        console.error('Hover preview play failed:', err);
-                    }
-                });
-            }, 350);
-        });
-
-        const handleLeave = () => {
-            if (hoverPreviewTimeout) {
-                clearTimeout(hoverPreviewTimeout);
-                hoverPreviewTimeout = null;
-            }
-            if (activeHoverCard === card) {
-                cleanupHoverPreview();
-            }
-        };
-
-        card.addEventListener('mouseleave', handleLeave);
-        card.addEventListener('dragstart', handleLeave);
-    };
-
-    const cleanupHoverPreview = () => {
-        if (hoverPreviewTimeout) {
-            clearTimeout(hoverPreviewTimeout);
-            hoverPreviewTimeout = null;
-        }
-        if (activeHoverCard) {
-            activeHoverCard.classList.remove('hovering-video');
-            activeHoverCard = null;
-        }
-        if (activeHoverVideo) {
-            try {
-                activeHoverVideo.pause();
-                activeHoverVideo.src = '';
-                activeHoverVideo.load();
-                activeHoverVideo.remove();
-            } catch (err) {
-                console.error('Error cleaning up hover video:', err);
-            }
-            activeHoverVideo = null;
-        }
-    };
+    // Hover video preview helpers removed completely on user request
 
     // Navigation Tabs
     const navItems = document.querySelectorAll('.nav-item');
@@ -416,6 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('use_cache').checked = data.use_cache !== false;
             document.getElementById('keep_keyframes').checked = data.keep_keyframes === true;
             document.getElementById('prefer_popular_identities').checked = data.prefer_popular_identities === true;
+            document.getElementById('multi_profile_policy').value = data.multi_profile_policy || 'primary_only';
+            document.getElementById('profile_target').value = data.profile_target || 'female';
+            document.getElementById('scan_depth').value = data.scan_depth || 'fast';
+            document.getElementById('multi_profile_min_keyframes').value = data.multi_profile_min_keyframes || 2;
             
             // Slider values
             document.getElementById('face_det_threshold').value = data.face_det_threshold || 0.5;
@@ -480,6 +397,10 @@ document.addEventListener('DOMContentLoaded', () => {
             use_cache: document.getElementById('use_cache').checked,
             keep_keyframes: document.getElementById('keep_keyframes').checked,
             prefer_popular_identities: document.getElementById('prefer_popular_identities').checked,
+            multi_profile_policy: document.getElementById('multi_profile_policy').value,
+            profile_target: document.getElementById('profile_target').value,
+            scan_depth: document.getElementById('scan_depth').value,
+            multi_profile_min_keyframes: parseInt(document.getElementById('multi_profile_min_keyframes').value),
             face_det_threshold: parseFloat(document.getElementById('face_det_threshold').value),
             gender_threshold: parseFloat(document.getElementById('gender_threshold').value),
             min_eye_dist_ratio: parseFloat(document.getElementById('min_eye_dist_ratio').value),
@@ -1232,6 +1153,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ===== DYNAMIC GALLERY & LIGHTBOX CONTROLLERS =====
+    const DEFAULT_VIDEO_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23888890'><path d='M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z'/></svg>";
+    const DEFAULT_USER_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23888890'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
     const galleryModal = document.getElementById('gallery-modal');
     const galleryModalClose = document.getElementById('gallery-modal-close');
     const galleryTitle = document.getElementById('gallery-title');
@@ -1788,6 +1711,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectionCount = document.getElementById('selection-count');
     const btnSelectAll = document.getElementById('btn-select-all');
     const btnClearSelection = document.getElementById('btn-clear-selection');
+    const btnDeleteSelection = document.getElementById('btn-delete-selection');
 
     const updateSelectionBanner = () => {
         if (!gallerySelectionBanner || !selectionCount) return;
@@ -1886,6 +1810,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (btnClearSelection) {
         btnClearSelection.addEventListener('click', clearAllSelections);
+    }
+    if (btnDeleteSelection) {
+        btnDeleteSelection.addEventListener('click', async () => {
+            const count = selectedFilenames.size;
+            if (count === 0) return;
+            
+            if (confirm(`Are you sure you want to permanently delete all ${count} selected media files? This action cannot be undone.`)) {
+                btnDeleteSelection.disabled = true;
+                const icon = btnDeleteSelection.querySelector('i');
+                const origClass = icon ? icon.className : '';
+                if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+                
+                try {
+                    const filenames = Array.from(selectedFilenames);
+                    const response = await fetch('/api/delete-media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            folder_name: currentGalleryFolder,
+                            filenames: filenames
+                        })
+                    });
+                    const resData = await response.json();
+                    if (resData.status === 'success') {
+                        appendLog('info', `Successfully deleted ${filenames.length} selected files.`);
+                        selectedFilenames.clear();
+                        updateSelectionBanner();
+                        await openGallery(currentGalleryFolder, true);
+                        await loadLibrary();
+                    } else {
+                        alert(`Failed to delete selected files: ${resData.message}`);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert(`Failed to delete selected files: ${err.message}`);
+                } finally {
+                    btnDeleteSelection.disabled = false;
+                    if (icon) icon.className = origClass;
+                }
+            }
+        });
     }
 
     // Filter folders in sidebar
@@ -2164,8 +2129,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.dataset.isVideo = file.is_video ? "true" : "false";
                 const isNative = file.ext === '.mp4' || file.ext === '.webm';
                 item.dataset.isNative = isNative ? "true" : "false";
-                
-                attachHoverPreview(item);
 
                 const fileUrl = `/media/${encodeURIComponent(actualFolder)}/${encodeURIComponent(file.name)}`;
                 
@@ -2232,6 +2195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.innerHTML = `
                         <input type="checkbox" class="gallery-item-checkbox" data-filename="${file.name}" ${isSelected ? 'checked' : ''}>
                         <button class="item-info-btn" data-filename="${file.name}" title="View Info"><i class="fa-solid fa-circle-info"></i></button>
+                        <button class="item-delete-btn" data-filename="${file.name}" title="Delete File"><i class="fa-solid fa-trash"></i></button>
                         ${badgeHtml}
                         <img src="${videoThumbUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${videoThumbUrl}&retry=' + Date.now(); }, 1500); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }" alt="${file.name}">
                         <div class="video-placeholder" style="display:none; width:100%; height:100%;">
@@ -2260,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     item.addEventListener('click', (e) => {
-                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn')) {
+                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn') || e.target.closest('.item-delete-btn')) {
                             e.stopPropagation();
                             return;
                         }
@@ -2280,6 +2244,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.innerHTML = `
                         <input type="checkbox" class="gallery-item-checkbox" data-filename="${file.name}" ${isSelected ? 'checked' : ''}>
                         <button class="item-info-btn" data-filename="${file.name}" title="View Info"><i class="fa-solid fa-circle-info"></i></button>
+                        <button class="item-delete-btn" data-filename="${file.name}" title="Delete File"><i class="fa-solid fa-trash"></i></button>
                         <img src="${fileUrl}" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${fileUrl}&retry=' + Date.now(); }, 1000); }" alt="${file.name}">
                         <div class="gallery-item-hover-overlay">
                             <button class="hover-btn view-img-btn"><i class="fa-solid fa-eye"></i> View Image</button>
@@ -2296,7 +2261,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     item.addEventListener('click', (e) => {
-                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn')) {
+                        if (e.target.closest('.gallery-item-checkbox') || e.target.closest('.item-info-btn') || e.target.closest('.item-delete-btn')) {
                             e.stopPropagation();
                             return;
                         }
@@ -2336,6 +2301,43 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
                 
+                // Delete media listener
+                const itemDeleteBtn = item.querySelector('.item-delete-btn');
+                if (itemDeleteBtn) {
+                    itemDeleteBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to permanently delete "${file.name}"? This action cannot be undone.`)) {
+                            const icon = itemDeleteBtn.querySelector('i');
+                            if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+                            try {
+                                const response = await fetch('/api/delete-media', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        folder_name: currentGalleryFolder,
+                                        filenames: [file.name]
+                                    })
+                                });
+                                const resData = await response.json();
+                                if (resData.status === 'success') {
+                                    appendLog('info', `Successfully deleted media file: ${file.name}`);
+                                    selectedFilenames.delete(file.name);
+                                    updateSelectionBanner();
+                                    await openGallery(currentGalleryFolder, true);
+                                    await loadLibrary();
+                                } else {
+                                    alert(`Failed to delete file: ${resData.message}`);
+                                    if (icon) icon.className = 'fa-solid fa-trash';
+                                }
+                            } catch (err) {
+                                console.error(err);
+                                alert(`Failed to delete file: ${err.message}`);
+                                if (icon) icon.className = 'fa-solid fa-trash';
+                            }
+                        }
+                    });
+                }
+
                 // Checkbox change listener
                 const checkbox = item.querySelector('.gallery-item-checkbox');
                 if (checkbox) {
@@ -2532,9 +2534,114 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const stopLightboxMedia = () => {
+    const updateSingleVideoCardProgress = async (folder, filename) => {
+        try {
+            const folderEscaped = encodeURIComponent(folder);
+            const fileEscaped = encodeURIComponent(filename);
+            const progressRes = await fetch(`/api/watch-progress/${folderEscaped}/${fileEscaped}`);
+            const progressData = await progressRes.json();
+            
+            if (progressData.status === 'success') {
+                const progress = {
+                    playback_position: progressData.playback_position || 0,
+                    duration: progressData.duration || 0,
+                    is_completed: progressData.is_completed || false,
+                    progress_percent: progressData.progress_percent || 0
+                };
+                
+                // 1. Find card in gallery grid and update its elements
+                const card = galleryMediaGrid.querySelector(`.gallery-item[data-filename="${CSS.escape(filename)}"]`);
+                if (card) {
+                    const badgeEl = card.querySelector('.watch-badge');
+                    let newBadgeHtml = '';
+                    if (progress.is_completed) {
+                        newBadgeHtml = `<span class="watch-badge watched" title="Watched"><i class="fa-solid fa-circle-check"></i> Watched</span>`;
+                    } else if (progress.progress_percent > 0) {
+                        newBadgeHtml = `<span class="watch-badge watching" title="Resume play"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>`;
+                    } else {
+                        newBadgeHtml = `<span class="watch-badge unwatched"><i class="fa-solid fa-circle-play"></i> Unwatched</span>`;
+                    }
+                    if (badgeEl) {
+                        badgeEl.outerHTML = newBadgeHtml;
+                    }
+                    
+                    let progContainer = card.querySelector('.gallery-item-progress-container');
+                    if (progress.progress_percent > 0 && !progress.is_completed) {
+                        if (!progContainer) {
+                            progContainer = document.createElement('div');
+                            progContainer.className = 'gallery-item-progress-container';
+                            progContainer.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;';
+                            progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>`;
+                            card.appendChild(progContainer);
+                        } else {
+                            const bar = progContainer.querySelector('.gallery-item-progress-bar');
+                            if (bar) {
+                                bar.style.width = `${progress.progress_percent}%`;
+                            }
+                        }
+                    } else {
+                        if (progContainer) {
+                            progContainer.remove();
+                        }
+                    }
+                }
+
+                // 2. Find search result card in DOM if search results grid exists and update it
+                const searchCard = document.querySelector(`.search-result-card[data-filename="${CSS.escape(filename)}"][data-folder="${CSS.escape(folder)}"]`);
+                if (searchCard) {
+                    const thumbContainer = searchCard.querySelector('.thumbnail-container');
+                    if (thumbContainer) {
+                        let badgeEl = thumbContainer.querySelector('.watch-badge');
+                        let progContainer = thumbContainer.querySelector('.gallery-item-progress-container');
+                        
+                        if (progress.is_completed) {
+                            const newBadgeHtml = `<span class="watch-badge watched" style="position: absolute; top: 8px; left: 8px; z-index: 5;" title="Watched"><i class="fa-solid fa-circle-check"></i> Watched</span>`;
+                            if (badgeEl) {
+                                badgeEl.outerHTML = newBadgeHtml;
+                            } else {
+                                const temp = document.createElement('div');
+                                temp.innerHTML = newBadgeHtml;
+                                thumbContainer.appendChild(temp.firstElementChild);
+                            }
+                            if (progContainer) progContainer.remove();
+                        } else if (progress.progress_percent > 0) {
+                            const newBadgeHtml = `<span class="watch-badge watching" style="position: absolute; top: 8px; left: 8px; z-index: 5;" title="In Progress"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>`;
+                            if (badgeEl) {
+                                badgeEl.outerHTML = newBadgeHtml;
+                            } else {
+                                const temp = document.createElement('div');
+                                temp.innerHTML = newBadgeHtml;
+                                thumbContainer.appendChild(temp.firstElementChild);
+                            }
+                            
+                            if (!progContainer) {
+                                progContainer = document.createElement('div');
+                                progContainer.className = 'gallery-item-progress-container';
+                                progContainer.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;';
+                                progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>`;
+                                thumbContainer.appendChild(progContainer);
+                            } else {
+                                const bar = progContainer.querySelector('.gallery-item-progress-bar');
+                                if (bar) bar.style.width = `${progress.progress_percent}%`;
+                            }
+                        } else {
+                            if (badgeEl) badgeEl.remove();
+                            if (progContainer) progContainer.remove();
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error updating single video card progress:', err);
+        }
+    };
+
+    const stopLightboxMedia = async () => {
+        const watchedFolder = currentGalleryFolder;
+        const watchedFile = currentLightboxFile;
+
         if (currentVideoPath) {
-            saveWatchProgress(true);
+            await saveWatchProgress(true);
             currentVideoPath = null;
         }
         currentLightboxFile = null;
@@ -2544,8 +2651,8 @@ document.addEventListener('DOMContentLoaded', () => {
             lightboxVideo.pause();
         }
         
-        if (currentGalleryFolder) {
-            openGallery(currentGalleryFolder, true);
+        if (watchedFolder && watchedFile) {
+            await updateSingleVideoCardProgress(watchedFolder, watchedFile);
         }
         
         loadRecentlyWatched();
@@ -2736,8 +2843,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.dataset.isVideo = "true";
                     const isNative = item.ext === '.mp4' || item.ext === '.webm';
                     card.dataset.isNative = isNative ? "true" : "false";
-                    
-                    attachHoverPreview(card);
 
                     card.style.flex = '0 0 200px';
                     card.style.position = 'relative';
@@ -2760,7 +2865,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.innerHTML = `
                         <div style="position: relative; aspect-ratio: 16/9; overflow: hidden; background: rgba(0,0,0,0.2);">
                             ${badgeHtml}
-                            <img src="${videoThumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/video.svg';">
+                            <img src="${videoThumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src=DEFAULT_VIDEO_SVG;">
                             <div class="play-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;">
                                 <i class="fa-solid fa-play" style="color: white; font-size: 1.5rem;"></i>
                             </div>
@@ -3130,8 +3235,6 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.isVideo = file.is_video ? "true" : "false";
             const isNative = file.ext === '.mp4' || file.ext === '.webm';
             card.dataset.isNative = isNative ? "true" : "false";
-            
-            attachHoverPreview(card);
 
             const fileUrl = `/media/${encodeURIComponent(file.folder_name)}/${encodeURIComponent(file.filename)}`;
             const useVLC = file.is_video && (!isNative || defaultPlayer === 'vlc');
@@ -3278,15 +3381,18 @@ document.addEventListener('DOMContentLoaded', () => {
             card.setAttribute('draggable', 'true');
             card.dataset.folder = p.folder_name;
             
-            const avatarUrl = p.avatar_url ? `${p.avatar_url}?t=${Date.now()}` : 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/user-astronaut.svg';
+            const avatarUrl = p.avatar_url ? `${p.avatar_url}?t=${Date.now()}` : DEFAULT_USER_SVG;
             const genderIcon = p.gender === 'male' ? '<i class="fa-solid fa-mars" style="color: #3b82f6;" title="Male"></i>' : '<i class="fa-solid fa-venus" style="color: #ec4899;" title="Female"></i>';
             
             card.innerHTML = `
+                <button class="profile-delete-btn" title="Delete Profile and all files" style="position: absolute; top: 0.5rem; left: 0.5rem; background: rgba(239,68,68,0.1); border: none; color: #ef4444; padding: 0.35rem; border-radius: 50%; cursor: pointer; transition: background 0.2s, color 0.2s; display: flex; align-items: center; justify-content: center; z-index: 5;">
+                    <i class="fa-solid fa-trash" style="font-size: 0.75rem;"></i>
+                </button>
                 <button class="avatar-refresh-btn" title="Auto-extract best avatar" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); padding: 0.35rem; border-radius: 50%; cursor: pointer; transition: background 0.2s, color 0.2s; display: flex; align-items: center; justify-content: center; z-index: 5;">
                     <i class="fa-solid fa-arrows-rotate" style="font-size: 0.75rem;"></i>
                 </button>
                 <div class="avatar-container" style="position: relative; margin-bottom: 0.75rem; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, var(--color-primary) 0%, #a855f7 100%); width: 86px; height: 86px;">
-                    <img class="profile-avatar-img" src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; display: block; background: rgba(0,0,0,0.3);" onerror="this.src='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/user-astronaut.svg';">
+                    <img class="profile-avatar-img" src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; display: block; background: rgba(0,0,0,0.3);" onerror="this.onerror=null; this.src=DEFAULT_USER_SVG;">
                 </div>
                 <div style="font-weight: 600; text-align: center; margin-bottom: 0.25rem; font-size: 0.9rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">
                     ${p.display_name}
@@ -3299,13 +3405,44 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Navigate to gallery on click
             card.addEventListener('click', (e) => {
-                if (e.target.closest('.avatar-refresh-btn')) {
+                if (e.target.closest('.avatar-refresh-btn') || e.target.closest('.profile-delete-btn')) {
                     e.stopPropagation();
                     return;
                 }
                 openGallery(p.folder_name);
             });
             
+            // Delete profile action
+            const deleteBtn = card.querySelector('.profile-delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to permanently delete the profile "${p.display_name}" and all its ${p.media_count} media files? This action cannot be undone.`)) {
+                        const icon = deleteBtn.querySelector('i');
+                        if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+                        try {
+                            const response = await fetch('/api/delete-folder', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ folder_name: p.folder_name })
+                            });
+                            const resData = await response.json();
+                            if (resData.status === 'success') {
+                                appendLog('info', `Successfully deleted profile directory: ${p.folder_name}`);
+                                await loadLibrary();
+                            } else {
+                                alert(`Failed to delete profile: ${resData.message}`);
+                                if (icon) icon.className = 'fa-solid fa-trash';
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert(`Failed to delete profile: ${err.message}`);
+                            if (icon) icon.className = 'fa-solid fa-trash';
+                        }
+                    }
+                });
+            }
+
             // Refresh avatar action
             const refreshBtn = card.querySelector('.avatar-refresh-btn');
             if (refreshBtn) {
@@ -3688,10 +3825,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const videoCards = groupCard.querySelectorAll('.thumbnail-container');
             videoCards.forEach(card => {
-                if (typeof attachHoverPreview === 'function') {
-                    attachHoverPreview(card);
-                }
-                
                 card.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const folder = card.dataset.folder;

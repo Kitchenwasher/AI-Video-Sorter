@@ -6,6 +6,18 @@ class ScreenTimeCalculator:
     def __init__(self, config):
         self.config = config
 
+    def _is_target_face(self, face: dict) -> bool:
+        target = getattr(self.config, 'profile_target', 'female')
+        if target == 'all':
+            return face.get('gender') in {'female', 'male'}
+        return face.get('gender') == target
+
+    def _min_required_frames(self, faces: list) -> int:
+        is_video = any(face.get('frame_index', 0) not in (None, 0) for face in faces)
+        if not is_video:
+            return 1
+        return max(1, int(getattr(self.config, 'multi_profile_min_keyframes', 2)))
+
     def calculate_assignments(self, file_faces_map: dict, face_id_to_cluster: dict) -> dict:
         """
         Calculates the primary female cluster for each processed file.
@@ -27,7 +39,7 @@ class ScreenTimeCalculator:
             first_seen_order = []
             
             for face in faces:
-                if face['gender'] == 'female':
+                if self._is_target_face(face):
                     emb_idx = face['embedding_index']
                     cluster_id = face_id_to_cluster.get(emb_idx, -1)
                     
@@ -99,3 +111,56 @@ class ScreenTimeCalculator:
                 
         return assignments
 
+    def calculate_multi_assignments(self, file_faces_map: dict, face_id_to_cluster: dict) -> dict:
+        """
+        Returns primary and visible profile assignments for each file.
+        The primary cluster uses the existing single-owner rules. Matched clusters
+        are filtered by minimum evidence for multi-profile copy/virtual modes.
+        """
+        primary_assignments = self.calculate_assignments(file_faces_map, face_id_to_cluster)
+        results = {}
+
+        for file_path, faces in file_faces_map.items():
+            occurrences = {}
+            first_seen_order = []
+
+            for face in faces:
+                if not self._is_target_face(face):
+                    continue
+
+                emb_idx = face['embedding_index']
+                cluster_id = face_id_to_cluster.get(emb_idx, -1)
+                if cluster_id == -1:
+                    continue
+
+                if cluster_id not in occurrences:
+                    occurrences[cluster_id] = set()
+                occurrences[cluster_id].add(face['frame_index'])
+                if cluster_id not in first_seen_order:
+                    first_seen_order.append(cluster_id)
+
+            min_frames = self._min_required_frames(faces)
+            matched_clusters = [
+                cid for cid in first_seen_order
+                if len(occurrences.get(cid, set())) >= min_frames
+            ]
+
+            primary_cluster = primary_assignments.get(file_path, -1)
+            if primary_cluster != -1 and primary_cluster not in matched_clusters:
+                matched_clusters.insert(0, primary_cluster)
+
+            evidence = {
+                cid: {
+                    'keyframe_count': len(frames),
+                    'first_seen_order': first_seen_order.index(cid) if cid in first_seen_order else None
+                }
+                for cid, frames in occurrences.items()
+            }
+
+            results[file_path] = {
+                'primary_cluster': primary_cluster,
+                'matched_clusters': matched_clusters,
+                'evidence': evidence
+            }
+
+        return results

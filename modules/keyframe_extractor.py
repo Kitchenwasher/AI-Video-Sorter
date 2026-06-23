@@ -12,6 +12,16 @@ class KeyframeExtractor:
         self.temp_dir = os.path.join(workspace_dir, ".temp_keyframes")
         os.makedirs(self.temp_dir, exist_ok=True)
 
+    def _effective_extraction_percent(self) -> int:
+        if getattr(self.config, 'scan_depth', 'fast') == 'deep':
+            return 100
+        return int(getattr(self.config, 'extraction_percent', 100))
+
+    def _effective_max_keyframes(self) -> int:
+        if getattr(self.config, 'scan_depth', 'fast') == 'deep':
+            return 10000
+        return int(getattr(self.config, 'max_keyframes', 100))
+
     def extract_keyframes(self, video_path: str) -> list:
         """
         Extract keyframes from a video file.
@@ -54,12 +64,13 @@ class KeyframeExtractor:
             extracted_frames = self._extract_with_opencv(video_path, video_temp_dir)
             
         # Limit the number of keyframes if it exceeds max_keyframes
-        if len(extracted_frames) > self.config.max_keyframes:
-            logger.info(f"Limiting extracted keyframes from {len(extracted_frames)} to {self.config.max_keyframes} for {video_path}")
+        max_keyframes = self._effective_max_keyframes()
+        if len(extracted_frames) > max_keyframes:
+            logger.info(f"Limiting extracted keyframes from {len(extracted_frames)} to {max_keyframes} for {video_path}")
             # Evenly sample keyframes
-            step = len(extracted_frames) / self.config.max_keyframes
+            step = len(extracted_frames) / max_keyframes
             sampled = []
-            for i in range(self.config.max_keyframes):
+            for i in range(max_keyframes):
                 idx = int(i * step)
                 if idx < len(extracted_frames):
                     sampled.append(extracted_frames[idx])
@@ -124,9 +135,10 @@ class KeyframeExtractor:
         
         duration = self._get_video_duration(video_path)
         limit_duration = 0.0
-        if duration > 0.0 and getattr(self.config, 'extraction_percent', 100) < 100:
-            limit_duration = duration * (self.config.extraction_percent / 100.0)
-            logger.info(f"Limiting keyframe extraction to first {self.config.extraction_percent}% of video ({limit_duration:.1f}s of {duration:.1f}s)")
+        extraction_percent = self._effective_extraction_percent()
+        if duration > 0.0 and extraction_percent < 100:
+            limit_duration = duration * (extraction_percent / 100.0)
+            logger.info(f"Limiting keyframe extraction to first {extraction_percent}% of video ({limit_duration:.1f}s of {duration:.1f}s)")
         
         # Try GPU-accelerated decoding first
         cmd_gpu = [
@@ -237,9 +249,10 @@ class KeyframeExtractor:
             total_frames = 1000
             
         limit_frame = total_frames
-        if getattr(self.config, 'extraction_percent', 100) < 100:
-            limit_frame = int(total_frames * (self.config.extraction_percent / 100.0))
-            logger.info(f"Limiting OpenCV keyframe sampling to first {self.config.extraction_percent}% of video frames (frame {limit_frame} of {total_frames})")
+        extraction_percent = self._effective_extraction_percent()
+        if extraction_percent < 100:
+            limit_frame = int(total_frames * (extraction_percent / 100.0))
+            logger.info(f"Limiting OpenCV keyframe sampling to first {extraction_percent}% of video frames (frame {limit_frame} of {total_frames})")
             
         # Determine step size: sample 1 frame per second by default, or use config keyframe_interval
         interval_sec = self.config.keyframe_interval if self.config.keyframe_interval > 0 else 1.0
@@ -266,7 +279,7 @@ class KeyframeExtractor:
                 })
                 
                 # Safeguard against too many frames in loop
-                if len(frames) >= self.config.max_keyframes * 2:
+                if len(frames) >= self._effective_max_keyframes() * 2:
                     break
                     
             frame_idx += 1

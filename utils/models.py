@@ -10,6 +10,7 @@ class ProcessedFile(db.Model):
     file_type = db.Column(db.String, nullable=True)
     mtime = db.Column(db.Float, nullable=True)
     size = db.Column(db.BigInteger, nullable=True)
+    analysis_fingerprint = db.Column(db.String, nullable=True)
     processed_time = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     faces = db.relationship('Face', backref='processed_file', cascade='all, delete-orphan')
 
@@ -30,6 +31,18 @@ class PersistentProfile(db.Model):
     embedding_blob = db.Column(db.LargeBinary, nullable=True)
     last_updated = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+class ProfileMediaMembership(db.Model):
+    __tablename__ = 'profile_media_memberships'
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('persistent_profiles.id', ondelete='CASCADE'), nullable=False)
+    file_id = db.Column(db.Integer, db.ForeignKey('processed_files.id', ondelete='CASCADE'), nullable=False)
+    role = db.Column(db.String, default='secondary')
+    evidence_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint('profile_id', 'file_id', name='uq_profile_media_membership'),
+    )
+
 class WatchHistory(db.Model):
     __tablename__ = 'watch_history'
     id = db.Column(db.Integer, primary_key=True)
@@ -49,4 +62,3 @@ class WatchParty(db.Model):
     admin_token = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
-

@@ -318,6 +318,9 @@
                             </div>
                         </div>
                         <div class="gallery-hero-actions" style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" id="btn-select-all" title="Select All Items">
+                                <i class="fa-solid fa-square-check"></i> Select All
+                            </button>
                             <button class="btn btn-secondary" id="btn-open-explorer" title="Open in Windows File Explorer">
                                 <i class="fa-solid fa-folder-open"></i> Open Folder
                             </button>
@@ -332,6 +335,18 @@
                 <div class="gallery-layout-wrapper">
                     <!-- Main Pane: Media Grid -->
                     <div class="gallery-main-pane">
+                        <!-- Gallery Selection Banner -->
+                        <div class="selection-banner" id="gallery-selection-banner" style="display: none;">
+                            <span id="selection-count" style="font-weight: 700;">0 items selected</span>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary" id="btn-clear-selection" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" title="Clear Selection">
+                                    <i class="fa-solid fa-square-xmark"></i> Clear Selection
+                                </button>
+                                <button class="btn btn-danger" id="btn-delete-selection" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" title="Delete Selected Items">
+                                    <i class="fa-solid fa-trash"></i> Delete Selected
+                                </button>
+                            </div>
+                        </div>
                         <div class="gallery-grid" id="gallery-media-grid" style="overflow-y: auto; max-height: 75vh;">
                             <!-- Media items will be rendered here dynamically -->
                         </div>

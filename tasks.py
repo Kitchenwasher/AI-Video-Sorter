@@ -26,6 +26,6 @@ def run_sorting_task(self, config_dict, workspace_dir):
         })
         
     with app.app_context():
-        pipeline = SortingPipeline(config_obj, workspace_dir, progress_callback)
+        pipeline = SortingPipeline(config_obj, workspace_dir, progress_callback, flask_app=app)
         report = pipeline.run()
         return report

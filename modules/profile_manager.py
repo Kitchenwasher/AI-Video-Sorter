@@ -6,7 +6,7 @@ import time
 import numpy as np
 import cv2
 from utils.logger import logger
-from utils.models import db, ProcessedFile, Face, PersistentProfile, WatchHistory
+from utils.models import db, ProcessedFile, Face, PersistentProfile, WatchHistory, ProfileMediaMembership
 from utils.cache import EmbeddingCache
 
 class LibraryIndexer:
@@ -408,6 +408,26 @@ def get_profile_media(folder_name, cache_db, config):
     folder_path = os.path.join(output_dir, folder_name)
     
     results = {}
+
+    def add_media_result(key, filename, owner_folder):
+        ext = os.path.splitext(filename)[1].lower()
+        is_video = ext in {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v', '.mpg', '.mpeg'}
+        results[key] = {
+            'name': filename,
+            'filename': filename,
+            'folder_name': owner_folder,
+            'display_folder_name': owner_folder.replace('_', ' ').strip(),
+            'file_type': 'video' if is_video else 'image',
+            'is_video': is_video,
+            'ext': ext,
+            'watch_progress': {
+                'playback_position': 0.0,
+                'duration': 0.0,
+                'is_completed': False,
+                'progress_percent': 0
+            },
+            'has_thumbnail': is_video or ext in {'.jpg', '.jpeg', '.png', '.webp'}
+        }
     
     # 1. Add all files physically in folder_name
     if os.path.exists(folder_path):
@@ -416,39 +436,49 @@ def get_profile_media(folder_name, cache_db, config):
                 continue
             file_path = os.path.join(folder_path, filename)
             if os.path.isfile(file_path):
-                ext = os.path.splitext(filename)[1].lower()
-                is_video = ext in {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v', '.mpg', '.mpeg'}
-                
                 key = f"{folder_name}/{filename}"
-                results[key] = {
-                    'name': filename,
-                    'filename': filename,
-                    'folder_name': folder_name,
-                    'display_folder_name': folder_name.replace('_', ' ').strip(),
-                    'file_type': 'video' if is_video else 'image',
-                    'is_video': is_video,
-                    'ext': ext,
-                    'watch_progress': {
-                        'playback_position': 0.0,
-                        'duration': 0.0,
-                        'is_completed': False,
-                        'progress_percent': 0
-                    },
-                    'has_thumbnail': is_video or ext in {'.jpg', '.jpeg', '.png', '.webp'}
-                }
+                add_media_result(key, filename, folder_name)
                 
     # 2. Get profile embedding to scan other folders
     profile_emb = None
+    profile_id = None
     profile_json_path = os.path.join(folder_path, '_profile_embedding.json')
     if os.path.exists(profile_json_path):
         try:
             with open(profile_json_path, 'r') as f:
                 data = json.load(f)
             profile_emb = np.array(data['embedding'], dtype=np.float32)
+            profile_id = data.get('profile_id')
         except Exception:
             pass
+
+    # 3. Prefer persisted virtual memberships when available
+    if profile_id is not None:
+        try:
+            memberships = ProfileMediaMembership.query.filter_by(profile_id=int(profile_id)).all()
+            for membership in memberships:
+                pf = ProcessedFile.query.get(membership.file_id)
+                if not pf:
+                    continue
+
+                abs_path = os.path.abspath(pf.file_path)
+                if not abs_path.startswith(os.path.abspath(output_dir)) or not os.path.exists(abs_path):
+                    continue
+
+                rel_to_out = os.path.relpath(abs_path, output_dir)
+                parts = rel_to_out.replace('\\', '/').split('/')
+                if len(parts) < 2:
+                    continue
+
+                f_folder = parts[0]
+                f_name = parts[1] if len(parts) == 2 else '/'.join(parts[1:])
+                key = f"{f_folder}/{f_name}"
+                if key not in results:
+                    add_media_result(key, f_name, f_folder)
+        except Exception as e:
+            logger.error(f"Error loading persisted profile memberships: {e}")
             
-    # 3. If profile embedding is available, search Face table for matches
+    # 4. If profile embedding is available, search Face table for legacy matches
     if profile_emb is not None:
         try:
             all_faces = Face.query.all()
@@ -478,25 +508,7 @@ def get_profile_media(folder_name, cache_db, config):
                     if f_folder != folder_name:
                         key = f"{f_folder}/{f_name}"
                         if key not in results:
-                            ext = os.path.splitext(f_name)[1].lower()
-                            is_video = ext in {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.flv', '.m4v', '.mpg', '.mpeg'}
-                            
-                            results[key] = {
-                                'name': f_name,
-                                'filename': f_name,
-                                'folder_name': f_folder,
-                                'display_folder_name': f_folder.replace('_', ' ').strip(),
-                                'file_type': 'video' if is_video else 'image',
-                                'is_video': is_video,
-                                'ext': ext,
-                                'watch_progress': {
-                                    'playback_position': 0.0,
-                                    'duration': 0.0,
-                                    'is_completed': False,
-                                    'progress_percent': 0
-                                },
-                                'has_thumbnail': is_video or ext in {'.jpg', '.jpeg', '.png', '.webp'}
-                            }
+                            add_media_result(key, f_name, f_folder)
         except Exception as e:
             logger.error(f"Error scanning Face table for profile matches: {e}")
             

@@ -47,6 +47,13 @@ with app.app_context():
                 conn.execute(db.text("ALTER TABLE watch_history ADD COLUMN rating INTEGER"))
                 conn.commit()
             logger.info("Added 'rating' column to 'watch_history' table.")
+
+        pf_columns = [c['name'] for c in inspector.get_columns('processed_files')]
+        if 'analysis_fingerprint' not in pf_columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE processed_files ADD COLUMN analysis_fingerprint VARCHAR"))
+                conn.commit()
+            logger.info("Added 'analysis_fingerprint' column to 'processed_files' table.")
             
         # Check if admin_token exists in watch_parties, if not add it
         wp_columns = [c['name'] for c in inspector.get_columns('watch_parties')]
@@ -103,6 +110,10 @@ def load_settings():
                     keep_keyframes=data.get('keep_keyframes', False),
                     prefer_popular_identities=data.get('prefer_popular_identities', False),
                     extraction_percent=data.get('extraction_percent', 100),
+                    scan_depth=data.get('scan_depth', 'fast'),
+                    multi_profile_policy=data.get('multi_profile_policy', 'primary_only'),
+                    profile_target=data.get('profile_target', 'female'),
+                    multi_profile_min_keyframes=data.get('multi_profile_min_keyframes', 2),
                     auto_name_folders=data.get('auto_name_folders', False),
                     only_name_unnamed=data.get('only_name_unnamed', True),
                     name_confidence_threshold=data.get('name_confidence_threshold', 0.5),
@@ -142,6 +153,10 @@ def save_settings(config_obj):
             'keep_keyframes': config_obj.keep_keyframes,
             'prefer_popular_identities': config_obj.prefer_popular_identities,
             'extraction_percent': config_obj.extraction_percent,
+            'scan_depth': config_obj.scan_depth,
+            'multi_profile_policy': config_obj.multi_profile_policy,
+            'profile_target': config_obj.profile_target,
+            'multi_profile_min_keyframes': config_obj.multi_profile_min_keyframes,
             'auto_name_folders': config_obj.auto_name_folders,
             'only_name_unnamed': config_obj.only_name_unnamed,
             'name_confidence_threshold': config_obj.name_confidence_threshold,
@@ -167,6 +182,19 @@ def save_settings(config_obj):
 
 # Load config
 current_config = load_settings()
+
+def is_safe_path_segment(s: str) -> bool:
+    """Checks if a string is a safe path segment (prevents directory traversal)."""
+    if not s:
+        return False
+    # Normalize slashes
+    normalized = s.replace('\\', '/')
+    if normalized == '..' or normalized == '.' or '../' in normalized or '/..' in normalized:
+        return False
+    # Slashes are not allowed in simple folder/file segments
+    if '/' in normalized:
+        return False
+    return True
 
 def cleanup_expired_parties():
     try:
@@ -434,7 +462,7 @@ def run_pipeline_thread(config_obj):
 
     with app.app_context():
         try:
-            pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback)
+            pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback, flask_app=app)
             report = pipeline.run()
             
             with state_lock:
@@ -465,7 +493,7 @@ def run_auto_naming_thread(config_obj):
 
     with app.app_context():
         try:
-            pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback)
+            pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback, flask_app=app)
             results = pipeline.run_auto_naming()
             
             with state_lock:
@@ -605,6 +633,10 @@ def handle_config():
         current_config.keep_keyframes = bool(data.get('keep_keyframes', current_config.keep_keyframes))
         current_config.prefer_popular_identities = bool(data.get('prefer_popular_identities', current_config.prefer_popular_identities))
         current_config.extraction_percent = int(data.get('extraction_percent', current_config.extraction_percent))
+        current_config.scan_depth = data.get('scan_depth', current_config.scan_depth)
+        current_config.multi_profile_policy = data.get('multi_profile_policy', current_config.multi_profile_policy)
+        current_config.profile_target = data.get('profile_target', current_config.profile_target)
+        current_config.multi_profile_min_keyframes = int(data.get('multi_profile_min_keyframes', current_config.multi_profile_min_keyframes))
         current_config.auto_name_folders = bool(data.get('auto_name_folders', current_config.auto_name_folders))
         current_config.only_name_unnamed = bool(data.get('only_name_unnamed', current_config.only_name_unnamed))
         current_config.name_confidence_threshold = float(data.get('name_confidence_threshold', current_config.name_confidence_threshold))
@@ -644,6 +676,10 @@ def handle_config():
             'keep_keyframes': current_config.keep_keyframes,
             'prefer_popular_identities': current_config.prefer_popular_identities,
             'extraction_percent': current_config.extraction_percent,
+            'scan_depth': current_config.scan_depth,
+            'multi_profile_policy': current_config.multi_profile_policy,
+            'profile_target': current_config.profile_target,
+            'multi_profile_min_keyframes': current_config.multi_profile_min_keyframes,
             'auto_name_folders': current_config.auto_name_folders,
             'only_name_unnamed': current_config.only_name_unnamed,
             'name_confidence_threshold': current_config.name_confidence_threshold,
@@ -689,6 +725,10 @@ def start_pipeline():
             'keep_keyframes': current_config.keep_keyframes,
             'prefer_popular_identities': current_config.prefer_popular_identities,
             'extraction_percent': current_config.extraction_percent,
+            'scan_depth': current_config.scan_depth,
+            'multi_profile_policy': current_config.multi_profile_policy,
+            'profile_target': current_config.profile_target,
+            'multi_profile_min_keyframes': current_config.multi_profile_min_keyframes,
             'auto_name_folders': current_config.auto_name_folders,
             'only_name_unnamed': current_config.only_name_unnamed,
             'name_confidence_threshold': current_config.name_confidence_threshold,
@@ -856,16 +896,33 @@ def list_folders():
         return jsonify({'folders': []})
     
     histories_by_folder = {}
+    histories_by_path = {}
+    membership_paths_by_folder = {}
     try:
-        from utils.models import WatchHistory
+        from utils.models import WatchHistory, PersistentProfile, ProcessedFile, ProfileMediaMembership
         all_histories = WatchHistory.query.all()
         for h in all_histories:
+            histories_by_path[h.file_path] = h
             parts = h.file_path.split('/', 1)
             if len(parts) == 2:
                 f_name = parts[0]
                 if f_name not in histories_by_folder:
                     histories_by_folder[f_name] = []
                 histories_by_folder[f_name].append(h)
+
+        profiles_by_id = {p.id: p.folder_name for p in PersistentProfile.query.all()}
+        for membership in ProfileMediaMembership.query.all():
+            folder_name = profiles_by_id.get(membership.profile_id)
+            if not folder_name:
+                continue
+            pf = ProcessedFile.query.get(membership.file_id)
+            if not pf:
+                continue
+            abs_path = os.path.abspath(pf.file_path)
+            if not abs_path.startswith(os.path.abspath(output_dir)) or not os.path.exists(abs_path):
+                continue
+            rel_path = os.path.relpath(abs_path, output_dir).replace('\\', '/')
+            membership_paths_by_folder.setdefault(folder_name, set()).add(rel_path)
     except Exception as e:
         logger.error(f"Error loading watch history in list_folders: {e}")
 
@@ -882,7 +939,9 @@ def list_folders():
         if os.path.isdir(folder_path) and not name.startswith('.'):
             # Calculate total files and sizes
             files_in_folder = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and not f.startswith('_')]
-            file_count = len(files_in_folder)
+            visible_paths = {f"{name}/{f}" for f in files_in_folder}
+            visible_paths.update(membership_paths_by_folder.get(name, set()))
+            file_count = len(visible_paths)
             
             total_size_bytes = 0
             for f in files_in_folder:
@@ -894,7 +953,11 @@ def list_folders():
             has_thumbnail = os.path.exists(os.path.join(folder_path, '_reference_face.jpg'))
             
             # Aggregate watch stats
-            folder_histories = histories_by_folder.get(name, [])
+            folder_histories = [
+                histories_by_path[p]
+                for p in visible_paths
+                if p in histories_by_path
+            ] or histories_by_folder.get(name, [])
             ratings = [h.rating for h in folder_histories if h.rating is not None]
             avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
             watched_count = len(folder_histories)
@@ -966,7 +1029,7 @@ def resolve_duplicates():
     deleted_count = 0
     errors = []
     
-    from utils.models import ProcessedFile, WatchHistory
+    from utils.models import ProcessedFile, WatchHistory, ProfileMediaMembership
     from modules.duplicate_detector import DuplicateDetector
     
     for file_path in files_to_delete:
@@ -984,6 +1047,7 @@ def resolve_duplicates():
             # 1. Delete from DB (cascade removes faces)
             db_file = ProcessedFile.query.filter_by(file_path=abs_path).first()
             if db_file:
+                ProfileMediaMembership.query.filter_by(file_id=db_file.id).delete()
                 db.session.delete(db_file)
                 
             # Delete from WatchHistory (using relative path schema)
@@ -1020,7 +1084,7 @@ def resolve_duplicates():
 @app.route('/api/video-thumbnail/<folder_name>/<filename>')
 def get_video_thumbnail(folder_name, filename):
     """Generates or retrieves a cached video thumbnail frame using FFmpeg."""
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name or '..' in filename or '/' in filename or '\\' in filename:
+    if not is_safe_path_segment(folder_name) or not is_safe_path_segment(filename):
         return "Invalid path", 400
         
     video_path = os.path.abspath(os.path.join(current_config.output_dir, folder_name, filename))
@@ -1219,8 +1283,7 @@ def get_media_metadata(file_path, is_video):
 @app.route('/api/file-info/<folder_name>/<filename>')
 def get_file_info(folder_name, filename):
     """Fetches video or image file metadata using ffprobe / cv2 and database records."""
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name or \
-       '..' in filename or '/' in filename or '\\' in filename:
+    if not is_safe_path_segment(folder_name) or not is_safe_path_segment(filename):
         return jsonify({'status': 'error', 'message': 'Invalid paths'}), 400
         
     file_path = os.path.join(current_config.output_dir, folder_name, filename)
@@ -1265,7 +1328,7 @@ def get_file_info(folder_name, filename):
 @app.route('/api/list-media/<folder_name>')
 def list_media(folder_name):
     """Lists all media files inside a specific identity folder with their watch history status."""
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+    if not is_safe_path_segment(folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
     folder_path = os.path.join(current_config.output_dir, folder_name)
     if not os.path.exists(folder_path):
@@ -1476,7 +1539,7 @@ def clear_recently_watched():
 @app.route('/api/open-folder/<folder_name>', methods=['POST'])
 def open_folder(folder_name):
     """Launches Windows Explorer pointing directly to the selected folder."""
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+    if not is_safe_path_segment(folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
     path = os.path.abspath(os.path.join(current_config.output_dir, folder_name))
     if os.path.exists(path):
@@ -1495,7 +1558,7 @@ def play_file():
     filename = data.get('filename')
     if not folder_name or not filename:
         return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name or '..' in filename or '/' in filename or '\\' in filename:
+    if not is_safe_path_segment(folder_name) or not is_safe_path_segment(filename):
         return jsonify({'status': 'error', 'message': 'Invalid file path'}), 400
     path = os.path.abspath(os.path.join(current_config.output_dir, folder_name, filename))
     if os.path.exists(path):
@@ -1512,7 +1575,7 @@ def get_thumbnail(cluster_folder):
     Serves the reference thumbnail (_reference_face.jpg) from the cluster folder.
     """
     # Safe validation of folder name
-    if '..' in cluster_folder or '/' in cluster_folder or '\\' in cluster_folder:
+    if not is_safe_path_segment(cluster_folder):
         return "Invalid path", 400
         
     cluster_path = os.path.join(current_config.output_dir, cluster_folder)
@@ -1587,12 +1650,11 @@ def move_media():
         return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
         
     # Prevent path traversal
-    if '..' in from_folder or '/' in from_folder or '\\' in from_folder or \
-       '..' in to_folder or '/' in to_folder or '\\' in to_folder:
+    if not is_safe_path_segment(from_folder) or not is_safe_path_segment(to_folder):
         return jsonify({'status': 'error', 'message': 'Invalid paths'}), 400
         
     for filename in filenames:
-        if '..' in filename or '/' in filename or '\\' in filename:
+        if not is_safe_path_segment(filename):
             return jsonify({'status': 'error', 'message': 'Invalid paths in filenames'}), 400
             
     src_dir = os.path.join(current_config.output_dir, from_folder)
@@ -1728,8 +1790,7 @@ def rename_folder():
         return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
         
     # Prevent path traversal and invalid characters
-    if '..' in old_name or '/' in old_name or '\\' in old_name or \
-       '..' in new_name or '/' in new_name or '\\' in new_name:
+    if not is_safe_path_segment(old_name) or not is_safe_path_segment(new_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
         
     # Trim and strip to be clean
@@ -1765,6 +1826,121 @@ def rename_folder():
         return jsonify({'status': 'success', 'message': 'Folder renamed successfully.'})
     except Exception as e:
         logger.error(f"Error renaming folder: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/delete-folder', methods=['POST'])
+def delete_folder_api():
+    """Deletes an entire identity directory physically and cleans up its database references."""
+    data = request.json or {}
+    folder_name = data.get('folder_name')
+    if not folder_name:
+        return jsonify({'status': 'error', 'message': 'folder_name parameter is required'}), 400
+        
+    if not is_safe_path_segment(folder_name):
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    folder_path = os.path.abspath(os.path.join(current_config.output_dir, folder_name))
+    if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+        return jsonify({'status': 'error', 'message': f'Folder {folder_name} not found'}), 404
+        
+    try:
+        from utils.models import ProcessedFile, WatchHistory, PersistentProfile, db
+        import shutil
+        
+        # 1. Database Cleanup
+        # Remove ProcessedFile records belonging to this directory (cascades delete on faces and media memberships)
+        db_files = ProcessedFile.query.filter(ProcessedFile.file_path.like(f"{folder_path}%")).all()
+        for f in db_files:
+            db.session.delete(f)
+            
+        # Delete corresponding WatchHistory entries
+        db_history = WatchHistory.query.filter(WatchHistory.file_path.like(f"{folder_name}/%")).all()
+        for h in db_history:
+            db.session.delete(h)
+            
+        # Delete profile mapping from db
+        profile = PersistentProfile.query.filter_by(folder_name=folder_name).first()
+        if profile:
+            db.session.delete(profile)
+            
+        db.session.commit()
+        
+        # 2. Disk Cleanup
+        shutil.rmtree(folder_path)
+        logger.info(f"Successfully deleted folder and database profile registry for: {folder_name}")
+        
+        return jsonify({'status': 'success', 'message': f'Folder {folder_name} successfully deleted.'})
+    except Exception as e:
+        logger.error(f"Error during folder deletion: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/delete-media', methods=['POST'])
+def delete_media_api():
+    """Deletes one or more files physically and cleans up database references. If directory becomes empty, it cleans up the directory."""
+    data = request.json or {}
+    folder_name = data.get('folder_name')
+    filenames = data.get('filenames')
+    
+    if not folder_name or not filenames:
+        return jsonify({'status': 'error', 'message': 'folder_name and filenames are required'}), 400
+        
+    if not is_safe_path_segment(folder_name):
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+        
+    for filename in filenames:
+        if not is_safe_path_segment(filename):
+            return jsonify({'status': 'error', 'message': f'Invalid filename: {filename}'}), 400
+            
+    try:
+        from utils.models import ProcessedFile, WatchHistory, PersistentProfile, db
+        import shutil
+        
+        deleted_count = 0
+        for filename in filenames:
+            file_path = os.path.abspath(os.path.join(current_config.output_dir, folder_name, filename))
+            if not os.path.exists(file_path):
+                logger.warning(f"File not found during delete-media: {file_path}")
+                continue
+                
+            # 1. Delete physical file
+            os.remove(file_path)
+            deleted_count += 1
+            
+            # 2. Database Cleanup
+            pf = ProcessedFile.query.filter_by(file_path=file_path).first()
+            if pf:
+                db.session.delete(pf)
+                
+            wh = WatchHistory.query.filter_by(file_path=f"{folder_name}/{filename}").first()
+            if wh:
+                db.session.delete(wh)
+                
+        db.session.commit()
+        
+        # 3. Check if directory is now empty (excluding metadata starting with '_')
+        folder_path = os.path.abspath(os.path.join(current_config.output_dir, folder_name))
+        if os.path.exists(folder_path):
+            remaining = [f for f in os.listdir(folder_path) if not f.startswith('_')]
+            if len(remaining) == 0:
+                # Remove profile mapping from db
+                profile = PersistentProfile.query.filter_by(folder_name=folder_name).first()
+                if profile:
+                    db.session.delete(profile)
+                    db.session.commit()
+                # Clean up the empty folder
+                shutil.rmtree(folder_path)
+                logger.info(f"Cleaned up empty directory after media deletion: {folder_name}")
+                
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully deleted {deleted_count} file(s).'
+        })
+    except Exception as e:
+        logger.error(f"Error during media deletion: {e}")
+        db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -2015,7 +2191,7 @@ def list_profiles():
         cache_db = EmbeddingCache(cache_dir)
         
         # Load and sync profiles using pipeline's sync mechanism
-        pipeline = SortingPipeline(current_config, WORKSPACE_DIR)
+        pipeline = SortingPipeline(current_config, WORKSPACE_DIR, flask_app=app)
         db_profiles = pipeline._load_and_sync_profiles()
         
         profiles = []
@@ -2064,7 +2240,7 @@ def list_profiles():
 @app.route('/api/profile/<folder_name>/media', methods=['GET'])
 def list_profile_media(folder_name):
     """Returns all media files containing this profile's face across all folders."""
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+    if not is_safe_path_segment(folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
         
     try:
@@ -2151,10 +2327,8 @@ def transcode_video_api(party_id):
     if not folder_name or not filename:
         return jsonify({'status': 'error', 'message': 'folder_name and filename are required'}), 400
         
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
-        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
-    if '..' in filename or '/' in filename or '\\' in filename:
-        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
+    if not is_safe_path_segment(folder_name) or not is_safe_path_segment(filename):
+        return jsonify({'status': 'error', 'message': 'Invalid path parameters'}), 400
         
     # Check if HLS is enabled
     if not current_config.wp_use_hls:
@@ -2199,7 +2373,7 @@ def extract_profile_avatar_api():
     if not folder_name:
         return jsonify({'status': 'error', 'message': 'Missing folder_name'}), 400
         
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+    if not is_safe_path_segment(folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
         
     try:
@@ -2267,8 +2441,7 @@ def merge_profiles_api():
     if not source_folder or not target_folder:
         return jsonify({'status': 'error', 'message': 'Missing parameters'}), 400
         
-    if '..' in source_folder or '/' in source_folder or '\\' in source_folder or \
-       '..' in target_folder or '/' in target_folder or '\\' in target_folder:
+    if not is_safe_path_segment(source_folder) or not is_safe_path_segment(target_folder):
         return jsonify({'status': 'error', 'message': 'Invalid paths'}), 400
         
     try:
@@ -2347,7 +2520,7 @@ def create_watch_party():
     if not folder_name:
         return jsonify({'status': 'error', 'message': 'Folder name is required'}), 400
         
-    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+    if not is_safe_path_segment(folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
  
     try:
@@ -2725,7 +2898,7 @@ def change_watch_party_folder(party_id):
     if not admin_token or not new_folder_name:
         return jsonify({'status': 'error', 'message': 'admin_token and folder_name are required'}), 400
         
-    if '..' in new_folder_name or '/' in new_folder_name or '\\' in new_folder_name:
+    if not is_safe_path_segment(new_folder_name):
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
         
     try:
@@ -3428,5 +3601,4 @@ if __name__ == '__main__':
         t.start()
         
     logger.info("Starting Face Sorter Web Interface...")
-    socketio.run(app, host='127.0.0.1', port=5000, debug=True)
-
+    socketio.run(app, host='127.0.0.1', port=5000, debug=True, allow_unsafe_werkzeug=True)

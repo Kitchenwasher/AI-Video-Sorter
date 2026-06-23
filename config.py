@@ -27,6 +27,10 @@ class Config:
     keep_keyframes: bool = False        # Keep extracted keyframe images on disk to skip extraction on re-run (debug)
     prefer_popular_identities: bool = False # Prefer globally popular identities in multi-face videos
     extraction_percent: int = 100       # Only analyze the first X% of the video duration
+    scan_depth: str = "fast"            # "fast", "deep", or "custom"
+    multi_profile_policy: str = "primary_only" # "primary_only", "copy_all", or "virtual_all"
+    profile_target: str = "female"      # "female", "male", or "all"
+    multi_profile_min_keyframes: int = 2 # Min video keyframes required to map secondary profiles
     
     # Auto-naming
     auto_name_folders: bool = False     # Auto-name folders after sorting

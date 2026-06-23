@@ -14,7 +14,7 @@ from modules.sorter import VideoSorter
 from modules.name_resolver import NameResolver
 
 class SortingPipeline:
-    def __init__(self, config: Config, workspace_dir: str, progress_cb=None, face_analysis_app=None):
+    def __init__(self, config: Config, workspace_dir: str, progress_cb=None, face_analysis_app=None, flask_app=None):
         self.config = config
         self.workspace_dir = workspace_dir
         self.progress_cb = progress_cb or (lambda stage, pct, msg, detail=None: None)
@@ -26,6 +26,7 @@ class SortingPipeline:
             self.analyzer.app = face_analysis_app
             self.analyzer.initialized = True
             
+        self.flask_app = flask_app
         self.clusterer = FaceClusterer(config)
         self.screen_time = ScreenTimeCalculator(config)
         self.sorter = VideoSorter(config)
@@ -95,10 +96,31 @@ class SortingPipeline:
                         old_path = os.path.join(out_dir, db_p['folder_name'])
                         new_path = os.path.join(out_dir, disk_p['folder_name'])
                         self.cache.update_folder_paths(old_path, new_path)
+                        
+                        # Also update folder_name inside _profile_embedding.json on disk
+                        emb_path = os.path.join(new_path, "_profile_embedding.json")
+                        if os.path.exists(emb_path):
+                            try:
+                                with open(emb_path, 'r') as f:
+                                    json_data = json.load(f)
+                                json_data['folder_name'] = disk_p['folder_name']
+                                with open(emb_path, 'w') as f:
+                                    json.dump(json_data, f, indent=4)
+                                logger.info(f"Successfully updated folder_name inside _profile_embedding.json to: {disk_p['folder_name']}")
+                            except Exception as json_err:
+                                logger.error(f"Failed to update folder_name inside _profile_embedding.json: {json_err}")
                     except Exception as e:
                         logger.error(f"Failed to sync SQLite file paths for manual rename: {e}")
                     # Update in-memory copy
                     db_p['folder_name'] = disk_p['folder_name']
+                
+        # Case D: Profile is in DB, but NOT on disk (e.g., manually deleted folder)
+        if os.path.exists(out_dir):
+            for p_id, db_p in list(db_profile_map.items()):
+                if p_id not in disk_profiles_by_id:
+                    logger.info(f"Profile {p_id} ({db_p['folder_name']}) was deleted from disk output directory. Removing from database registry...")
+                    self.cache.delete_persistent_profile(p_id)
+                    del db_profile_map[p_id]
                 
         # Case B: Profile is on disk but NOT in DB (e.g. database was cleared or profile copied over)
         for p_id, disk_p in disk_profiles_by_id.items():
@@ -243,6 +265,18 @@ class SortingPipeline:
             file_faces_map_lock = threading.Lock()
             
             def process_video(video_path):
+                # Set up the app context for database access within this thread
+                ctx = None
+                if getattr(self, 'flask_app', None) is not None:
+                    ctx = self.flask_app.app_context()
+                
+                if ctx:
+                    with ctx:
+                        return _process_video_impl(video_path)
+                else:
+                    return _process_video_impl(video_path)
+
+            def _process_video_impl(video_path):
                 filename = os.path.basename(video_path)
                 cached = None
                 if self.cache and self.config.use_cache:
@@ -350,8 +384,22 @@ class SortingPipeline:
                     best_dist = float('inf')
                     best_profile_idx = -1
                     
+                    # Gather all embeddings in this raw cluster to compute percentile distance robustness
+                    cluster_embs = [female_embeddings[i] for i, label in enumerate(raw_labels) if label == raw_cid]
+                    
                     for p_idx, profile in enumerate(existing_profiles):
-                        dist = np.linalg.norm(med_emb - profile['embedding'])
+                        # Medoid distance (classic comparison)
+                        med_dist = np.linalg.norm(med_emb - profile['embedding'])
+                        
+                        # 5th percentile distance of all faces in the cluster to handle varying poses
+                        cluster_dists = [np.linalg.norm(emb - profile['embedding']) for emb in cluster_embs]
+                        cluster_dists.sort()
+                        percentile_idx = min(len(cluster_dists) - 1, max(0, int(len(cluster_dists) * 0.05)))
+                        percentile_dist = cluster_dists[percentile_idx] if cluster_dists else float('inf')
+                        
+                        # Use the best matching representation (either medoid or cluster percentile)
+                        dist = min(med_dist, percentile_dist)
+                        
                         if dist < best_dist:
                             best_dist = dist
                             best_profile_idx = p_idx
