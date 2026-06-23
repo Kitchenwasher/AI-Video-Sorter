@@ -2670,14 +2670,12 @@ def change_watch_party_folder(party_id):
                 'last_updated': time.time()
             }
             
-            change_msg = {
-                'type': 'folder_changed',
+            # Broadcast folder change over Socket.IO room
+            socketio.emit('folder_changed', {
                 'folder_name': new_folder_name,
                 'files': new_media_files,
                 'sender_id': 'system'
-            }
-            for c_id, client in party_state['clients'].items():
-                client['queue'].put(change_msg)
+            }, to=party_id)
                 
         logger.info(f"Watch party {party_id} active folder changed to {new_folder_name} by admin")
         return jsonify({'status': 'success', 'files': new_media_files})
@@ -2718,20 +2716,18 @@ def kick_watch_party_client(party_id):
             if target_client_id in party_state['clients']:
                 target_client = party_state['clients'][target_client_id]
                 # Queue kick event to the target client
-                target_client['queue'].put({'type': 'kicked'})
+                # Emit direct kick to target client over Socket.IO
+                socketio.emit('kicked_direct', {}, to=target_client['sid'])
                 
                 # Immediately remove from clients list to update participant UI instantly
                 kicked_name = target_client['name']
                 del party_state['clients'][target_client_id]
                 
-                # Broadcast departure event to all remaining participants
-                leave_msg = {
-                    'type': 'peer_left',
+                # Broadcast departure event to all remaining participants over Socket.IO room
+                socketio.emit('peer_left', {
                     'client_id': target_client_id,
                     'name': kicked_name
-                }
-                for c_id, client in party_state['clients'].items():
-                    client['queue'].put(leave_msg)
+                }, to=party_id)
                 
         logger.info(f"Client {target_client_id} kicked and removed from watch party {party_id} by admin")
         return jsonify({'status': 'success'})
@@ -2765,7 +2761,7 @@ def force_mute_watch_party_client(party_id):
                 
             party_state = watch_parties_state[party_id]
             if target_client_id in party_state['clients']:
-                party_state['clients'][target_client_id]['queue'].put({'type': 'force_mute'})
+                socketio.emit('force_mute', {}, to=party_state['clients'][target_client_id]['sid'])
                 
         logger.info(f"Client {target_client_id} force muted in watch party {party_id} by admin")
         return jsonify({'status': 'success'})
@@ -2800,13 +2796,10 @@ def toggle_playback_lock(party_id):
             party_state = watch_parties_state[party_id]
             party_state['playback_locked'] = locked
             
-            # Broadcast the change in locking status
-            lock_msg = {
-                'type': 'playback_locked',
+            # Broadcast the change in locking status over Socket.IO room
+            socketio.emit('playback_locked', {
                 'locked': locked
-            }
-            for c_id, client in party_state['clients'].items():
-                client['queue'].put(lock_msg)
+            }, to=party_id)
                 
         logger.info(f"Playback lock in watch party {party_id} set to {locked} by admin")
         return jsonify({'status': 'success', 'locked': locked})
@@ -2839,12 +2832,10 @@ def delete_chat_message(party_id):
                 return jsonify({'status': 'error', 'message': 'Watch party not active'}), 404
                 
             party_state = watch_parties_state[party_id]
-            delete_msg = {
-                'type': 'chat_delete',
+            # Broadcast message deletion over Socket.IO room
+            socketio.emit('chat_delete', {
                 'message_id': message_id
-            }
-            for c_id, client in party_state['clients'].items():
-                client['queue'].put(delete_msg)
+            }, to=party_id)
                 
         logger.info(f"Message {message_id} deleted in watch party {party_id} by admin")
         return jsonify({'status': 'success'})
@@ -2883,19 +2874,12 @@ def update_watch_party_settings(party_id):
             
             if slow_mode is not None:
                 party_state['slow_mode'] = slow_mode
-                settings_msg = {
-                    'type': 'settings_changed',
+                socketio.emit('settings_changed', {
                     'slow_mode': slow_mode
-                }
-                for c_id, client in party_state['clients'].items():
-                    client['queue'].put(settings_msg)
+                }, to=party_id)
                     
             if clear_chat:
-                clear_msg = {
-                    'type': 'chat_clear'
-                }
-                for c_id, client in party_state['clients'].items():
-                    client['queue'].put(clear_msg)
+                socketio.emit('chat_clear', {}, to=party_id)
                     
         if new_password is not None:
             if new_password == '':
@@ -2942,12 +2926,10 @@ def extend_watch_party(party_id):
         with watch_parties_lock:
             if party_id in watch_parties_state:
                 party_state = watch_parties_state[party_id]
-                extend_msg = {
-                    'type': 'settings_changed',
+                # Broadcast extension over Socket.IO room
+                socketio.emit('settings_changed', {
                     'expires_at': expires_str
-                }
-                for c_id, client in party_state['clients'].items():
-                    client['queue'].put(extend_msg)
+                }, to=party_id)
                     
         logger.info(f"Watch party {party_id} extended by {hours} hours (new expiry: {expires_str})")
         return jsonify({'status': 'success', 'expires_at': expires_str})
@@ -2995,11 +2977,8 @@ def end_watch_party(party_id):
         with watch_parties_lock:
             if party_id in watch_parties_state:
                 party_state = watch_parties_state[party_id]
-                end_msg = {
-                    'type': 'party_ended'
-                }
-                for c_id, client in party_state['clients'].items():
-                    client['queue'].put(end_msg)
+                # Broadcast end over Socket.IO room
+                socketio.emit('party_ended', {}, to=party_id)
                     
         logger.info(f"Watch party {party_id} ended by admin")
         return jsonify({'status': 'success'})

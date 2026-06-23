@@ -874,8 +874,9 @@
                 break;
 
             case 'chat':
-                const isSelf = data.sender_id === clientId;
-                addChatMessage(data.sender_name, data.message, data.time, isSelf, data.message_id, data.is_admin || false);
+                const isSelf = data.client_id === clientId;
+                const timeStr = data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                addChatMessage(data.name, data.message, timeStr, isSelf, data.id, data.is_admin || false);
                 break;
 
             case 'kicked':
