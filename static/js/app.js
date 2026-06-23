@@ -194,7 +194,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 video.play().then(() => {
                     card.classList.add('hovering-video');
                 }).catch(err => {
-                    console.error('Hover preview play failed:', err);
+                    if (err.name !== 'AbortError') {
+                        console.error('Hover preview play failed:', err);
+                    }
                 });
             }, 350);
         });
