@@ -261,6 +261,11 @@ if (!window.safeSessionStorage) {
     let lastReactionSentTime = 0;
     const allowedReactions = new Set(['😂', '🔥', '💀', '😭', '❤️', '👀']);
     const locallyRenderedReactionIds = new Set();
+    let screenStream = null;
+    let isScreenSharing = false;
+    let screenShareOwnerId = null;
+    const screenTrackSenders = {};
+    const remoteScreenStreams = {};
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('wp-toast-container');
@@ -398,29 +403,18 @@ if (!window.safeSessionStorage) {
             });
             
             updateMicUI(false);
-            const btnMic = document.getElementById('btn-mic-toggle');
-            btnMic.disabled = false;
+            setMicControlsDisabled(false);
             document.getElementById('local-voice-status').innerText = 'Muted';
         } catch (err) {
             console.warn('Microphone access denied or not available:', err);
             addLogEntry('System', 'Voice chat in receive-only mode (mic not allowed).');
             updateMicUI(false);
-            const btnMic = document.getElementById('btn-mic-toggle');
-            btnMic.disabled = true;
+            setMicControlsDisabled(true);
             document.getElementById('local-voice-status').innerText = 'Listen only';
         }
 
-        // Bind mic toggle action
-        const btnMic = document.getElementById('btn-mic-toggle');
-        btnMic.onclick = () => {
-            if (!localStream) return;
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                updateMicUI(audioTrack.enabled);
-                document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
-            }
-        };
+        bindMicControlButtons();
+        initCallControls();
 
         // Start watch party connection and load playlist
         startWatchParty();
@@ -481,14 +475,63 @@ if (!window.safeSessionStorage) {
     }
 
     function updateMicUI(isActive) {
-        const btnMic = document.getElementById('btn-mic-toggle');
-        if (isActive) {
-            btnMic.classList.add('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        } else {
-            btnMic.classList.remove('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
+        const micButtons = [
+            document.getElementById('btn-mic-toggle'),
+            document.getElementById('btn-call-mic-toggle')
+        ].filter(Boolean);
+
+        micButtons.forEach(btnMic => {
+            if (isActive) {
+                btnMic.classList.add('active');
+                btnMic.innerHTML = btnMic.id === 'btn-call-mic-toggle'
+                    ? '<i class="fa-solid fa-microphone"></i><span>Mic</span>'
+                    : '<i class="fa-solid fa-microphone"></i>';
+            } else {
+                btnMic.classList.remove('active');
+                btnMic.innerHTML = btnMic.id === 'btn-call-mic-toggle'
+                    ? '<i class="fa-solid fa-microphone-slash"></i><span>Mic</span>'
+                    : '<i class="fa-solid fa-microphone-slash"></i>';
+            }
+        });
+    }
+
+    function setMicControlsDisabled(disabled) {
+        ['btn-mic-toggle', 'btn-call-mic-toggle'].forEach(id => {
+            const button = document.getElementById(id);
+            if (button) button.disabled = disabled;
+        });
+    }
+
+    function toggleLocalMic() {
+        if (!localStream) return;
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (!audioTrack) return;
+
+        audioTrack.enabled = !audioTrack.enabled;
+        updateMicUI(audioTrack.enabled);
+        document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
+    }
+
+    function bindMicControlButtons() {
+        ['btn-mic-toggle', 'btn-call-mic-toggle'].forEach(id => {
+            const button = document.getElementById(id);
+            if (button) button.onclick = toggleLocalMic;
+        });
+    }
+
+    function initCallControls() {
+        const btnScreenShare = document.getElementById('btn-screen-share');
+        if (btnScreenShare) {
+            btnScreenShare.onclick = () => {
+                if (isScreenSharing) {
+                    stopScreenShare(true);
+                } else {
+                    startScreenShare();
+                }
+            };
         }
+
+        updateScreenShareControls();
     }
 
     /**
@@ -642,6 +685,14 @@ if (!window.safeSessionStorage) {
 
         socket.on('reaction_event', (data) => {
             handleSSEMessage({ type: 'reaction', ...data });
+        });
+
+        socket.on('screen_share_started', (data) => {
+            handleSSEMessage({ type: 'screen_share_started', ...data });
+        });
+
+        socket.on('screen_share_stopped', (data) => {
+            handleSSEMessage({ type: 'screen_share_stopped', ...data });
         });
 
         // Bind local player events to broadcast modifications
@@ -892,6 +943,11 @@ if (!window.safeSessionStorage) {
                     });
                     updatePeersUI();
                 }
+
+                if (data.screen_share_owner && data.screen_share_owner !== clientId) {
+                    screenShareOwnerId = data.screen_share_owner;
+                    showScreenShareWaiting(data.screen_share_owner_name || 'Host');
+                }
                 break;
 
             case 'peer_joined':
@@ -923,6 +979,13 @@ if (!window.safeSessionStorage) {
                 }
                 delete activePeers[data.client_id];
                 delete iceCandidateQueues[data.client_id];
+                delete screenTrackSenders[data.client_id];
+                delete remoteScreenStreams[data.client_id];
+                if (screenShareOwnerId === data.client_id) {
+                    clearRemoteScreenShare();
+                    showToast('Screen sharing ended', 'info');
+                    addSystemChatMessage('Screen sharing ended.');
+                }
                 updatePeersUI();
                 break;
 
@@ -981,11 +1044,35 @@ if (!window.safeSessionStorage) {
                 renderReaction(data.emoji);
                 break;
 
+            case 'screen_share_started': {
+                if (data.sender_id === clientId) return;
+                screenShareOwnerId = data.sender_id;
+                const ownerName = data.sender_name || activePeers[data.sender_id]?.name || 'Host';
+                showScreenShareWaiting(ownerName);
+                showToast(`${ownerName} started screen sharing.`, 'info');
+                addSystemChatMessage(`${ownerName} started screen sharing.`);
+                break;
+            }
+
+            case 'screen_share_stopped': {
+                if (data.sender_id === clientId) return;
+                const hadRemoteScreenShare = !data.sender_id || screenShareOwnerId === data.sender_id || !!remoteScreenStreams[data.sender_id];
+                if (hadRemoteScreenShare) {
+                    delete remoteScreenStreams[data.sender_id];
+                    clearRemoteScreenShare();
+                    showToast('Screen sharing ended', 'info');
+                    addSystemChatMessage('Screen sharing ended.');
+                }
+                break;
+            }
+
             case 'kicked':
                 if (window.socket) window.socket.disconnect();
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
+                clearRemoteScreenShare();
+                stopScreenShare(false);
                 document.getElementById('wp-kicked-overlay').classList.add('active');
                 break;
                 
@@ -1032,6 +1119,8 @@ if (!window.safeSessionStorage) {
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
+                clearRemoteScreenShare();
+                stopScreenShare(false);
                 document.getElementById('wp-ended-overlay').classList.add('active');
                 break;
                 
@@ -1127,6 +1216,7 @@ if (!window.safeSessionStorage) {
         if (peerConnections[peerId]) {
             try { peerConnections[peerId].close(); } catch(e) {}
             delete peerConnections[peerId];
+            delete screenTrackSenders[peerId];
         }
 
         console.log(`Setting up RTCPeerConnection for peer ${peerId}, initiator: ${isInitiator}`);
@@ -1139,6 +1229,8 @@ if (!window.safeSessionStorage) {
                 pc.addTrack(track, localStream);
             });
         }
+
+        addScreenTracksToPeer(peerId, pc);
 
         // ICE candidate callback
         pc.onicecandidate = (event) => {
@@ -1163,14 +1255,12 @@ if (!window.safeSessionStorage) {
 
         // Receive remote track
         pc.ontrack = (event) => {
-            console.log(`Received remote audio track from peer ${peerId}`);
-            const stream = event.streams[0];
-            playRemoteStream(peerId, stream);
+            handleRemoteTrack(peerId, event);
         };
 
         // If initiator, send offer
         if (isInitiator) {
-            pc.createOffer({ offerToReceiveAudio: true })
+            pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
                 .then(offer => {
                     return pc.setLocalDescription(offer).then(() => offer);
                 })
@@ -1250,6 +1340,27 @@ if (!window.safeSessionStorage) {
             pc.addIceCandidate(new RTCIceCandidate(candidate))
                 .catch(e => console.error('Error adding queued ICE candidate:', e));
         }
+    }
+
+    function handleRemoteTrack(peerId, event) {
+        const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+        const isScreenTrack = event.track.kind === 'video' || stream.getVideoTracks().length > 0;
+
+        if (isScreenTrack) {
+            console.log(`Received remote screen share track from peer ${peerId}`);
+            remoteScreenStreams[peerId] = stream;
+            screenShareOwnerId = peerId;
+            showScreenShareStream(stream, false, `${getPeerDisplayName(peerId)} is sharing`);
+            event.track.addEventListener('ended', () => {
+                if (screenShareOwnerId === peerId) {
+                    clearRemoteScreenShare();
+                }
+            }, { once: true });
+            return;
+        }
+
+        console.log(`Received remote audio track from peer ${peerId}`);
+        playRemoteStream(peerId, stream);
     }
 
     function playRemoteStream(peerId, stream) {
@@ -1339,6 +1450,234 @@ if (!window.safeSessionStorage) {
         } catch (err) {
             console.error('Error initializing remote speech analyser for peer', peerId, err);
         }
+    }
+
+    /**
+     * 5b. Host Screen Share
+     */
+    async function startScreenShare() {
+        if (!adminToken) {
+            showToast('Only the host can share their screen.', 'warning');
+            return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            showToast('Screen sharing is not supported in this browser', 'warning');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const videoTracks = stream.getVideoTracks();
+            if (!videoTracks.length) {
+                stream.getTracks().forEach(track => track.stop());
+                showToast('No screen video was selected.', 'warning');
+                return;
+            }
+
+            if (screenStream) {
+                stopScreenShare(false);
+            }
+
+            screenStream = stream;
+            isScreenSharing = true;
+            screenShareOwnerId = clientId;
+            videoTracks[0].addEventListener('ended', () => {
+                if (isScreenSharing) {
+                    stopScreenShare(true);
+                }
+            }, { once: true });
+
+            showScreenShareStream(stream, true, 'Screen Sharing Live');
+            updateScreenShareControls();
+            addScreenTracksToAllPeers();
+            emitScreenShareStarted();
+            showToast('Screen sharing started.', 'success');
+            addSystemChatMessage('Screen sharing started.');
+        } catch (err) {
+            if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+                showToast('Screen share cancelled', 'info');
+            } else {
+                console.error('Error starting screen share:', err);
+                showToast('Could not start screen sharing.', 'error');
+            }
+        }
+    }
+
+    function stopScreenShare(announce = true) {
+        const hadScreenShare = isScreenSharing || !!screenStream;
+        isScreenSharing = false;
+
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            screenStream = null;
+        }
+
+        removeScreenTracksFromAllPeers();
+        screenShareOwnerId = null;
+        clearScreenShareLayer();
+        updateScreenShareControls();
+
+        if (announce && hadScreenShare) {
+            emitScreenShareStopped();
+            showToast('Screen sharing ended', 'info');
+            addSystemChatMessage('Screen sharing ended.');
+        }
+    }
+
+    function addScreenTracksToPeer(peerId, pc = peerConnections[peerId]) {
+        if (!isScreenSharing || !screenStream || !pc || screenTrackSenders[peerId]?.length) return;
+
+        const liveTracks = screenStream.getTracks().filter(track => track.readyState === 'live');
+        if (!liveTracks.length) return;
+
+        screenTrackSenders[peerId] = liveTracks.map(track => pc.addTrack(track, screenStream));
+    }
+
+    function addScreenTracksToAllPeers() {
+        Object.keys(peerConnections).forEach(peerId => {
+            addScreenTracksToPeer(peerId, peerConnections[peerId]);
+            renegotiatePeer(peerId);
+        });
+    }
+
+    function removeScreenTracksFromAllPeers() {
+        Object.keys(screenTrackSenders).forEach(peerId => {
+            const pc = peerConnections[peerId];
+            if (pc && pc.signalingState !== 'closed') {
+                screenTrackSenders[peerId].forEach(sender => {
+                    try { pc.removeTrack(sender); } catch (e) {}
+                });
+                renegotiatePeer(peerId);
+            }
+            delete screenTrackSenders[peerId];
+        });
+    }
+
+    function renegotiatePeer(peerId) {
+        const pc = peerConnections[peerId];
+        if (!pc || pc.signalingState === 'closed') return;
+
+        if (pc.signalingState !== 'stable') {
+            setTimeout(() => renegotiatePeer(peerId), 300);
+            return;
+        }
+
+        pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
+            .then(offer => pc.setLocalDescription(offer).then(() => offer))
+            .then(offer => sendSignal(peerId, offer))
+            .catch(err => console.error(`Error renegotiating with peer ${peerId}:`, err));
+    }
+
+    function showScreenShareStream(stream, isLocalPreview, statusText) {
+        const wrapper = document.querySelector('.video-wrapper');
+        const layer = document.getElementById('wp-screen-share-layer');
+        const video = document.getElementById('wp-screen-share-video');
+        const status = document.getElementById('wp-screen-share-status');
+        if (!wrapper || !layer || !video) return;
+
+        video.muted = !!isLocalPreview;
+        video.srcObject = stream;
+        layer.classList.add('active');
+        layer.setAttribute('aria-hidden', 'false');
+        wrapper.classList.add('screen-share-active');
+
+        if (status) {
+            status.innerHTML = '<i class="fa-solid fa-display"></i>';
+            status.appendChild(document.createTextNode(` ${statusText}`));
+        }
+
+        video.play().catch(err => {
+            console.warn('Screen share autoplay was blocked:', err);
+            const playOnInteract = () => {
+                video.play().finally(() => {
+                    document.removeEventListener('click', playOnInteract);
+                });
+            };
+            document.addEventListener('click', playOnInteract);
+        });
+    }
+
+    function showScreenShareWaiting(ownerName) {
+        const wrapper = document.querySelector('.video-wrapper');
+        const layer = document.getElementById('wp-screen-share-layer');
+        const video = document.getElementById('wp-screen-share-video');
+        const status = document.getElementById('wp-screen-share-status');
+        if (!wrapper || !layer || !video) return;
+
+        video.pause();
+        video.srcObject = null;
+        video.muted = true;
+        layer.classList.add('active');
+        layer.setAttribute('aria-hidden', 'false');
+        wrapper.classList.add('screen-share-active');
+
+        if (status) {
+            status.innerHTML = '<i class="fa-solid fa-display"></i>';
+            status.appendChild(document.createTextNode(` ${ownerName} screen loading`));
+        }
+    }
+
+    function clearRemoteScreenShare() {
+        screenShareOwnerId = null;
+        clearScreenShareLayer();
+    }
+
+    function clearScreenShareLayer() {
+        const wrapper = document.querySelector('.video-wrapper');
+        const layer = document.getElementById('wp-screen-share-layer');
+        const video = document.getElementById('wp-screen-share-video');
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+            video.muted = false;
+        }
+        if (layer) {
+            layer.classList.remove('active');
+            layer.setAttribute('aria-hidden', 'true');
+        }
+        if (wrapper) {
+            wrapper.classList.remove('screen-share-active');
+        }
+    }
+
+    function updateScreenShareControls() {
+        const btnScreenShare = document.getElementById('btn-screen-share');
+        const label = document.getElementById('screen-share-label');
+        if (!btnScreenShare) return;
+
+        btnScreenShare.style.display = adminToken ? 'inline-flex' : 'none';
+        btnScreenShare.classList.toggle('screen-active', isScreenSharing);
+        btnScreenShare.title = isScreenSharing ? 'Stop Sharing' : 'Share Screen';
+        btnScreenShare.innerHTML = isScreenSharing
+            ? '<i class="fa-solid fa-stop"></i><span id="screen-share-label">Stop Sharing</span>'
+            : '<i class="fa-solid fa-display"></i><span id="screen-share-label">Share Screen</span>';
+        if (label) {
+            label.innerText = isScreenSharing ? 'Stop Sharing' : 'Share Screen';
+        }
+    }
+
+    function emitScreenShareStarted() {
+        if (!window.socket || !window.socket.connected) return;
+        window.socket.emit('screen_share_started', {
+            party_id: window.PARTY_ID,
+            client_id: clientId
+        });
+    }
+
+    function emitScreenShareStopped() {
+        if (!window.socket || !window.socket.connected) return;
+        window.socket.emit('screen_share_stopped', {
+            party_id: window.PARTY_ID,
+            client_id: clientId
+        });
+    }
+
+    function getPeerDisplayName(peerId) {
+        if (peerId === clientId) return clientName;
+        return activePeers[peerId]?.name || 'Host';
     }
 
     /**
@@ -1698,6 +2037,8 @@ if (!window.safeSessionStorage) {
     }
 
     function setupAdminUI() {
+        updateScreenShareControls();
+
         const btnChangeFolder = document.getElementById('btn-wp-change-folder');
         if (btnChangeFolder) {
             btnChangeFolder.style.display = 'inline-block';

@@ -132,6 +132,10 @@
         }
 
         .plyr { width: 100%; height: 100%; background: #000; }
+        .video-wrapper.screen-share-active .plyr {
+            opacity: 0;
+            pointer-events: none;
+        }
         .plyr video,
         .plyr .plyr__video-wrapper video,
         .plyr--video .plyr__video-wrapper video {
@@ -703,6 +707,109 @@
             display: flex;
         }
 
+        /* Watch Party call controls */
+        .watch-call-controls {
+            position: absolute;
+            top: 0.85rem;
+            right: 0.85rem;
+            z-index: 16;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.35rem;
+            background: rgba(10, 10, 12, 0.88);
+            border: 2px solid var(--border);
+            box-shadow: 3px 3px 0px var(--border);
+        }
+
+        .call-control-btn {
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0 0.65rem;
+            background: var(--bg-raised);
+            color: var(--text);
+            border: 2px solid var(--border);
+            box-shadow: 2px 2px 0px var(--border);
+            cursor: pointer;
+            font-size: 0.72rem;
+            font-weight: 900;
+            line-height: 1;
+            text-transform: uppercase;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+        }
+
+        .call-control-btn:hover:not(:disabled),
+        .call-control-btn:focus-visible:not(:disabled) {
+            background: var(--accent-yellow);
+            color: #000;
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--accent-blue);
+            outline: none;
+        }
+
+        .call-control-btn.active {
+            background: var(--accent-lime);
+            color: #000;
+            box-shadow: 3px 3px 0px var(--border);
+        }
+
+        .call-control-btn.screen-active {
+            background: var(--accent-pink);
+            color: #fff;
+            box-shadow: 3px 3px 0px var(--accent-yellow);
+        }
+
+        .call-control-btn:disabled {
+            cursor: not-allowed;
+            color: var(--text-muted);
+            background: var(--bg-overlay);
+            opacity: 0.7;
+            box-shadow: 1px 1px 0px var(--border);
+        }
+
+        .screen-share-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 11;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .screen-share-layer.active {
+            display: flex;
+        }
+
+        .screen-share-layer video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .screen-share-status {
+            position: absolute;
+            left: 0.85rem;
+            bottom: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.4rem 0.65rem;
+            background: var(--accent-yellow);
+            color: #000;
+            border: 2px solid var(--border);
+            box-shadow: 3px 3px 0px var(--border);
+            font-size: 0.72rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
+
         /* Live emoji reactions */
         .reaction-overlay {
             position: absolute;
@@ -878,6 +985,21 @@
                 max-height: none;
             }
 
+            .watch-call-controls {
+                top: 0.55rem;
+                right: 0.55rem;
+                gap: 0.35rem;
+                max-width: calc(100% - 1.1rem);
+                overflow-x: auto;
+            }
+
+            .call-control-btn {
+                height: 32px;
+                padding: 0 0.5rem;
+                font-size: 0.68rem;
+                white-space: nowrap;
+            }
+
             .reaction-bar {
                 align-items: flex-start;
                 flex-direction: column;
@@ -931,7 +1053,24 @@
                 <div class="player-lock-overlay" id="wp-player-lock-overlay">
                     <i class="fa-solid fa-lock"></i> Playback Locked by Host
                 </div>
+                <div class="watch-call-controls" aria-label="Watch Party media controls">
+                    <button class="call-control-btn" id="btn-call-mic-toggle" type="button" title="Toggle Mic" disabled>
+                        <i class="fa-solid fa-microphone-slash"></i><span>Mic</span>
+                    </button>
+                    <button class="call-control-btn" id="btn-screen-share" type="button" title="Share Screen" style="display: none;">
+                        <i class="fa-solid fa-display"></i><span id="screen-share-label">Share Screen</span>
+                    </button>
+                    <button class="call-control-btn" id="btn-camera-toggle" type="button" title="Camera coming soon" disabled>
+                        <i class="fa-solid fa-video-slash"></i><span>Camera</span>
+                    </button>
+                </div>
                 <video id="lightbox-video" controls playsinline></video>
+                <div class="screen-share-layer" id="wp-screen-share-layer" aria-hidden="true">
+                    <video id="wp-screen-share-video" autoplay playsinline></video>
+                    <div class="screen-share-status" id="wp-screen-share-status">
+                        <i class="fa-solid fa-display"></i> Screen Sharing Live
+                    </div>
+                </div>
                 <div class="reaction-overlay" id="wp-reaction-overlay" aria-hidden="true"></div>
             </div>
 

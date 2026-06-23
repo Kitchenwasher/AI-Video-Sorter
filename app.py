@@ -277,7 +277,8 @@ def handle_join_event(data):
                 'slow_mode': False,
                 'kicked_clients': [],
                 'cooldowns': {},
-                'reaction_cooldowns': {}
+                'reaction_cooldowns': {},
+                'screen_share_owner': None
             }
         
         party_state = watch_parties_state[party_id]
@@ -301,6 +302,11 @@ def handle_join_event(data):
             'is_admin': is_admin
         }, to=party_id, include_self=False)
         
+        screen_share_owner = party_state.get('screen_share_owner')
+        screen_share_owner_name = None
+        if screen_share_owner and screen_share_owner in party_state['clients']:
+            screen_share_owner_name = party_state['clients'][screen_share_owner].get('name')
+
         # Send init payload to client
         emit('init_payload', {
             'playback_state': party_state['playback_state'],
@@ -308,6 +314,8 @@ def handle_join_event(data):
             'slow_mode': party_state.get('slow_mode', False),
             'is_admin': is_admin,
             'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
+            'screen_share_owner': screen_share_owner,
+            'screen_share_owner_name': screen_share_owner_name,
             'turn_server': current_config.wp_turn_server,
             'turn_username': current_config.wp_turn_username,
             'turn_credential': current_config.wp_turn_credential
@@ -441,17 +449,98 @@ def handle_signal_event(data):
                 'signal': signal_payload
             }, to=target_client['sid'])
 
+@socketio.on('screen_share_started')
+def handle_screen_share_started_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+
+    if not party_id or not client_id:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        if client_id in party_state.get('kicked_clients', []):
+            return
+        client_info = party_state['clients'].get(client_id)
+        if not client_info or not client_info.get('is_admin', False):
+            return
+
+        current_owner = party_state.get('screen_share_owner')
+        if current_owner and current_owner != client_id:
+            return
+
+        party_state['screen_share_owner'] = client_id
+        message = {
+            'type': 'screen_share_started',
+            'sender_id': client_id,
+            'sender_name': client_info.get('name', 'Host')
+        }
+
+        emit('screen_share_started', {
+            'sender_id': message['sender_id'],
+            'sender_name': message['sender_name']
+        }, to=party_id, include_self=False)
+
+        for c_id, client in party_state.get('clients', {}).items():
+            if c_id != client_id and 'queue' in client:
+                client['queue'].put(message)
+
+@socketio.on('screen_share_stopped')
+def handle_screen_share_stopped_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+
+    if not party_id or not client_id:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        client_info = party_state['clients'].get(client_id)
+        if not client_info or not client_info.get('is_admin', False):
+            return
+
+        current_owner = party_state.get('screen_share_owner')
+        if current_owner and current_owner != client_id:
+            return
+
+        party_state['screen_share_owner'] = None
+        message = {
+            'type': 'screen_share_stopped',
+            'sender_id': client_id,
+            'sender_name': client_info.get('name', 'Host')
+        }
+
+        emit('screen_share_stopped', {
+            'sender_id': message['sender_id'],
+            'sender_name': message['sender_name']
+        }, to=party_id, include_self=False)
+
+        for c_id, client in party_state.get('clients', {}).items():
+            if c_id != client_id and 'queue' in client:
+                client['queue'].put(message)
+
 @socketio.on('disconnect')
 def handle_disconnect():
     with watch_parties_lock:
         for party_id, party_state in watch_parties_state.items():
             for client_id, client in list(party_state['clients'].items()):
                 if client['sid'] == request.sid:
+                    was_screen_owner = party_state.get('screen_share_owner') == client_id
                     del party_state['clients'][client_id]
                     emit('peer_left', {
                         'client_id': client_id,
                         'name': client['name']
                     }, to=party_id)
+                    if was_screen_owner:
+                        party_state['screen_share_owner'] = None
+                        emit('screen_share_stopped', {
+                            'sender_id': client_id,
+                            'sender_name': client['name']
+                        }, to=party_id)
                     logger.info(f"Socket.IO client {client['name']} ({client_id}) disconnected from room {party_id}")
                     return
 
@@ -2505,7 +2594,8 @@ def create_watch_party():
                 'slow_mode': False,
                 'kicked_clients': [],
                 'cooldowns': {},
-                'reaction_cooldowns': {}
+                'reaction_cooldowns': {},
+                'screen_share_owner': None
             }
             
         logger.info(f"Watch party {party_id} created for folder {folder_name} (expires: {expires_at})")
@@ -2616,7 +2706,8 @@ def stream_watch_party(party_id):
                     'slow_mode': False,
                     'kicked_clients': [],
                     'cooldowns': {},
-                    'reaction_cooldowns': {}
+                    'reaction_cooldowns': {},
+                    'screen_share_owner': None
                 }
                 
             party_state = watch_parties_state[party_id]
@@ -2640,6 +2731,11 @@ def stream_watch_party(party_id):
                 if c_id != client_id:
                     client['queue'].put(join_msg)
                     
+            screen_share_owner = party_state.get('screen_share_owner')
+            screen_share_owner_name = None
+            if screen_share_owner and screen_share_owner in party_state['clients']:
+                screen_share_owner_name = party_state['clients'][screen_share_owner].get('name')
+
             # Queue current playback state to new client
             q.put({
                 'type': 'init',
@@ -2647,7 +2743,9 @@ def stream_watch_party(party_id):
                 'playback_locked': party_state.get('playback_locked', False),
                 'slow_mode': party_state.get('slow_mode', False),
                 'is_admin': is_admin,
-                'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id]
+                'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
+                'screen_share_owner': screen_share_owner,
+                'screen_share_owner_name': screen_share_owner_name
             })
             
         logger.info(f"Client {client_name} ({client_id}) connected to watch party {party_id} (is_admin: {is_admin})")
@@ -2830,7 +2928,8 @@ def reaction_watch_party(party_id):
                     'slow_mode': False,
                     'kicked_clients': [],
                     'cooldowns': {},
-                    'reaction_cooldowns': {}
+                    'reaction_cooldowns': {},
+                    'screen_share_owner': None
                 }
 
             party_state = watch_parties_state[party_id]
@@ -2895,7 +2994,8 @@ def check_watch_party_admin(party_id):
                     'slow_mode': False,
                     'kicked_clients': [],
                     'cooldowns': {},
-                    'reaction_cooldowns': {}
+                    'reaction_cooldowns': {},
+                    'screen_share_owner': None
                 }
             except Exception as e:
                 return jsonify({'status': 'error', 'message': f'DB error: {e}'}), 500
@@ -2953,7 +3053,8 @@ def change_watch_party_folder(party_id):
                     'slow_mode': False,
                     'kicked_clients': [],
                     'cooldowns': {},
-                    'reaction_cooldowns': {}
+                    'reaction_cooldowns': {},
+                    'screen_share_owner': None
                 }
             
             party_state = watch_parties_state[party_id]
