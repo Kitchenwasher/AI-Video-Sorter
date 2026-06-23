@@ -50,7 +50,7 @@
     function setupBindingsLoop() {
         const checkInterval = setInterval(() => {
             const rawPlayer = document.getElementById('lightbox-video')?.__plyr;
-            if (window.socket && window.socket.connected && rawPlayer) {
+            if (window.socket && rawPlayer) {
                 socket = window.socket;
                 player = rawPlayer;
                 clearInterval(checkInterval);
@@ -59,12 +59,26 @@
                 bindUIEventListeners();
                 startPeriodicChecks();
                 
-                console.log("[QueueModule] Advanced playback and queue infrastructure initialized.");
+                // Request initial queue state immediately if connected, or on connect event
+                if (socket.connected) {
+                    requestInitialQueue();
+                }
+                socket.on('connect', () => {
+                    requestInitialQueue();
+                });
+                
+                console.log("[QueueModule] Advanced playback and queue infrastructure initialized and bound.");
             }
         }, 200);
-        
-        // Timeout after 15 seconds
-        setTimeout(() => clearInterval(checkInterval), 15000);
+    }
+
+    function requestInitialQueue() {
+        if (socket && socket.connected) {
+            console.log("[QueueModule] Requesting active queue state from server...");
+            socket.emit('get_queue', {
+                party_id: window.PARTY_ID
+            });
+        }
     }
 
     /**

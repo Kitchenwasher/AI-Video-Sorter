@@ -46,7 +46,7 @@
         const checkInterval = setInterval(() => {
             // In watch_party.js, window.socket is set and plyr player is global/accessible
             const rawPlayer = document.getElementById('lightbox-video')?.__plyr;
-            if (window.socket && window.socket.connected && rawPlayer) {
+            if (window.socket && rawPlayer) {
                 socket = window.socket;
                 player = rawPlayer;
                 clearInterval(checkInterval);
@@ -55,12 +55,9 @@
                 bindPlayerEvents();
                 startSyncLoops();
                 
-                console.log("[SyncModule] Playback sync infrastructure initialized successfully.");
+                console.log("[SyncModule] Playback sync infrastructure bound successfully.");
             }
         }, 200);
-        
-        // Stop checking after 15 seconds to avoid memory leak if offline
-        setTimeout(() => clearInterval(checkInterval), 15000);
     }
 
     function bindSocketListeners() {

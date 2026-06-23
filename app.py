@@ -592,6 +592,17 @@ def handle_queue_clear(data):
         party_state = watch_parties_state[party_id]
         party_state['queue'] = []
         emit('queue_updated', {'queue': party_state['queue']}, to=party_id)
+
+@socketio.on('get_queue')
+def handle_get_queue(data):
+    party_id = data.get('party_id')
+    if not party_id:
+        return
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        emit('queue_updated', {'queue': party_state.get('queue', [])}, room=request.sid)
 @socketio.on('speed_change')
 def handle_speed_change(data):
     party_id = data.get('party_id')
@@ -631,103 +642,6 @@ def handle_audio_track_change(data):
         'client_id': client_id,
         'index': index
     }, to=party_id, include_self=False)
-@socketio.on('queue_add')
-def handle_queue_add(data):
-    party_id = data.get('party_id')
-    filename = data.get('filename')
-    if not party_id or not filename:
-        return
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-        party_state = watch_parties_state[party_id]
-        if 'queue' not in party_state:
-            party_state['queue'] = []
-        if filename not in party_state['queue']:
-            party_state['queue'].append(filename)
-        emit('queue_updated', {'queue': party_state['queue']}, to=party_id)
-
-@socketio.on('queue_remove')
-def handle_queue_remove(data):
-    party_id = data.get('party_id')
-    index = data.get('index')
-    if not party_id or index is None:
-        return
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-        party_state = watch_parties_state[party_id]
-        if 'queue' in party_state and 0 <= index < len(party_state['queue']):
-            party_state['queue'].pop(index)
-        emit('queue_updated', {'queue': party_state['queue']}, to=party_id)
-
-@socketio.on('queue_reorder')
-def handle_queue_reorder(data):
-    party_id = data.get('party_id')
-    new_queue = data.get('queue')
-    if not party_id or new_queue is None:
-        return
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-        party_state = watch_parties_state[party_id]
-        party_state['queue'] = new_queue
-        emit('queue_updated', {'queue': party_state['queue']}, to=party_id)
-
-@socketio.on('queue_clear')
-def handle_queue_clear(data):
-    party_id = data.get('party_id')
-    if not party_id:
-        return
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-        party_state = watch_parties_state[party_id]
-        party_state['queue'] = []
-        emit('queue_updated', {'queue': party_state['queue']}, to=party_id)
-
-@socketio.on('speed_change')
-def handle_speed_change(data):
-    party_id = data.get('party_id')
-    client_id = data.get('client_id')
-    speed = data.get('speed', 1.0)
-    if not party_id:
-        return
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-        party_state = watch_parties_state[party_id]
-        party_state['playback_state']['speed'] = speed
-        party_state['playback_state']['last_updated'] = time.time()
-        emit('speed_changed_broadcast', {
-            'client_id': client_id,
-            'speed': speed
-        }, to=party_id, include_self=False)
-
-@socketio.on('subtitle_change')
-def handle_subtitle_change(data):
-    party_id = data.get('party_id')
-    client_id = data.get('client_id')
-    filename = data.get('filename')
-    if not party_id:
-        return
-    emit('subtitle_changed_broadcast', {
-        'client_id': client_id,
-        'filename': filename
-    }, to=party_id, include_self=False)
-
-@socketio.on('audio_track_change')
-def handle_audio_track_change(data):
-    party_id = data.get('party_id')
-    client_id = data.get('client_id')
-    index = data.get('index')
-    if not party_id:
-        return
-    emit('audio_track_changed_broadcast', {
-        'client_id': client_id,
-        'index': index
-    }, to=party_id, include_self=False)
-
 @socketio.on('signal')
 def handle_signal_event(data):
     party_id = data.get('party_id')
