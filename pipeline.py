@@ -47,6 +47,8 @@ class SortingPipeline:
         
         # Build map of profile_id -> db_profile
         db_profile_map = {p['profile_id']: p for p in db_profiles}
+        # Build map of folder_name -> db_profile to optimize disk scanning
+        db_folder_map = {p['folder_name']: p for p in db_profiles}
         
         # 2. Scan the output directory to sync any disk changes (e.g. manual folder renames)
         out_dir = self.config.output_dir
@@ -58,29 +60,38 @@ class SortingPipeline:
             for item in sorted(os.listdir(out_dir)):
                 item_path = os.path.join(out_dir, item)
                 if os.path.isdir(item_path):
-                    emb_path = os.path.join(item_path, "_profile_embedding.json")
-                    if os.path.exists(emb_path):
-                        try:
-                            with open(emb_path, 'r') as f:
-                                data = json.load(f)
-                            
-                            embedding = np.array(data['embedding'], dtype=np.float32)
-                            profile_id = data.get('profile_id')
-                            
-                            if profile_id is not None:
-                                disk_profiles_by_id[int(profile_id)] = {
-                                    'folder_name': item,
-                                    'embedding': embedding
-                                }
-                            else:
-                                # Legacy profile without profile_id
-                                legacy_disk_profiles.append({
-                                    'folder_name': item,
-                                    'embedding': embedding,
-                                    'emb_path': emb_path
-                                })
-                        except Exception as e:
-                            logger.error(f"Error reading profile embedding from {emb_path}: {e}")
+                    # Optimization: If the folder name on disk matches an existing database folder name,
+                    # we do not need to read the JSON file from disk. We can reuse database details.
+                    if item in db_folder_map:
+                        db_p = db_folder_map[item]
+                        disk_profiles_by_id[db_p['profile_id']] = {
+                            'folder_name': item,
+                            'embedding': db_p['embedding']
+                        }
+                    else:
+                        emb_path = os.path.join(item_path, "_profile_embedding.json")
+                        if os.path.exists(emb_path):
+                            try:
+                                with open(emb_path, 'r') as f:
+                                    data = json.load(f)
+                                
+                                embedding = np.array(data['embedding'], dtype=np.float32)
+                                profile_id = data.get('profile_id')
+                                
+                                if profile_id is not None:
+                                    disk_profiles_by_id[int(profile_id)] = {
+                                        'folder_name': item,
+                                        'embedding': embedding
+                                    }
+                                else:
+                                    # Legacy profile without profile_id
+                                    legacy_disk_profiles.append({
+                                        'folder_name': item,
+                                        'embedding': embedding,
+                                        'emb_path': emb_path
+                                    })
+                            except Exception as e:
+                                logger.error(f"Error reading profile embedding from {emb_path}: {e}")
                             
         # 3. Synchronize database and disk
         # Case A: Profile is in DB, and also on disk

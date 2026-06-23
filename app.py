@@ -2194,6 +2194,25 @@ def list_profiles():
         pipeline = SortingPipeline(current_config, WORKSPACE_DIR, flask_app=app)
         db_profiles = pipeline._load_and_sync_profiles()
         
+        # Optimize: Query genders in a single bulk SQL join query to avoid O(N) database queries in a loop
+        gender_map = {}
+        try:
+            from utils.models import ProfileMediaMembership, Face
+            # Retrieve one face gender per profile using fast database indexes
+            results = db.session.query(
+                ProfileMediaMembership.profile_id,
+                Face.gender
+            ).join(
+                Face, Face.file_id == ProfileMediaMembership.file_id
+            ).group_by(
+                ProfileMediaMembership.profile_id
+            ).all()
+            for p_id, g in results:
+                if g:
+                    gender_map[p_id] = g
+        except Exception as ge:
+            logger.error(f"Failed to bulk query profile genders: {ge}")
+            
         profiles = []
         for p in db_profiles:
             folder_name = p['folder_name']
@@ -2209,15 +2228,8 @@ def list_profiles():
                 media_count = len(files_in_folder)
                 has_thumbnail = os.path.exists(os.path.join(folder_path, '_reference_face.jpg'))
             
-            # Try to get gender guess
-            gender = 'female' # default
-            try:
-                from utils.models import ProcessedFile
-                pf = ProcessedFile.query.filter(ProcessedFile.file_path.like(f"%{folder_name}%")).first()
-                if pf and pf.faces:
-                    gender = pf.faces[0].gender or 'female'
-            except Exception:
-                pass
+            # Use pre-fetched gender guess (defaults to 'female')
+            gender = gender_map.get(profile_id, 'female')
                 
             profiles.append({
                 'id': profile_id,
