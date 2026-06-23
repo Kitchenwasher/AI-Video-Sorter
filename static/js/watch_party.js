@@ -457,10 +457,33 @@
 
         socket.on('init_payload', (data) => {
             if (data.turn_server) {
+                const rawUrl = data.turn_server.trim();
+                const urls = [rawUrl];
+                
+                // Automatically generate TCP, TLS, and standard port variants of the TURN server for high reliability
+                const match = rawUrl.match(/^(turns?:)?([^?]+)/i);
+                if (match) {
+                    const hostAndPort = match[2];
+                    urls.push(`turn:${hostAndPort}?transport=tcp`);
+                    urls.push(`turns:${hostAndPort}`);
+                    urls.push(`turns:${hostAndPort}?transport=tcp`);
+                    
+                    const hostOnly = hostAndPort.split(':')[0];
+                    urls.push(`turn:${hostOnly}:80`);
+                    urls.push(`turn:${hostOnly}:80?transport=tcp`);
+                    urls.push(`turns:${hostOnly}:443`);
+                    urls.push(`turns:${hostOnly}:443?transport=tcp`);
+                }
+                
+                const uniqueUrls = [...new Set(urls)];
+                console.log("Configuring WebRTC with expanded TURN servers:", uniqueUrls);
+                
                 rtcConfig.iceServers = [
                     { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
                     { 
-                        urls: data.turn_server,
+                        urls: uniqueUrls,
                         username: data.turn_username,
                         credential: data.turn_credential
                     }
