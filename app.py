@@ -3092,7 +3092,7 @@ def setup_windows_job_object():
         )
         if res:
             windows_job_handle = h_job
-            logger.info("Successfully configured Windows Job Object for SSH tunnel auto-termination.")
+            logger.info("Successfully configured Windows Job Object for tunnel auto-termination.")
         else:
             ctypes.windll.kernel32.CloseHandle(h_job)
     except Exception as e:
@@ -3103,7 +3103,7 @@ def cleanup_tunnel():
     tunnel_should_run = False
     if active_tunnel_proc:
         try:
-            logger.info("Terminating localhost.run SSH tunnel subprocess...")
+            logger.info("Terminating active tunnel subprocess...")
             active_tunnel_proc.terminate()
             try:
                 active_tunnel_proc.wait(timeout=1.0)
