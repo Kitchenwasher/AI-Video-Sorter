@@ -2380,9 +2380,23 @@ def kick_watch_party_client(party_id):
                 
             if target_client_id in party_state['clients']:
                 target_client = party_state['clients'][target_client_id]
+                # Queue kick event to the target client
                 target_client['queue'].put({'type': 'kicked'})
                 
-        logger.info(f"Client {target_client_id} kicked from watch party {party_id} by admin")
+                # Immediately remove from clients list to update participant UI instantly
+                kicked_name = target_client['name']
+                del party_state['clients'][target_client_id]
+                
+                # Broadcast departure event to all remaining participants
+                leave_msg = {
+                    'type': 'peer_left',
+                    'client_id': target_client_id,
+                    'name': kicked_name
+                }
+                for c_id, client in party_state['clients'].items():
+                    client['queue'].put(leave_msg)
+                
+        logger.info(f"Client {target_client_id} kicked and removed from watch party {party_id} by admin")
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Error kicking client: {e}")
