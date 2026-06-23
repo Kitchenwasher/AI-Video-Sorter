@@ -1,1167 +1,1299 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AuraSort — Watch Party</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
-    <!-- Fonts and Icons -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.all.min.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <!-- Plyr Video Player CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/plyr.css') }}">
-    
-    <style>
-        :root {
-            --bg: #0F0F11;
-            --bg-raised: #1A1A1E;
-            --bg-overlay: #131316;
-            --text: #F3F3F3;
-            --text-dim: #888890;
-            --text-muted: #5C5C64;
-            --accent: #FF8C00;
-            --border: #2C2C30;
-            --font-sans: 'Outfit', 'Inter', system-ui, sans-serif;
-            --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-            --bw: 2px;
-            --plyr-color-main: var(--accent);
-            --plyr-video-control-color-hover: #0F0F11;
-            --plyr-video-control-background-hover: var(--accent);
-            --plyr-control-radius: 0px;
-        }
-
-        * { box-sizing: border-box; font-family: var(--font-sans); }
-
-        body {
-            margin: 0; padding: 0;
-            background: var(--bg);
-            color: var(--text);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            height: 56px;
-            background: var(--bg);
-            border-bottom: var(--bw) solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 1.2rem;
-            z-index: 10;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 700;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-            color: var(--text);
-            text-decoration: none;
-        }
-        .logo span { color: var(--accent); }
-
-        .main-container {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-            z-index: 5;
-            position: relative;
-        }
-
-        .player-pane {
-            flex: 1.8;
-            display: flex;
-            flex-direction: column;
-            padding: 1.2rem;
-            gap: var(--bw * 4, 8px);
-            overflow-y: auto;
-        }
-
-        .video-wrapper {
-            background: #000;
-            border: var(--bw) solid var(--border);
-            aspect-ratio: 16/9;
-            width: 100%;
-            max-width: 1100px;
-            align-self: center;
-            position: relative;
-        }
-
-        .plyr { width: 100%; height: 100%; background: #000; }
-        .plyr video,
-        .plyr .plyr__video-wrapper video,
-        .plyr--video .plyr__video-wrapper video {
-            object-fit: contain !important;
-        }
-
-        .playlist-card {
-            background: var(--bg-raised);
-            border: var(--bw) solid var(--border);
-            padding: 1rem;
-            width: 100%;
-            max-width: 1100px;
-            align-self: center;
-        }
-
-        .playlist-header {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-dim);
-            letter-spacing: 1px;
-            margin-bottom: 0.8rem;
-            text-transform: uppercase;
-        }
-
-        .playlist-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: var(--bw * 4, 8px);
-            max-height: 140px;
-            overflow-y: auto;
-        }
-
-        .playlist-item {
-            background: var(--bg);
-            border: var(--bw) solid var(--border);
-            overflow: hidden;
-            aspect-ratio: 16/9;
-            position: relative;
-            cursor: pointer;
-        }
-        .playlist-item:hover, .playlist-item.active {
-            border-color: var(--accent);
-        }
-        .playlist-item img { width: 100%; height: 100%; object-fit: cover; }
-        .playlist-item-title {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            padding: 3px 6px;
-            background: var(--bg-overlay);
-            font-size: 0.65rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .sidebar-pane {
-            flex: 0.7;
-            border-left: var(--bw) solid var(--border);
-            background: var(--bg);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            max-width: 360px;
-            min-width: 260px;
-        }
-
-        .sidebar-section {
-            padding: 1rem;
-            border-bottom: var(--bw) solid var(--border);
-        }
-
-        .local-user-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: var(--bg-raised);
-            padding: 0.6rem 0.8rem;
-            border: var(--bw) solid var(--border);
-        }
-
-        .btn-mic {
-            background: #FF2E93;
-            color: var(--text);
-            border: var(--bw) solid #FF2E93;
-            width: 36px;
-            height: 36px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            transition: all 0.2s;
-        }
-
-        .btn-mic.active {
-            background: #22c55e;
-            border-color: #22c55e;
-            box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
-        }
-
-        /* Chat & Sidebar UI styling */
-        .chat-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .sidebar-header {
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            letter-spacing: 0.5px;
-            padding: 0.75rem 1.25rem 0.25rem 1.25rem;
-            text-transform: uppercase;
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0.75rem 1.25rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .chat-entry {
-            font-size: 0.85rem;
-            line-height: 1.4;
-            max-width: 85%;
-            padding: 0.5rem 0.75rem;
-            border-radius: 12px;
-            word-break: break-word;
-            position: relative;
-        }
-
-        .chat-entry.incoming {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            align-self: flex-start;
-            border-top-left-radius: 2px;
-        }
-
-        .chat-entry.outgoing {
-            background: var(--accent);
-            color: white;
-            align-self: flex-end;
-            border-top-right-radius: 2px;
-        }
-
-        .chat-entry.system {
-            background: rgba(255, 140, 0, 0.08);
-            border: 1px solid rgba(255, 140, 0, 0.15);
-            color: var(--accent);
-            align-self: center;
-            font-size: 0.75rem;
-            text-align: center;
-            max-width: 100%;
-            width: 100%;
-            border-radius: 6px;
-            padding: 0.35rem 0.6rem;
-        }
-
-        .chat-sender {
-            font-weight: 700;
-            font-size: 0.72rem;
-            display: block;
-            margin-bottom: 0.15rem;
-            color: var(--accent);
-        }
-
-        .chat-entry.outgoing .chat-sender {
-            color: rgba(255, 255, 255, 0.95);
-        }
-
-        .chat-time {
-            font-size: 0.62rem;
-            color: var(--text-muted);
-            float: right;
-            margin-top: 0.22rem;
-            margin-left: 0.5rem;
-        }
-
-        .chat-entry.outgoing .chat-time {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .chat-input-container {
-            padding: 0.75rem 1.25rem;
-            display: flex;
-            gap: 0.5rem;
-            background: rgba(10, 10, 12, 0.4);
-            border-top: 1px solid var(--border);
-        }
-
-        .chat-input {
-            flex: 1;
-            padding: 0.6rem 0.85rem;
-            font-size: 0.85rem;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .chat-input:focus {
-            border-color: var(--accent);
-        }
-
-        .btn-send {
-            background: var(--accent);
-            color: white;
-            border: none;
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.95rem;
-            transition: all 0.2s;
-        }
-
-        .btn-send:hover {
-            box-shadow: 0 0 10px var(--accent);
-            transform: translateY(-1px);
-        }
-
-        /* Bottom Section: Participants list */
-        .bottom-section {
-            max-height: 180px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            padding-bottom: 0.75rem;
-        }
-
-        .peers-list-compact {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0.4rem 1.25rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .peer-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border);
-            padding: 0.5rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-        }
-
-        .peer-name {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 500;
-        }
-
-        .voice-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #6b7280;
-            transition: background 0.2s, box-shadow 0.2s;
-        }
-
-        .voice-indicator.speaking {
-            background: #22c55e;
-            box-shadow: 0 0 8px #22c55e;
-        }
-
-        .voice-indicator.muted {
-            background: #ef4444;
-        }
-
-        /* System Logs list */
-        .logs-container-compact {
-            display: none; /* Hide standard system logs to make room for chat */
-        }
-
-        .log-entry {
-            line-height: 1.4;
-        }
-
-        .log-time {
-            color: var(--accent);
-            margin-right: 0.3rem;
-            font-weight: 600;
-        }
-
-        /* Modal Overlays styling */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(5, 5, 5, 0.85);
-            z-index: 100;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal-box {
-            background: #101013;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            width: 100%;
-            max-width: 400px;
-            padding: 1.5rem;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
-        }
-
-        .btn {
-            padding: 0.65rem 1.2rem;
-            font-size: 0.9rem;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: var(--accent);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            box-shadow: 0 0 15px var(--accent);
-            transform: translateY(-1px);
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 0.65rem 0.85rem;
-            font-size: 0.9rem;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .input-field:focus {
-            border-color: var(--accent);
-        }
-
-        /* Folder Select Item styles for Admin Folder Switcher */
-        .folder-select-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.6rem 0.8rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-            margin-bottom: 0.35rem;
-            color: var(--text-main);
-            background: rgba(255, 255, 255, 0.01);
-        }
-
-        .folder-select-item:hover {
-            background: rgba(255, 255, 255, 0.04);
-            border-color: var(--border);
-        }
-
-        .folder-select-item.selected {
-            background: rgba(255, 140, 0, 0.1);
-            border-color: var(--accent);
-            color: var(--text-main);
-        }
-
-        .folder-select-name {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 500;
-        }
-
-        .folder-select-count {
-            font-size: 0.72rem;
-            color: var(--text-muted);
-            background: rgba(255,255,255,0.05);
-            padding: 0.15rem 0.45rem;
-            border-radius: 10px;
-        }
-
-        /* Slider Switch Styling */
-        .switch-container input:checked + .slider {
-            background-color: #eab308;
-        }
-        .switch-container .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            border-radius: 50%;
-            transition: .3s;
-        }
-        .switch-container input:checked + .slider:before {
-            transform: translateX(22px);
-        }
-
-        /* Crown styles */
-        .crown-badge {
-            color: #eab308;
-            margin-right: 0.2rem;
-            text-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
-        }
-        .chat-entry.outgoing .crown-badge {
-            color: #fffbeb;
-        }
-
-        /* Message Action controls */
-        .btn-msg-delete {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.72rem;
-            opacity: 0;
-            transition: opacity 0.2s, color 0.2s;
-            position: absolute;
-            right: 8px;
-            top: 8px;
-        }
-        .chat-entry:hover .btn-msg-delete {
-            opacity: 1;
-        }
-        .chat-entry:hover .btn-msg-delete:hover {
-            color: #ef4444;
-        }
-        .chat-entry.outgoing .btn-msg-delete {
-            color: rgba(255,255,255,0.7);
-        }
-
-        /* Participant Actions style */
-        .peer-actions {
-            display: flex;
-            gap: 0.35rem;
-            align-items: center;
-        }
-        .btn-peer-action {
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 0.8rem;
-            padding: 0.2rem;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        .btn-peer-action.mute {
-            color: #ef4444;
-        }
-        .btn-peer-action.mute:hover {
-            background: rgba(239, 68, 68, 0.15);
-            transform: scale(1.1);
-        }
-        .btn-peer-action.kick {
-            color: #ef4444;
-        }
-        .btn-peer-action.kick:hover {
-            background: rgba(239, 68, 68, 0.15);
-            transform: scale(1.1);
-        }
-
-        /* Playback Lock indicators */
-        .player-lock-overlay {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-            background: rgba(0, 0, 0, 0.75);
-            border: 1px solid rgba(234, 179, 8, 0.4);
-            color: #eab308;
-            padding: 0.35rem 0.65rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            display: none;
-            align-items: center;
-            gap: 0.35rem;
-            z-index: 10;
-            pointer-events: none;
-        }
-        .player-lock-overlay.active {
-            display: flex;
-        }
-
-        /* Toast Container */
-        #wp-toast-container {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 999;
-            pointer-events: none;
-        }
-        .wp-toast {
-            background: #101013;
-            border: 1px solid var(--border);
-            border-left: 4px solid var(--accent);
-            color: var(--text-main);
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            font-size: 0.8rem;
-            font-weight: 500;
-            pointer-events: auto;
-            animation: slideInToast 0.3s ease forwards;
-            min-width: 200px;
-        }
-        @keyframes slideInToast {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        
-        /* Floating Emoji Reactions */
-        .emoji-overlay-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: 15;
-        }
-        
-        .floating-emoji-wrapper {
-            position: absolute;
-            bottom: -50px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            pointer-events: none;
-            animation: floatUp 2.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-        }
-        
-        .floating-emoji {
-            font-size: 2.2rem;
-            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
-            transform-origin: center;
-        }
-        
-        .floating-emoji-sender {
-            background: rgba(18, 18, 22, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            padding: 2px 8px;
-            font-size: 0.7rem;
-            color: #F3F3F3;
-            font-weight: 600;
-            white-space: nowrap;
-            margin-top: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            opacity: 0.9;
-        }
-        
-        @keyframes floatUp {
-            0% {
-                transform: translateY(0) scale(0.5) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-                transform: translateY(-10%) scale(1.1);
-            }
-            100% {
-                transform: translateY(-120vh) scale(0.8) rotate(var(--rot, 15deg));
-                opacity: 0;
-            }
-        }
-        
-        /* Emoji Action Bar */
-        .emoji-action-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            background: rgba(25, 25, 30, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            padding: 8px 16px;
-            width: fit-content;
-            margin: 0.5rem auto 0;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-        
-        .emoji-btn {
-            background: transparent;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 8px;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
-            position: relative;
-        }
-        
-        .emoji-btn:hover {
-            transform: scale(1.25) translateY(-4px);
-            background: rgba(255, 255, 255, 0.08);
-        }
-        
-        .emoji-btn:active {
-            transform: scale(0.95);
-        }
-        
-        .emoji-btn::after {
-            content: attr(data-key);
-            position: absolute;
-            bottom: -6px;
-            right: -2px;
-            background: var(--accent);
-            color: #121216;
-            font-size: 0.6rem;
-            font-weight: 800;
-            border-radius: 4px;
-            padding: 1px 3px;
-            line-height: 1;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        /* Synced Laser Pointer & Drawing Canvas */
-        .laser-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 12;
-        }
-        .laser-canvas.interactive {
-            pointer-events: auto;
-            cursor: crosshair;
-        }
-        
-        .laser-toolbar {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(18, 18, 22, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            padding: 4px 6px;
-            z-index: 20;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            opacity: 0.4;
-            transition: opacity 0.25s ease;
-        }
-        .video-wrapper:hover .laser-toolbar,
-        .laser-toolbar:hover {
-            opacity: 1;
-        }
-        
-        .laser-toolbar-btn {
-            background: transparent;
-            border: none;
-            color: #888890;
-            cursor: pointer;
-            padding: 6px 10px;
-            font-size: 0.85rem;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            font-family: 'Outfit', sans-serif;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-        .laser-toolbar-btn:hover {
-            color: #F3F3F3;
-            background: rgba(255, 255, 255, 0.06);
-        }
-        .laser-toolbar-btn.active {
-            color: #121216;
-            background: var(--accent);
-            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
-        }
-        
-        .color-dot-picker {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: transform 0.2s, border-color 0.2s;
-        }
-        .color-dot-picker.selected {
-            transform: scale(1.25);
-            border-color: #F3F3F3;
-        }
-        
-        /* Playback Buffering Overlay */
-        .buffering-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 10, 12, 0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            z-index: 18;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        .buffering-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        
-        .buffering-card {
-            background: rgba(25, 25, 30, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 24px 36px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            transform: scale(0.9);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .buffering-overlay.active .buffering-card {
-            transform: scale(1);
-        }
-        
-        .buffering-spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top: 3px solid var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        .buffering-text {
-            font-family: 'Outfit', sans-serif;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #F3F3F3;
-            letter-spacing: -0.1px;
-            text-align: center;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body>
-    <!-- Header bar -->
-    <header class="header">
-        <span class="logo" style="cursor: default; user-select: none;">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            AURA<span>SORT</span>
-        </span>
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <button id="btn-wp-admin-panel" class="btn" style="display: none; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; align-items: center; gap: 0.25rem; background: #eab308; color: #101013; border: none; cursor: pointer; transition: transform 0.1s;"><i class="fa-solid fa-crown"></i> Admin Panel</button>
-            <span class="badge" style="background: rgba(236,72,153,0.15); color: var(--accent); padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
-                <i class="fa-solid fa-users"></i> WATCH PARTY
-            </span>
-            <span id="party-folder-badge" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
-                Folder: <span id="wp-active-folder-name">{{ folder_name }}</span>
-                <button id="btn-wp-change-folder" class="btn-change-folder" title="Change Folder (Admin Only)" style="display: none; background: transparent; border: none; color: var(--accent); cursor: pointer; padding: 0.2rem; font-size: 0.85rem; transition: transform 0.1s;"><i class="fa-solid fa-pen-to-square"></i></button>
-            </span>
-        </div>
-    </header>
-
-    <!-- Main Section -->
-    <div class="main-container">
-        <!-- Left: Video Panel -->
-        <div class="player-pane">
-            <div class="video-wrapper" style="position: relative;">
-                <div class="player-lock-overlay" id="wp-player-lock-overlay">
-                    <i class="fa-solid fa-lock"></i> Playback Locked by Host
-                </div>
-                <div class="emoji-overlay-container" id="emoji-overlay-container"></div>
-                
-                <!-- Playback Buffering Overlay -->
-                <div class="buffering-overlay" id="wp-buffering-overlay">
-                    <div class="buffering-card">
-                        <div class="buffering-spinner"></div>
-                        <div class="buffering-text" id="wp-buffering-text">Waiting for peers to buffer...</div>
-                    </div>
-                </div>
-                
-                <canvas class="laser-canvas" id="laser-canvas"></canvas>
-                
-                <!-- Laser & Drawing Floating Toolbar -->
-                <div class="laser-toolbar" id="laser-toolbar">
-                    <button class="laser-toolbar-btn active" id="tool-select-none" title="Select / Move Player">
-                        <i class="fa-solid fa-arrow-pointer"></i>
-                    </button>
-                    <button class="laser-toolbar-btn" id="tool-select-laser" title="Laser Pointer">
-                        <i class="fa-solid fa-circle-radiation"></i> Laser
-                    </button>
-                    <button class="laser-toolbar-btn" id="tool-select-draw" title="Drawing Brush">
-                        <i class="fa-solid fa-pen-fancy"></i> Draw
-                    </button>
-                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
-                    <div class="color-dot-picker selected" data-color="#ff4757" style="background: #ff4757;" title="Red"></div>
-                    <div class="color-dot-picker" data-color="#2ed573" style="background: #2ed573;" title="Green"></div>
-                    <div class="color-dot-picker" data-color="#1e90ff" style="background: #1e90ff;" title="Blue"></div>
-                    <div class="color-dot-picker" data-color="#ffa502" style="background: #ffa502;" title="Orange"></div>
-                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
-                    <button class="laser-toolbar-btn" id="btn-clear-drawings" title="Clear All Drawings" style="color: #ef4444; padding: 4px 8px;">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </div>
-                
-                <video id="lightbox-video" controls playsinline></video>
-            </div>
-            
-            <!-- Emoji Reaction Bar -->
-            <div class="emoji-action-bar" id="emoji-action-bar">
-                <button class="emoji-btn" data-emoji="❤️" data-key="1">❤️</button>
-                <button class="emoji-btn" data-emoji="🔥" data-key="2">🔥</button>
-                <button class="emoji-btn" data-emoji="😂" data-key="3">😂</button>
-                <button class="emoji-btn" data-emoji="👏" data-key="4">👏</button>
-                <button class="emoji-btn" data-emoji="🎉" data-key="5">🎉</button>
-            </div>
-            
-            <div class="playlist-card">
-                <div class="playlist-header">Watch Party Playlist</div>
-                <div class="playlist-grid" id="wp-playlist-grid">
-                    <!-- Loaded dynamically -->
-                </div>
-            </div>
-        </div>
-        
-        <!-- Right: Side Panel (Mic, Chat, Peers) -->
-        <div class="sidebar-pane">
-            <!-- Mic Controller -->
-            <div class="sidebar-section">
-                <div class="local-user-card">
-                    <div>
-                        <div style="font-weight: 700; font-size: 0.95rem;" id="local-display-name">You</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);" id="local-voice-status">Voice offline</div>
-                    </div>
-                    <button class="btn-mic" id="btn-mic-toggle" title="Toggle Mic" disabled>
-                        <i class="fa-solid fa-microphone-slash"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Live Chat Section -->
-            <div class="chat-section">
-                <div class="sidebar-header">LIVE CHAT</div>
-                <div class="chat-messages" id="wp-chat-messages">
-                    <div class="chat-entry system">
-                        Welcome to the Watch Party! Type a message below to chat live.
-                    </div>
-                </div>
-                <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="wp-chat-input" placeholder="Type a message...">
-                    <button class="btn-send" id="btn-chat-send" title="Send Message">
-                        <i class="fa-solid fa-paper-plane"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Participants list -->
-            <div class="sidebar-section bottom-section">
-                <div class="sidebar-header">PARTICIPANTS (<span id="wp-participant-count">1</span>)</div>
-                <div class="peers-list-compact" id="wp-peers-list">
-                    <!-- Loaded dynamically -->
-                </div>
-                <div class="logs-container-compact" id="wp-logs-container">
-                    <!-- Standard logs wrapper hidden but preserved for SSE setup compatibility -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Password Prompt Modal -->
-    <div class="modal-overlay" id="wp-password-overlay">
-        <div class="modal-box">
-            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-lock"></i> Protected Party</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">This watch party is password protected. Enter the password below to join.</p>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-                <input type="password" class="input-field" id="wp-join-password" placeholder="Enter password...">
-                <button class="btn btn-primary" id="btn-wp-auth-submit" style="width: 100%;">Unlock & Join</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Nickname Prompt Modal -->
-    <div class="modal-overlay" id="wp-nickname-overlay">
-        <div class="modal-box">
-            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-user-ninja"></i> Choose Nickname</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Enter a nickname for your friends to identify you during playback and voice chat.</p>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-                <input type="text" class="input-field" id="wp-join-nickname" placeholder="Enter your nickname..." value="Viewer">
-                <button class="btn btn-primary" id="btn-wp-nickname-submit" style="width: 100%;">Enter Room</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Folder Switcher Modal -->
-    <div class="modal-overlay" id="wp-change-folder-overlay">
-        <div class="modal-box" style="max-width: 450px;">
-            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-folder-open"></i> Change Room Folder</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Switch this watch party room to a different folder. All connected participants will automatically sync to the new folder.</p>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-                <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; background: rgba(0,0,0,0.2);" id="wp-folders-list-container">
-                    <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folders...</div>
-                </div>
-                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
-                    <button class="btn" id="btn-wp-cancel-change" style="background: rgba(255,255,255,0.05); color: var(--text-main);">Cancel</button>
-                    <button class="btn btn-primary" id="btn-wp-confirm-change" disabled>Switch Folder</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Admin Panel Modal -->
-    <div class="modal-overlay" id="wp-admin-overlay">
-        <div class="modal-box" style="max-width: 480px;">
-            <h3 style="margin-top: 0; color: #eab308; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                <span><i class="fa-solid fa-crown"></i> Admin Control Panel</span>
-                <button id="btn-wp-admin-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
-            </h3>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Moderation and configuration settings for this watch party session.</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 1.25rem; max-height: 450px; overflow-y: auto; padding-right: 0.5rem;">
-                
-                <!-- Section: Playback Control -->
-                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border);">
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Playback Lock</h4>
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">Only admin can control player & playlist</span>
-                        <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
-                            <input type="checkbox" id="admin-toggle-playback-lock" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Section: Chat Controls -->
-                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border);">
-                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Chat Moderation</h4>
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">Enforce Slow Mode (10s limit)</span>
-                        <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
-                            <input type="checkbox" id="admin-toggle-slow-mode" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
-                        </label>
-                    </div>
-                    <button class="btn" id="btn-admin-clear-chat" style="width: 100%; font-size: 0.8rem; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25);">
-                        <i class="fa-solid fa-trash-can"></i> Clear Chat History
-                    </button>
-                </div>
-
-                <!-- Section: Password Management -->
-                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem;">
-                    <h4 style="margin: 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Room Access Code</h4>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="password" class="input-field" id="admin-room-password" placeholder="New room password..." style="font-size: 0.8rem; padding: 0.5rem 0.75rem;">
-                        <button class="btn btn-primary" id="btn-admin-save-password" style="font-size: 0.8rem; padding: 0.5rem 1rem;">Set</button>
-                    </div>
-                    <button class="btn" id="btn-admin-remove-password" style="font-size: 0.8rem; padding: 0.4rem; background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%;">
-                        Remove Password Protection
-                    </button>
-                </div>
-
-                <!-- Section: Lifetime Management -->
-                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem;">
-                    <h4 style="margin: 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Room Expiry</h4>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between;">
-                        <span>Current Expiry:</span>
-                        <strong id="admin-expiry-label" style="color: var(--text-main); font-weight: 600;">Loading...</strong>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="6">+6 Hours</button>
-                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="12">+12 Hours</button>
-                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="24">+24 Hours</button>
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid var(--border); margin: 0.25rem 0;">
-                    <button class="btn" id="btn-admin-end-party" style="background: #ef4444; color: white; font-weight: 700; font-size: 0.8rem; padding: 0.55rem; width: 100%;">
-                        <i class="fa-solid fa-skull-crossbones"></i> End Party & Disconnect All
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Kicked Modal -->
-    <div class="modal-overlay" id="wp-kicked-overlay">
-        <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-circle-minus"></i> Kicked</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">You have been removed from this watch party room by the host.</p>
-            <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
-        </div>
-    </div>
-
-    <!-- Party Ended Modal -->
-    <div class="modal-overlay" id="wp-ended-overlay">
-        <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">This watch party has been ended by the host.</p>
-            <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
-        </div>
-    </div>
-
-    <!-- Toast notifications container -->
-    <div id="wp-toast-container"></div>
-
-    <!-- Server state parameters injection -->
-    <script>
-        window.PARTY_ID = "{{ party_id }}";
-        window.FOLDER_NAME = "{{ folder_name }}";
-    </script>
-
-    <!-- Socket.IO & HLS.js client libraries -->
-    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/hls.js') }}"></script>
-    <!-- Plyr custom video player JS -->
-    <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
-    <!-- Standalone Watch Party client handler script -->
-    <script src="{{ url_for('static', filename='js/watch_party.js') }}"></script>
-    <!-- Modular Laser Pointer and Drawing Canvas script -->
-    <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}"></script>
-    <!-- Modular Top-Notch Playback Sync Infrastructure script -->
-    <script src="{{ url_for('static', filename='js/watch_party_sync.js') }}"></script>
-</body>
-</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraSort — Watch Party</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+    <!-- Fonts and Icons -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.all.min.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Plyr Video Player CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/plyr.css') }}">
+    
+    <style>
+        /* CSS for Advanced Co-Watching Playback (Queue Items, Drag & Drop, Hover) */
+        .queue-item {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            user-select: none;
+        }
+        .queue-item:active {
+            cursor: grabbing;
+        }
+        .queue-item:hover {
+            border-color: var(--accent);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .queue-item.dragging {
+            opacity: 0.4;
+            border: 1px dashed var(--accent);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .queue-item.drag-over {
+            border-top: 2px solid var(--accent);
+            padding-top: 0.6rem;
+        }
+        .queue-drag-handle {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            cursor: grab;
+            padding: 0 0.15rem;
+            display: flex;
+            align-items: center;
+            transition: color 0.15s;
+        }
+        .queue-item:hover .queue-drag-handle {
+            color: var(--text-main);
+        }
+        .queue-remove-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.25rem;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .queue-remove-btn:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .playlist-item-thumb-wrapper:hover .btn-add-to-queue {
+            background: var(--accent) !important;
+            color: #101013 !important;
+            border-color: var(--accent) !important;
+            transform: scale(1.1);
+        }
+        .btn-add-to-queue {
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        :root {
+            --bg: #0F0F11;
+            --bg-raised: #1A1A1E;
+            --bg-overlay: #131316;
+            --text: #F3F3F3;
+            --text-dim: #888890;
+            --text-muted: #5C5C64;
+            --accent: #FF8C00;
+            --border: #2C2C30;
+            --font-sans: 'Outfit', 'Inter', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+            --bw: 2px;
+            --plyr-color-main: var(--accent);
+            --plyr-video-control-color-hover: #0F0F11;
+            --plyr-video-control-background-hover: var(--accent);
+            --plyr-control-radius: 0px;
+        }
+
+        * { box-sizing: border-box; font-family: var(--font-sans); }
+
+        body {
+            margin: 0; padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            height: 56px;
+            background: var(--bg);
+            border-bottom: var(--bw) solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            color: var(--text);
+            text-decoration: none;
+        }
+        .logo span { color: var(--accent); }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            z-index: 5;
+            position: relative;
+        }
+
+        .player-pane {
+            flex: 1.8;
+            display: flex;
+            flex-direction: column;
+            padding: 1.2rem;
+            gap: var(--bw * 4, 8px);
+            overflow-y: auto;
+        }
+
+        .video-wrapper {
+            background: #000;
+            border: var(--bw) solid var(--border);
+            aspect-ratio: 16/9;
+            width: 100%;
+            max-width: 1100px;
+            align-self: center;
+            position: relative;
+        }
+
+        .plyr { width: 100%; height: 100%; background: #000; }
+        .plyr video,
+        .plyr .plyr__video-wrapper video,
+        .plyr--video .plyr__video-wrapper video {
+            object-fit: contain !important;
+        }
+
+        .playlist-card {
+            background: var(--bg-raised);
+            border: var(--bw) solid var(--border);
+            padding: 1rem;
+            width: 100%;
+            max-width: 1100px;
+            align-self: center;
+        }
+
+        .playlist-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            margin-bottom: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .playlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: var(--bw * 4, 8px);
+            max-height: 140px;
+            overflow-y: auto;
+        }
+
+        .playlist-item {
+            background: var(--bg);
+            border: var(--bw) solid var(--border);
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+            cursor: pointer;
+        }
+        .playlist-item:hover, .playlist-item.active {
+            border-color: var(--accent);
+        }
+        .playlist-item img { width: 100%; height: 100%; object-fit: cover; }
+        .playlist-item-title {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 3px 6px;
+            background: var(--bg-overlay);
+            font-size: 0.65rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-pane {
+            flex: 0.7;
+            border-left: var(--bw) solid var(--border);
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            max-width: 360px;
+            min-width: 260px;
+        }
+
+        .sidebar-section {
+            padding: 1rem;
+            border-bottom: var(--bw) solid var(--border);
+        }
+
+        .local-user-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-raised);
+            padding: 0.6rem 0.8rem;
+            border: var(--bw) solid var(--border);
+        }
+
+        .btn-mic {
+            background: #FF2E93;
+            color: var(--text);
+            border: var(--bw) solid #FF2E93;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+        }
+
+        .btn-mic.active {
+            background: #22c55e;
+            border-color: #22c55e;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+        }
+
+        /* Chat & Sidebar UI styling */
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            padding: 0.75rem 1.25rem 0.25rem 1.25rem;
+            text-transform: uppercase;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .chat-entry {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            max-width: 85%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            word-break: break-word;
+            position: relative;
+        }
+
+        .chat-entry.incoming {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+            border-top-left-radius: 2px;
+        }
+
+        .chat-entry.outgoing {
+            background: var(--accent);
+            color: white;
+            align-self: flex-end;
+            border-top-right-radius: 2px;
+        }
+
+        .chat-entry.system {
+            background: rgba(255, 140, 0, 0.08);
+            border: 1px solid rgba(255, 140, 0, 0.15);
+            color: var(--accent);
+            align-self: center;
+            font-size: 0.75rem;
+            text-align: center;
+            max-width: 100%;
+            width: 100%;
+            border-radius: 6px;
+            padding: 0.35rem 0.6rem;
+        }
+
+        .chat-sender {
+            font-weight: 700;
+            font-size: 0.72rem;
+            display: block;
+            margin-bottom: 0.15rem;
+            color: var(--accent);
+        }
+
+        .chat-entry.outgoing .chat-sender {
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .chat-time {
+            font-size: 0.62rem;
+            color: var(--text-muted);
+            float: right;
+            margin-top: 0.22rem;
+            margin-left: 0.5rem;
+        }
+
+        .chat-entry.outgoing .chat-time {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .chat-input-container {
+            padding: 0.75rem 1.25rem;
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(10, 10, 12, 0.4);
+            border-top: 1px solid var(--border);
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 0.6rem 0.85rem;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--accent);
+        }
+
+        .btn-send {
+            background: var(--accent);
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .btn-send:hover {
+            box-shadow: 0 0 10px var(--accent);
+            transform: translateY(-1px);
+        }
+
+        /* Bottom Section: Participants list */
+        .bottom-section {
+            max-height: 180px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-bottom: 0.75rem;
+        }
+
+        .peers-list-compact {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.4rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .peer-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .peer-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .voice-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6b7280;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        .voice-indicator.speaking {
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .voice-indicator.muted {
+            background: #ef4444;
+        }
+
+        /* System Logs list */
+        .logs-container-compact {
+            display: none; /* Hide standard system logs to make room for chat */
+        }
+
+        .log-entry {
+            line-height: 1.4;
+        }
+
+        .log-time {
+            color: var(--accent);
+            margin-right: 0.3rem;
+            font-weight: 600;
+        }
+
+        /* Modal Overlays styling */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 5, 5, 0.85);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: #101013;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 400px;
+            padding: 1.5rem;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        .btn {
+            padding: 0.65rem 1.2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 15px var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-field:focus {
+            border-color: var(--accent);
+        }
+
+        /* Folder Select Item styles for Admin Folder Switcher */
+        .folder-select-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            margin-bottom: 0.35rem;
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .folder-select-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--border);
+        }
+
+        .folder-select-item.selected {
+            background: rgba(255, 140, 0, 0.1);
+            border-color: var(--accent);
+            color: var(--text-main);
+        }
+
+        .folder-select-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .folder-select-count {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.05);
+            padding: 0.15rem 0.45rem;
+            border-radius: 10px;
+        }
+
+        /* Slider Switch Styling */
+        .switch-container input:checked + .slider {
+            background-color: #eab308;
+        }
+        .switch-container .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: .3s;
+        }
+        .switch-container input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Crown styles */
+        .crown-badge {
+            color: #eab308;
+            margin-right: 0.2rem;
+            text-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+        }
+        .chat-entry.outgoing .crown-badge {
+            color: #fffbeb;
+        }
+
+        /* Message Action controls */
+        .btn-msg-delete {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.72rem;
+            opacity: 0;
+            transition: opacity 0.2s, color 0.2s;
+            position: absolute;
+            right: 8px;
+            top: 8px;
+        }
+        .chat-entry:hover .btn-msg-delete {
+            opacity: 1;
+        }
+        .chat-entry:hover .btn-msg-delete:hover {
+            color: #ef4444;
+        }
+        .chat-entry.outgoing .btn-msg-delete {
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* Participant Actions style */
+        .peer-actions {
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
+        }
+        .btn-peer-action {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0.2rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .btn-peer-action.mute {
+            color: #ef4444;
+        }
+        .btn-peer-action.mute:hover {
+            background: rgba(239, 68, 68, 0.15);
+            transform: scale(1.1);
+        }
+        .btn-peer-action.kick {
+            color: #ef4444;
+        }
+        .btn-peer-action.kick:hover {
+            background: rgba(239, 68, 68, 0.15);
+            transform: scale(1.1);
+        }
+
+        /* Playback Lock indicators */
+        .player-lock-overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid rgba(234, 179, 8, 0.4);
+            color: #eab308;
+            padding: 0.35rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            gap: 0.35rem;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .player-lock-overlay.active {
+            display: flex;
+        }
+
+        /* Toast Container */
+        #wp-toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 999;
+            pointer-events: none;
+        }
+        .wp-toast {
+            background: #101013;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            color: var(--text-main);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            font-size: 0.8rem;
+            font-weight: 500;
+            pointer-events: auto;
+            animation: slideInToast 0.3s ease forwards;
+            min-width: 200px;
+        }
+        @keyframes slideInToast {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Floating Emoji Reactions */
+        .emoji-overlay-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 15;
+        }
+        
+        .floating-emoji-wrapper {
+            position: absolute;
+            bottom: -50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+            animation: floatUp 2.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        
+        .floating-emoji {
+            font-size: 2.2rem;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
+            transform-origin: center;
+        }
+        
+        .floating-emoji-sender {
+            background: rgba(18, 18, 22, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            color: #F3F3F3;
+            font-weight: 600;
+            white-space: nowrap;
+            margin-top: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            opacity: 0.9;
+        }
+        
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: translateY(-10%) scale(1.1);
+            }
+            100% {
+                transform: translateY(-120vh) scale(0.8) rotate(var(--rot, 15deg));
+                opacity: 0;
+            }
+        }
+        
+        /* Emoji Action Bar */
+        .emoji-action-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            background: rgba(25, 25, 30, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 8px 16px;
+            width: fit-content;
+            margin: 0.5rem auto 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .emoji-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+            position: relative;
+        }
+        
+        .emoji-btn:hover {
+            transform: scale(1.25) translateY(-4px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .emoji-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .emoji-btn::after {
+            content: attr(data-key);
+            position: absolute;
+            bottom: -6px;
+            right: -2px;
+            background: var(--accent);
+            color: #121216;
+            font-size: 0.6rem;
+            font-weight: 800;
+            border-radius: 4px;
+            padding: 1px 3px;
+            line-height: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        /* Synced Laser Pointer & Drawing Canvas */
+        .laser-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 12;
+        }
+        .laser-canvas.interactive {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+        
+        .laser-toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(18, 18, 22, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 4px 6px;
+            z-index: 20;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            opacity: 0.4;
+            transition: opacity 0.25s ease;
+        }
+        .video-wrapper:hover .laser-toolbar,
+        .laser-toolbar:hover {
+            opacity: 1;
+        }
+        
+        .laser-toolbar-btn {
+            background: transparent;
+            border: none;
+            color: #888890;
+            cursor: pointer;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .laser-toolbar-btn:hover {
+            color: #F3F3F3;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .laser-toolbar-btn.active {
+            color: #121216;
+            background: var(--accent);
+            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
+        }
+        
+        .color-dot-picker {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .color-dot-picker.selected {
+            transform: scale(1.25);
+            border-color: #F3F3F3;
+        }
+        
+        /* Playback Buffering Overlay */
+        .buffering-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 12, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            z-index: 18;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .buffering-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .buffering-card {
+            background: rgba(25, 25, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 24px 36px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .buffering-overlay.active .buffering-card {
+            transform: scale(1);
+        }
+        
+        .buffering-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .buffering-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #F3F3F3;
+            letter-spacing: -0.1px;
+            text-align: center;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header bar -->
+    <header class="header">
+        <span class="logo" style="cursor: default; user-select: none;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            AURA<span>SORT</span>
+        </span>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <button id="btn-wp-admin-panel" class="btn" style="display: none; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; align-items: center; gap: 0.25rem; background: #eab308; color: #101013; border: none; cursor: pointer; transition: transform 0.1s;"><i class="fa-solid fa-crown"></i> Admin Panel</button>
+            <span class="badge" style="background: rgba(236,72,153,0.15); color: var(--accent); padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
+                <i class="fa-solid fa-users"></i> WATCH PARTY
+            </span>
+            <span id="party-folder-badge" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+                Folder: <span id="wp-active-folder-name">{{ folder_name }}</span>
+                <button id="btn-wp-change-folder" class="btn-change-folder" title="Change Folder (Admin Only)" style="display: none; background: transparent; border: none; color: var(--accent); cursor: pointer; padding: 0.2rem; font-size: 0.85rem; transition: transform 0.1s;"><i class="fa-solid fa-pen-to-square"></i></button>
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Section -->
+    <div class="main-container">
+        <!-- Left: Video Panel -->
+        <div class="player-pane">
+            <div class="video-wrapper" style="position: relative;">
+                <div class="player-lock-overlay" id="wp-player-lock-overlay">
+                    <i class="fa-solid fa-lock"></i> Playback Locked by Host
+                </div>
+                <div class="emoji-overlay-container" id="emoji-overlay-container"></div>
+                
+                <!-- Playback Buffering Overlay -->
+                <div class="buffering-overlay" id="wp-buffering-overlay">
+                    <div class="buffering-card">
+                        <div class="buffering-spinner"></div>
+                        <div class="buffering-text" id="wp-buffering-text">Waiting for peers to buffer...</div>
+                    </div>
+                </div>
+                
+                <canvas class="laser-canvas" id="laser-canvas"></canvas>
+                
+                <!-- Laser & Drawing Floating Toolbar -->
+                <div class="laser-toolbar" id="laser-toolbar">
+                    <button class="laser-toolbar-btn active" id="tool-select-none" title="Select / Move Player">
+                        <i class="fa-solid fa-arrow-pointer"></i>
+                    </button>
+                    <button class="laser-toolbar-btn" id="tool-select-laser" title="Laser Pointer">
+                        <i class="fa-solid fa-circle-radiation"></i> Laser
+                    </button>
+                    <button class="laser-toolbar-btn" id="tool-select-draw" title="Drawing Brush">
+                        <i class="fa-solid fa-pen-fancy"></i> Draw
+                    </button>
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                    <div class="color-dot-picker selected" data-color="#ff4757" style="background: #ff4757;" title="Red"></div>
+                    <div class="color-dot-picker" data-color="#2ed573" style="background: #2ed573;" title="Green"></div>
+                    <div class="color-dot-picker" data-color="#1e90ff" style="background: #1e90ff;" title="Blue"></div>
+                    <div class="color-dot-picker" data-color="#ffa502" style="background: #ffa502;" title="Orange"></div>
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                    <button class="laser-toolbar-btn" id="btn-clear-drawings" title="Clear All Drawings" style="color: #ef4444; padding: 4px 8px;">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+                
+                <video id="lightbox-video" controls playsinline></video>
+            </div>
+            
+            <!-- Emoji Reaction Bar -->
+            <div class="emoji-action-bar" id="emoji-action-bar">
+                <button class="emoji-btn" data-emoji="❤️" data-key="1">❤️</button>
+                <button class="emoji-btn" data-emoji="🔥" data-key="2">🔥</button>
+                <button class="emoji-btn" data-emoji="😂" data-key="3">😂</button>
+                <button class="emoji-btn" data-emoji="👏" data-key="4">👏</button>
+                <button class="emoji-btn" data-emoji="🎉" data-key="5">🎉</button>
+            </div>
+            
+            <!-- Playback Settings Bar (Modular Speed, Subtitles, Audio track) -->
+            <div class="wp-playback-settings-bar" id="wp-playback-settings-bar" style="margin-top: 0.75rem; background: var(--bg-raised); border: var(--bw) solid var(--border); padding: 0.6rem 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-sliders"></i> Co-Watch Controls</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <!-- Speed Control -->
+                    <div class="control-select-wrapper" style="display: flex; align-items: center; gap: 0.35rem;">
+                        <label for="wp-speed-select" style="font-size: 0.7rem; color: var(--text-muted);"><i class="fa-solid fa-gauge-high"></i> Speed:</label>
+                        <select id="wp-speed-select" style="background: var(--bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 4px; padding: 0.2rem 0.4rem; font-size: 0.75rem; outline: none; cursor: pointer; font-family: inherit;">
+                            <option value="0.75">0.75x</option>
+                            <option value="1.0" selected>1.0x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2.0">2.0x</option>
+                        </select>
+                    </div>
+                    <!-- Subtitles Control -->
+                    <div class="control-select-wrapper" style="display: flex; align-items: center; gap: 0.35rem;">
+                        <label for="wp-subtitle-select" style="font-size: 0.7rem; color: var(--text-muted);"><i class="fa-solid fa-closed-captioning"></i> Subs:</label>
+                        <select id="wp-subtitle-select" style="background: var(--bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 4px; padding: 0.2rem 0.4rem; font-size: 0.75rem; outline: none; cursor: pointer; max-width: 150px; font-family: inherit;">
+                            <option value="none" selected>Disabled</option>
+                            <!-- Dynamically loaded subtitle files -->
+                        </select>
+                    </div>
+                    <!-- Audio Track Control -->
+                    <div class="control-select-wrapper" style="display: flex; align-items: center; gap: 0.35rem;">
+                        <label for="wp-audio-select" style="font-size: 0.7rem; color: var(--text-muted);"><i class="fa-solid fa-music"></i> Audio:</label>
+                        <select id="wp-audio-select" style="background: var(--bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 4px; padding: 0.2rem 0.4rem; font-size: 0.75rem; outline: none; cursor: pointer; max-width: 150px; font-family: inherit;">
+                            <option value="default" selected>Default</option>
+                            <!-- Dynamically loaded HLS tracks -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="playlist-card">
+                <div class="playlist-header">Watch Party Playlist</div>
+                <div class="playlist-grid" id="wp-playlist-grid">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right: Side Panel (Mic, Chat, Peers) -->
+        <div class="sidebar-pane">
+            <!-- Mic Controller -->
+            <div class="sidebar-section">
+                <div class="local-user-card">
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.95rem;" id="local-display-name">You</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);" id="local-voice-status">Voice offline</div>
+                    </div>
+                    <button class="btn-mic" id="btn-mic-toggle" title="Toggle Mic" disabled>
+                        <i class="fa-solid fa-microphone-slash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Chat / Queue Tabbed Section -->
+            <div class="chat-section">
+                <div class="sidebar-tabs" style="display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; gap: 0.25rem;">
+                    <button class="sidebar-tab-btn active" id="tab-btn-chat" onclick="switchSidebarTab('chat')" style="flex: 1; padding: 0.75rem; background: transparent; border: none; color: var(--text-main); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: uppercase; border-bottom: 2px solid var(--accent); transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-family: inherit;">
+                        <i class="fa-solid fa-comments"></i> Chat
+                    </button>
+                    <button class="sidebar-tab-btn" id="tab-btn-queue" onclick="switchSidebarTab('queue')" style="flex: 1; padding: 0.75rem; background: transparent; border: none; color: var(--text-muted); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: uppercase; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-family: inherit;">
+                        <i class="fa-solid fa-list-ol"></i> Queue
+                    </button>
+                </div>
+
+                <!-- Chat Container -->
+                <div id="sidebar-chat-container" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                    <div class="chat-messages" id="wp-chat-messages">
+                        <div class="chat-entry system">
+                            Welcome to the Watch Party! Type a message below to chat live.
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="wp-chat-input" placeholder="Type a message...">
+                        <button class="btn-send" id="btn-chat-send" title="Send Message">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Queue Container -->
+                <div id="sidebar-queue-container" style="display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 0 0.25rem;">
+                    <div class="queue-header-info" style="font-size: 0.75rem; color: var(--text-muted); padding: 0.25rem 0 0.5rem 0; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span>Drag items to reorder</span>
+                        <button class="btn" id="btn-clear-queue" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 4px; cursor: pointer; transition: all 0.15s; font-family: inherit;">Clear Queue</button>
+                    </div>
+                    <div id="wp-queue-list" class="queue-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0;">
+                        <div class="queue-empty-state" style="padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-film" style="font-size: 1.5rem; color: rgba(255,255,255,0.15);"></i>
+                            <span>Queue is empty.<br>Add media using the <b>+</b> buttons.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Participants list -->
+            <div class="sidebar-section bottom-section">
+                <div class="sidebar-header">PARTICIPANTS (<span id="wp-participant-count">1</span>)</div>
+                <div class="peers-list-compact" id="wp-peers-list">
+                    <!-- Loaded dynamically -->
+                </div>
+                <div class="logs-container-compact" id="wp-logs-container">
+                    <!-- Standard logs wrapper hidden but preserved for SSE setup compatibility -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Prompt Modal -->
+    <div class="modal-overlay" id="wp-password-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-lock"></i> Protected Party</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">This watch party is password protected. Enter the password below to join.</p>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="password" class="input-field" id="wp-join-password" placeholder="Enter password...">
+                <button class="btn btn-primary" id="btn-wp-auth-submit" style="width: 100%;">Unlock & Join</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname Prompt Modal -->
+    <div class="modal-overlay" id="wp-nickname-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-user-ninja"></i> Choose Nickname</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Enter a nickname for your friends to identify you during playback and voice chat.</p>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="text" class="input-field" id="wp-join-nickname" placeholder="Enter your nickname..." value="Viewer">
+                <button class="btn btn-primary" id="btn-wp-nickname-submit" style="width: 100%;">Enter Room</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folder Switcher Modal -->
+    <div class="modal-overlay" id="wp-change-folder-overlay">
+        <div class="modal-box" style="max-width: 450px;">
+            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-folder-open"></i> Change Room Folder</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Switch this watch party room to a different folder. All connected participants will automatically sync to the new folder.</p>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; background: rgba(0,0,0,0.2);" id="wp-folders-list-container">
+                    <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> Loading folders...</div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
+                    <button class="btn" id="btn-wp-cancel-change" style="background: rgba(255,255,255,0.05); color: var(--text-main);">Cancel</button>
+                    <button class="btn btn-primary" id="btn-wp-confirm-change" disabled>Switch Folder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel Modal -->
+    <div class="modal-overlay" id="wp-admin-overlay">
+        <div class="modal-box" style="max-width: 480px;">
+            <h3 style="margin-top: 0; color: #eab308; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <span><i class="fa-solid fa-crown"></i> Admin Control Panel</span>
+                <button id="btn-wp-admin-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">Moderation and configuration settings for this watch party session.</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 1.25rem; max-height: 450px; overflow-y: auto; padding-right: 0.5rem;">
+                
+                <!-- Section: Playback Control -->
+                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Playback Lock</h4>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Only admin can control player & playlist</span>
+                        <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
+                            <input type="checkbox" id="admin-toggle-playback-lock" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Section: Chat Controls -->
+                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Chat Moderation</h4>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Enforce Slow Mode (10s limit)</span>
+                        <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
+                            <input type="checkbox" id="admin-toggle-slow-mode" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
+                        </label>
+                    </div>
+                    <button class="btn" id="btn-admin-clear-chat" style="width: 100%; font-size: 0.8rem; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25);">
+                        <i class="fa-solid fa-trash-can"></i> Clear Chat History
+                    </button>
+                </div>
+
+                <!-- Section: Password Management -->
+                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem;">
+                    <h4 style="margin: 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Room Access Code</h4>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="password" class="input-field" id="admin-room-password" placeholder="New room password..." style="font-size: 0.8rem; padding: 0.5rem 0.75rem;">
+                        <button class="btn btn-primary" id="btn-admin-save-password" style="font-size: 0.8rem; padding: 0.5rem 1rem;">Set</button>
+                    </div>
+                    <button class="btn" id="btn-admin-remove-password" style="font-size: 0.8rem; padding: 0.4rem; background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%;">
+                        Remove Password Protection
+                    </button>
+                </div>
+
+                <!-- Section: Lifetime Management -->
+                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem;">
+                    <h4 style="margin: 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Room Expiry</h4>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+                        <span>Current Expiry:</span>
+                        <strong id="admin-expiry-label" style="color: var(--text-main); font-weight: 600;">Loading...</strong>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="6">+6 Hours</button>
+                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="12">+12 Hours</button>
+                        <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="24">+24 Hours</button>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid var(--border); margin: 0.25rem 0;">
+                    <button class="btn" id="btn-admin-end-party" style="background: #ef4444; color: white; font-weight: 700; font-size: 0.8rem; padding: 0.55rem; width: 100%;">
+                        <i class="fa-solid fa-skull-crossbones"></i> End Party & Disconnect All
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Kicked Modal -->
+    <div class="modal-overlay" id="wp-kicked-overlay">
+        <div class="modal-box" style="text-align: center;">
+            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-circle-minus"></i> Kicked</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">You have been removed from this watch party room by the host.</p>
+            <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Party Ended Modal -->
+    <div class="modal-overlay" id="wp-ended-overlay">
+        <div class="modal-box" style="text-align: center;">
+            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">This watch party has been ended by the host.</p>
+            <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Toast notifications container -->
+    <div id="wp-toast-container"></div>
+
+    <!-- Server state parameters injection -->
+    <script>
+        window.PARTY_ID = "{{ party_id }}";
+        window.FOLDER_NAME = "{{ folder_name }}";
+    </script>
+
+    <!-- Socket.IO & HLS.js client libraries -->
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/hls.js') }}"></script>
+    <!-- Plyr custom video player JS -->
+    <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
+    <!-- Standalone Watch Party client handler script -->
+    <script src="{{ url_for('static', filename='js/watch_party.js') }}"></script>
+    <!-- Modular Laser Pointer and Drawing Canvas script -->
+    <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}"></script>
+    <!-- Modular Top-Notch Playback Sync Infrastructure script -->
+    <script src="{{ url_for('static', filename='js/watch_party_sync.js') }}"></script>
+    <!-- Modular Advanced Co-Watching Playback script -->
+    <script src="{{ url_for('static', filename='js/watch_party_queue.js') }}"></script>
+</body>
+</html>
