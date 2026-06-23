@@ -852,11 +852,29 @@
         audio.id = `audio-remote-${peerId}`;
         audio.autoplay = true;
         audio.controls = false;
-        audio.style.display = 'none';
+        
+        // Use layout-aware styles instead of display: none to prevent Chromium from muting/suspending the audio track
+        audio.style.position = 'fixed';
+        audio.style.width = '1px';
+        audio.style.height = '1px';
+        audio.style.opacity = '0';
+        audio.style.pointerEvents = 'none';
+        
         audio.srcObject = stream;
 
         document.body.appendChild(audio);
         remoteAudioElements[peerId] = audio;
+
+        // Force playback to resolve autoplay policy blockages
+        audio.play().catch(err => {
+            console.warn(`Autoplay blocked remote audio for peer ${peerId}:`, err);
+            const unmuteOnInteract = () => {
+                audio.play().then(() => {
+                    document.removeEventListener('click', unmuteOnInteract);
+                });
+            };
+            document.addEventListener('click', unmuteOnInteract);
+        });
 
         // Start Speech Detection for local speaking indicator
         monitorStreamSpeech(stream, peerId);

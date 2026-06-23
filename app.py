@@ -1234,7 +1234,12 @@ def stream_progress():
             else:
                 time.sleep(0.3)
                 
-    return Response(event_stream(), mimetype="text/event-stream")
+    headers = {
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Content-Type': 'text/event-stream'
+    }
+    return Response(event_stream(), mimetype="text/event-stream", headers=headers)
 
 @app.route('/api/move-media', methods=['POST'])
 def move_media():
@@ -2123,7 +2128,12 @@ def stream_watch_party(party_id):
                             
             logger.info(f"Client {client_name} ({client_id}) disconnected from watch party {party_id}")
             
-    return Response(event_stream(), mimetype="text/event-stream")
+    headers = {
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Content-Type': 'text/event-stream'
+    }
+    return Response(event_stream(), mimetype="text/event-stream", headers=headers)
 
 
 @app.route('/api/watch-party/<party_id>/sync', methods=['POST'])
