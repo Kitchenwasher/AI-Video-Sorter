@@ -9,9 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <!-- FontAwesome for Premium Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.all.min.css') }}">
     <!-- Plyr custom video player stylesheet -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/plyr.css') }}">
     <!-- Custom stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2.2">
     <style>
@@ -1114,7 +1114,7 @@
     </div>
 
     <!-- Plyr custom video player JS -->
-    <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.js"></script>
+    <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v=2.2"></script>
 </body>
 </html>
