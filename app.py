@@ -16,6 +16,7 @@ CORS(app)
 from flask_socketio import SocketIO, emit, join_room, leave_room
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 WORKSPACE_DIR = os.path.abspath(os.path.dirname(__file__))
+WATCH_PARTY_REACTIONS = {'😂', '🔥', '💀', '😭', '❤️', '👀'}
 
 # Configure SQLAlchemy (Postgres in production, SQLite fallback for local development)
 database_url = os.environ.get('DATABASE_URL')
@@ -275,7 +276,8 @@ def handle_join_event(data):
                 'playback_locked': False,
                 'slow_mode': False,
                 'kicked_clients': [],
-                'cooldowns': {}
+                'cooldowns': {},
+                'reaction_cooldowns': {}
             }
         
         party_state = watch_parties_state[party_id]
@@ -384,6 +386,38 @@ def handle_chat_event(data):
             'name': client_info['name'],
             'message': message,
             'is_admin': is_admin
+        }, to=party_id)
+
+@socketio.on('reaction')
+def handle_reaction_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    emoji = data.get('emoji')
+
+    if not party_id or not client_id or emoji not in WATCH_PARTY_REACTIONS:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        if client_id in party_state.get('kicked_clients', []):
+            return
+        client_info = party_state['clients'].get(client_id)
+        if not client_info:
+            return
+
+        now = time.time()
+        cooldowns = party_state.setdefault('reaction_cooldowns', {})
+        if now - cooldowns.get(client_id, 0) < 0.3:
+            return
+        cooldowns[client_id] = now
+
+        emit('reaction_event', {
+            'reaction_id': data.get('reaction_id'),
+            'sender_id': client_id,
+            'sender_name': client_info.get('name', data.get('client_name', 'Viewer')),
+            'emoji': emoji
         }, to=party_id)
 
 @socketio.on('signal')
@@ -2470,7 +2504,8 @@ def create_watch_party():
                 'playback_locked': False,
                 'slow_mode': False,
                 'kicked_clients': [],
-                'cooldowns': {}
+                'cooldowns': {},
+                'reaction_cooldowns': {}
             }
             
         logger.info(f"Watch party {party_id} created for folder {folder_name} (expires: {expires_at})")
@@ -2580,7 +2615,8 @@ def stream_watch_party(party_id):
                     'playback_locked': False,
                     'slow_mode': False,
                     'kicked_clients': [],
-                    'cooldowns': {}
+                    'cooldowns': {},
+                    'reaction_cooldowns': {}
                 }
                 
             party_state = watch_parties_state[party_id]
@@ -2758,6 +2794,77 @@ def chat_watch_party(party_id):
     return jsonify({'status': 'success', 'message_id': message_id})
 
 
+@app.route('/api/watch-party/<party_id>/reaction', methods=['POST'])
+def reaction_watch_party(party_id):
+    """Receives a live emoji reaction from a client and broadcasts it to the room."""
+    data = request.json or {}
+    client_id = data.get('client_id')
+    client_name = data.get('client_name', 'Viewer')
+    emoji = data.get('emoji')
+    reaction_id = data.get('reaction_id') or str(uuid.uuid4())
+
+    if not client_id or not emoji:
+        return jsonify({'status': 'error', 'message': 'client_id and emoji are required'}), 400
+
+    if emoji not in WATCH_PARTY_REACTIONS:
+        return jsonify({'status': 'error', 'message': 'Unsupported reaction'}), 400
+
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+
+        with watch_parties_lock:
+            if party_id not in watch_parties_state:
+                watch_parties_state[party_id] = {
+                    'admin_token': party.admin_token,
+                    'clients': {},
+                    'playback_state': {
+                        'filename': None,
+                        'position': 0.0,
+                        'playing': False,
+                        'last_updated': time.time()
+                    },
+                    'playback_locked': False,
+                    'slow_mode': False,
+                    'kicked_clients': [],
+                    'cooldowns': {},
+                    'reaction_cooldowns': {}
+                }
+
+            party_state = watch_parties_state[party_id]
+
+            if client_id in party_state.get('kicked_clients', []):
+                return jsonify({'status': 'error', 'message': 'You have been kicked from this party'}), 403
+
+            now = time.time()
+            cooldowns = party_state.setdefault('reaction_cooldowns', {})
+            if now - cooldowns.get(client_id, 0) < 0.3:
+                return jsonify({'status': 'ignored'}), 200
+            cooldowns[client_id] = now
+
+            client_info = party_state.get('clients', {}).get(client_id)
+            sender_name = client_info.get('name') if client_info else client_name
+            reaction_msg = {
+                'type': 'reaction',
+                'reaction_id': reaction_id,
+                'sender_id': client_id,
+                'sender_name': sender_name,
+                'emoji': emoji
+            }
+
+            socketio.emit('reaction_event', reaction_msg, to=party_id)
+            for client in party_state.get('clients', {}).values():
+                if 'queue' in client:
+                    client['queue'].put(reaction_msg)
+
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error broadcasting watch party reaction: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/api/watch-party/<party_id>/is-admin', methods=['POST'])
 def check_watch_party_admin(party_id):
     """Checks if the provided token matches the admin token of the watch party."""
@@ -2787,7 +2894,8 @@ def check_watch_party_admin(party_id):
                     'playback_locked': False,
                     'slow_mode': False,
                     'kicked_clients': [],
-                    'cooldowns': {}
+                    'cooldowns': {},
+                    'reaction_cooldowns': {}
                 }
             except Exception as e:
                 return jsonify({'status': 'error', 'message': f'DB error: {e}'}), 500
@@ -2844,7 +2952,8 @@ def change_watch_party_folder(party_id):
                     'playback_locked': False,
                     'slow_mode': False,
                     'kicked_clients': [],
-                    'cooldowns': {}
+                    'cooldowns': {},
+                    'reaction_cooldowns': {}
                 }
             
             party_state = watch_parties_state[party_id]

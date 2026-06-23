@@ -258,6 +258,9 @@ if (!window.safeSessionStorage) {
     let isSlowMode = false;
     let slowModeTimer = null;
     let lastChatSentTime = 0;
+    let lastReactionSentTime = 0;
+    const allowedReactions = new Set(['😂', '🔥', '💀', '😭', '❤️', '👀']);
+    const locallyRenderedReactionIds = new Set();
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('wp-toast-container');
@@ -422,6 +425,7 @@ if (!window.safeSessionStorage) {
         // Start watch party connection and load playlist
         startWatchParty();
         initChat();
+        initReactions();
     }
 
     function showNicknameModal() {
@@ -634,6 +638,10 @@ if (!window.safeSessionStorage) {
 
         socket.on('chat_clear', (data) => {
             handleSSEMessage({ type: 'chat_clear', ...data });
+        });
+
+        socket.on('reaction_event', (data) => {
+            handleSSEMessage({ type: 'reaction', ...data });
         });
 
         // Bind local player events to broadcast modifications
@@ -965,6 +973,12 @@ if (!window.safeSessionStorage) {
                 const isSelf = data.client_id === clientId;
                 const timeStr = data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                 addChatMessage(data.name, data.message, timeStr, isSelf, data.id, data.is_admin || false);
+                break;
+
+            case 'reaction':
+                if (data.reaction_id && locallyRenderedReactionIds.has(data.reaction_id)) return;
+                if (!data.reaction_id && data.sender_id === clientId) return;
+                renderReaction(data.emoji);
                 break;
 
             case 'kicked':
@@ -1489,6 +1503,90 @@ if (!window.safeSessionStorage) {
                 sendMessage();
             }
         };
+    }
+
+    function initReactions() {
+        const reactionBar = document.getElementById('wp-reaction-bar');
+        if (!reactionBar) return;
+
+        reactionBar.addEventListener('click', (event) => {
+            const button = event.target.closest('.reaction-button');
+            if (!button) return;
+
+            const emoji = button.dataset.emoji;
+            if (!allowedReactions.has(emoji)) return;
+
+            const now = Date.now();
+            if (now - lastReactionSentTime < 500) return;
+            lastReactionSentTime = now;
+
+            const reactionId = createReactionId();
+            locallyRenderedReactionIds.add(reactionId);
+            setTimeout(() => locallyRenderedReactionIds.delete(reactionId), 5000);
+
+            renderReaction(emoji);
+            sendReaction(emoji, reactionId);
+        });
+    }
+
+    function createReactionId() {
+        if (window.crypto && window.crypto.randomUUID) {
+            return window.crypto.randomUUID();
+        }
+        return `reaction_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    }
+
+    function sendReaction(emoji, reactionId) {
+        fetch(`/api/watch-party/${window.PARTY_ID}/reaction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                client_id: clientId,
+                client_name: clientName,
+                emoji: emoji,
+                reaction_id: reactionId
+            })
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`Reaction failed with status ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data.status === 'error') {
+                console.warn('Reaction rejected:', data.message);
+            }
+        })
+        .catch(err => {
+            console.warn('Error sending reaction:', err);
+        });
+    }
+
+    function renderReaction(emoji) {
+        if (!allowedReactions.has(emoji)) return;
+
+        const overlay = document.getElementById('wp-reaction-overlay');
+        if (!overlay) return;
+
+        const reaction = document.createElement('div');
+        reaction.className = 'floating-reaction';
+        reaction.textContent = emoji;
+
+        const left = 18 + Math.random() * 64;
+        const drift = (Math.random() * 80) - 40;
+        const tilt = (Math.random() * 24) - 12;
+        const tiltEnd = tilt + ((Math.random() * 34) - 17);
+        const duration = 1.2 + Math.random() * 0.6;
+
+        reaction.style.left = `${left}%`;
+        reaction.style.setProperty('--reaction-drift', `${drift}px`);
+        reaction.style.setProperty('--reaction-tilt', `${tilt}deg`);
+        reaction.style.setProperty('--reaction-tilt-end', `${tiltEnd}deg`);
+        reaction.style.setProperty('--reaction-duration', `${duration}s`);
+
+        overlay.appendChild(reaction);
+        reaction.addEventListener('animationend', () => reaction.remove(), { once: true });
     }
 
     window.deleteChatMessage = (messageId) => {
