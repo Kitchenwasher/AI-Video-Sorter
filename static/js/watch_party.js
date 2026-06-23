@@ -339,8 +339,10 @@
     }
 
     function showNicknameModal() {
-        // Automatically retrieve and bypass nickname modal if already saved/provided
-        const storedName = sessionStorage.getItem('wp_client_name') || localStorage.getItem('wp_nickname');
+        // Only bypass nickname modal if we have a session name, or if we are the admin/creator of this specific party
+        const isAdmin = !!localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
+        const storedName = sessionStorage.getItem('wp_client_name') || (isAdmin ? localStorage.getItem('wp_nickname') : null);
+        
         if (storedName && storedName.trim() !== '' && storedName !== 'Viewer') {
             clientName = storedName.trim();
             sessionStorage.setItem('wp_client_name', clientName);

@@ -3849,6 +3849,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (wpPassword) wpPassword.value = '';
             if (wpCustomFile) wpCustomFile.value = '';
             if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'none';
+            if (wpHostName) {
+                wpHostName.value = localStorage.getItem('wp_nickname') || 'Host';
+            }
             
             if (currentGalleryFolder) {
                 if (wpSourceFolderName) wpSourceFolderName.innerText = currentGalleryFolder;
