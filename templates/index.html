@@ -825,6 +825,28 @@
                         <label for="wp-host-name" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">YOUR NICKNAME</label>
                         <input type="text" id="wp-host-name" value="Host" placeholder="Enter nickname..." style="padding: 0.6rem 0.8rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text); outline: none;">
                     </div>
+                    
+                    <!-- Source Selection -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">PARTY SOURCE</label>
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <label id="wp-source-folder-label" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text);">
+                                <input type="radio" name="wp-source-type" id="wp-source-type-folder" value="folder" checked style="accent-color: var(--accent);">
+                                <span>Active Folder: <strong id="wp-source-folder-name" style="color: var(--accent);">None</strong></span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text);">
+                                <input type="radio" name="wp-source-type" id="wp-source-type-custom" value="custom" style="accent-color: var(--accent);">
+                                <span>Custom Video/Image</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom File Input -->
+                    <div id="wp-custom-file-container" style="display: none; flex-direction: column; gap: 0.4rem;">
+                        <label for="wp-custom-file" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">SELECT MEDIA FILE</label>
+                        <input type="file" id="wp-custom-file" accept="video/*,image/*" style="font-size: 0.85rem; color: var(--text-muted); background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; width: 100%;">
+                    </div>
+
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                         <label for="wp-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">PASSWORD (OPTIONAL)</label>
                         <input type="password" id="wp-password" placeholder="Leave empty for no password..." style="padding: 0.6rem 0.8rem; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text); outline: none;">

@@ -3631,9 +3631,29 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const wpCreateStep = document.getElementById('wp-create-step');
     const wpShareStep = document.getElementById('wp-share-step');
+
+    const radioWpSourceFolder = document.getElementById('wp-source-type-folder');
+    const radioWpSourceCustom = document.getElementById('wp-source-type-custom');
+    const wpCustomFileContainer = document.getElementById('wp-custom-file-container');
+    const wpCustomFile = document.getElementById('wp-custom-file');
+    const wpSourceFolderName = document.getElementById('wp-source-folder-name');
+    const wpSourceFolderLabel = document.getElementById('wp-source-folder-label');
     
     let createdPartyId = null;
     let createdPartyUrl = null;
+
+    if (radioWpSourceFolder && radioWpSourceCustom && wpCustomFileContainer) {
+        radioWpSourceFolder.addEventListener('change', () => {
+            if (radioWpSourceFolder.checked) {
+                wpCustomFileContainer.style.display = 'none';
+            }
+        });
+        radioWpSourceCustom.addEventListener('change', () => {
+            if (radioWpSourceCustom.checked) {
+                wpCustomFileContainer.style.display = 'flex';
+            }
+        });
+    }
 
     if (btnCreateWatchParty) {
         btnCreateWatchParty.addEventListener('click', () => {
@@ -3642,6 +3662,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (wpCreateStep) wpCreateStep.style.display = 'flex';
                 if (wpShareStep) wpShareStep.style.display = 'none';
                 if (wpPassword) wpPassword.value = '';
+                if (wpCustomFile) wpCustomFile.value = '';
+                if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'none';
+                
+                if (currentGalleryFolder) {
+                    if (wpSourceFolderName) wpSourceFolderName.innerText = currentGalleryFolder;
+                    if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'flex';
+                    if (radioWpSourceFolder) radioWpSourceFolder.checked = true;
+                } else {
+                    if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'none';
+                    if (radioWpSourceCustom) radioWpSourceCustom.checked = true;
+                    if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'flex';
+                }
                 
                 watchPartyModal.classList.add('active');
             }
@@ -3659,20 +3691,54 @@ document.addEventListener('DOMContentLoaded', () => {
             const hostName = (wpHostName ? wpHostName.value.trim() : '') || 'Host';
             const password = wpPassword ? wpPassword.value : '';
             
-            if (!currentGalleryFolder) {
-                alert('No active folder selected.');
-                return;
-            }
+            const isCustom = radioWpSourceCustom ? radioWpSourceCustom.checked : false;
+            let folderName = currentGalleryFolder;
+            let filename = null;
 
             try {
                 btnWpGenerate.disabled = true;
                 btnWpGenerate.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+
+                if (isCustom) {
+                    const fileInput = wpCustomFile;
+                    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                        alert('Please select a custom video or image file.');
+                        btnWpGenerate.disabled = false;
+                        btnWpGenerate.innerHTML = '<i class="fa-solid fa-magic"></i> Generate Shareable Link';
+                        return;
+                    }
+                    
+                    const file = fileInput.files[0];
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const uploadRes = await fetch('/api/watch-party/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const uploadData = await uploadRes.json();
+                    if (uploadData.status !== 'success') {
+                        throw new Error(uploadData.message || 'File upload failed');
+                    }
+                    
+                    folderName = uploadData.folder_name;
+                    filename = uploadData.filename;
+                } else {
+                    if (!folderName) {
+                        alert('No active folder selected.');
+                        btnWpGenerate.disabled = false;
+                        btnWpGenerate.innerHTML = '<i class="fa-solid fa-magic"></i> Generate Shareable Link';
+                        return;
+                    }
+                }
                 
                 const res = await fetch('/api/watch-party/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        folder_name: currentGalleryFolder,
+                        folder_name: folderName,
+                        filename: filename,
                         password: password
                     })
                 });

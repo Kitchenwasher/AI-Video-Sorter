@@ -238,6 +238,12 @@
         // Verify admin privileges
         checkAdminStatus();
 
+        // Format active folder name initially if it's a custom uploaded media room
+        const badgeEl = document.getElementById('wp-active-folder-name');
+        if (badgeEl && window.FOLDER_NAME && window.FOLDER_NAME.startsWith('single_')) {
+            badgeEl.innerText = 'Custom Media';
+        }
+
         // Fetch folder media files
         try {
             const res = await fetch(`/api/profile/${window.FOLDER_NAME}/media`);
@@ -324,6 +330,7 @@
         files.forEach(file => {
             const item = document.createElement('div');
             item.className = 'playlist-item';
+            item.setAttribute('data-filename', file.filename);
             if (file.filename === currentFilename) {
                 item.classList.add('active');
             }
@@ -335,9 +342,14 @@
                 thumbUrl = `/media/${file.folder_name}/${file.filename}`;
             }
 
+            let displayName = file.filename;
+            if (file.folder_name && file.folder_name.startsWith('single_') && file.filename.length > 9) {
+                displayName = file.filename.substring(9);
+            }
+
             item.innerHTML = `
-                <img src="${thumbUrl}" alt="${file.filename}" onerror="this.src='https://placehold.co/160x90/101013/ffffff?text=${encodeURIComponent(file.filename)}'">
-                <div class="playlist-item-title">${file.filename}</div>
+                <img src="${thumbUrl}" alt="${displayName}" onerror="this.src='https://placehold.co/160x90/101013/ffffff?text=${encodeURIComponent(displayName)}'">
+                <div class="playlist-item-title">${displayName}</div>
             `;
 
             item.onclick = () => {
@@ -368,8 +380,7 @@
             // Highlight in playlist grid
             const items = document.querySelectorAll('.playlist-item');
             items.forEach(item => {
-                const titleEl = item.querySelector('.playlist-item-title');
-                if (titleEl && titleEl.innerText === filename) {
+                if (item.getAttribute('data-filename') === filename) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
@@ -521,12 +532,13 @@
                 break;
 
             case 'folder_changed':
-                addSystemChatMessage(`Admin switched folder to: ${data.folder_name}`);
-                addLogEntry('System', `Admin switched folder to: ${data.folder_name}`);
+                const displayFolderName = data.folder_name.startsWith('single_') ? 'Custom Media' : data.folder_name;
+                addSystemChatMessage(`Admin switched folder to: ${displayFolderName}`);
+                addLogEntry('System', `Admin switched folder to: ${displayFolderName}`);
                 window.FOLDER_NAME = data.folder_name;
                 const badgeEl = document.getElementById('wp-active-folder-name');
                 if (badgeEl) {
-                    badgeEl.innerText = data.folder_name;
+                    badgeEl.innerText = displayFolderName;
                 }
                 mediaFilesList = data.files || [];
                 renderPlaylist(mediaFilesList);

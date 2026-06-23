@@ -1855,19 +1855,57 @@ import queue
 watch_parties_state = {}
 watch_parties_lock = threading.Lock()
 
+@app.route('/api/watch-party/upload', methods=['POST'])
+def upload_watch_party_media():
+    """Uploads a custom video or image for a watch party session (admin only, before creation)."""
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'No selected file'}), 400
+        
+    try:
+        from werkzeug.utils import secure_filename
+        import uuid
+        
+        orig_filename = secure_filename(file.filename)
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"{unique_id}_{orig_filename}"
+        
+        # Create a unique subfolder inside output_dir for this upload
+        party_folder_id = f"single_{str(uuid.uuid4())}"
+        target_dir = os.path.join(current_config.output_dir, party_folder_id)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        file_path = os.path.join(target_dir, filename)
+        file.save(file_path)
+        
+        logger.info(f"Custom watch party media saved to {file_path}")
+        return jsonify({
+            'status': 'success',
+            'filename': filename,
+            'folder_name': party_folder_id
+        })
+    except Exception as e:
+        logger.error(f"Error uploading custom party media: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/api/watch-party/create', methods=['POST'])
 def create_watch_party():
     """Generates a new watch party with optional password protection."""
     data = request.json or {}
     folder_name = data.get('folder_name')
     password = data.get('password')
+    filename = data.get('filename')
     
     if not folder_name:
         return jsonify({'status': 'error', 'message': 'Folder name is required'}), 400
         
     if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
         return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
-
+ 
     try:
         from utils.models import WatchParty
         party_id = str(uuid.uuid4())
@@ -1897,7 +1935,7 @@ def create_watch_party():
                 'admin_token': admin_token,
                 'clients': {},
                 'playback_state': {
-                    'filename': None,
+                    'filename': filename,
                     'position': 0.0,
                     'playing': False,
                     'last_updated': time.time()
@@ -2577,6 +2615,17 @@ def end_watch_party(party_id):
             
         party.expires_at = datetime.utcnow() - timedelta(seconds=1)
         db.session.commit()
+        
+        # Clean up files if it was a custom single-file party
+        if party.folder_name.startswith('single_'):
+            try:
+                import shutil
+                target_dir = os.path.join(current_config.output_dir, party.folder_name)
+                if os.path.exists(target_dir):
+                    shutil.rmtree(target_dir)
+                    logger.info(f"Cleaned up custom watch party directory: {target_dir}")
+            except Exception as clean_err:
+                logger.error(f"Error cleaning up custom watch party directory {party.folder_name}: {clean_err}")
         
         with watch_parties_lock:
             if party_id in watch_parties_state:
