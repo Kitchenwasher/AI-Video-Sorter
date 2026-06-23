@@ -3,6 +3,153 @@
  * Handles synchronization, WebRTC P2P voice mesh, and playlist controls.
  */
 
+// GLOBAL TOAST NOTIFICATION SYSTEM
+(function () {
+    // Dynamic CSS injection for toasts
+    if (!document.getElementById('custom-toast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'custom-toast-styles';
+        style.innerHTML = `
+            #custom-toast-container {
+                position: fixed;
+                top: 24px;
+                right: 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                z-index: 999999;
+                pointer-events: none;
+                max-width: 380px;
+                width: calc(100% - 48px);
+            }
+            .custom-toast {
+                background: rgba(18, 18, 22, 0.95);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 2px solid rgba(255, 255, 255, 0.08);
+                border-radius: 10px;
+                padding: 14px 18px;
+                color: #F3F3F3;
+                font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+                font-size: 0.9rem;
+                line-height: 1.4;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+                pointer-events: auto;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                transform: translateX(120%);
+                opacity: 0;
+                transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+            }
+            .custom-toast.show {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            .custom-toast.hide {
+                transform: translateX(120%) scale(0.9);
+                opacity: 0;
+            }
+            .custom-toast-icon {
+                font-size: 1.25rem;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .custom-toast-content {
+                flex-grow: 1;
+                font-weight: 500;
+                letter-spacing: -0.1px;
+            }
+            .custom-toast-close {
+                background: transparent;
+                border: none;
+                color: #888890;
+                cursor: pointer;
+                padding: 4px;
+                font-size: 1.2rem;
+                line-height: 1;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s, transform 0.2s;
+            }
+            .custom-toast-close:hover {
+                color: #F3F3F3;
+                transform: scale(1.1);
+            }
+            .custom-toast-success { border-left: 4px solid #22c55e; }
+            .custom-toast-success .custom-toast-icon { color: #22c55e; }
+            .custom-toast-error { border-left: 4px solid #ef4444; }
+            .custom-toast-error .custom-toast-icon { color: #ef4444; }
+            .custom-toast-warning { border-left: 4px solid #eab308; }
+            .custom-toast-warning .custom-toast-icon { color: #eab308; }
+            .custom-toast-info { border-left: 4px solid #FF8C00; }
+            .custom-toast-info .custom-toast-icon { color: #FF8C00; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    window.showToast = function (message, type = 'info', duration = 4000) {
+        let container = document.getElementById('custom-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'custom-toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `custom-toast custom-toast-${type}`;
+
+        let iconClass = 'fa-circle-info';
+        if (type === 'success') iconClass = 'fa-circle-check';
+        else if (type === 'error') iconClass = 'fa-circle-xmark';
+        else if (type === 'warning') iconClass = 'fa-triangle-exclamation';
+
+        toast.innerHTML = `
+            <div class="custom-toast-icon"><i class="fa-solid ${iconClass}"></i></div>
+            <div class="custom-toast-content">${message}</div>
+            <button class="custom-toast-close">&times;</button>
+        `;
+
+        container.appendChild(toast);
+
+        // Force a reflow and then add class
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        const closeBtn = toast.querySelector('.custom-toast-close');
+        const dismiss = () => {
+            toast.classList.remove('show');
+            toast.classList.add('hide');
+            setTimeout(() => toast.remove(), 400);
+        };
+        closeBtn.addEventListener('click', dismiss);
+
+        if (duration > 0) {
+            setTimeout(dismiss, duration);
+        }
+    };
+
+    // Override default alert
+    window.alert = function (message) {
+        if (typeof message !== 'string') {
+            try { message = String(message); } catch (e) { message = '[Complex Object]'; }
+        }
+        let type = 'info';
+        const msgLower = message.toLowerCase();
+        if (msgLower.includes('fail') || msgLower.includes('error') || msgLower.includes('incorrect') || msgLower.includes('invalid') || msgLower.includes('not empty') || msgLower.includes('cannot be empty')) {
+            type = 'error';
+        } else if (msgLower.includes('success') || msgLower.includes('complete') || msgLower.includes('saved') || msgLower.includes('cleared')) {
+            type = 'success';
+        } else if (msgLower.includes('warning') || msgLower.includes('please paste') || msgLower.includes('need at least')) {
+            type = 'warning';
+        }
+        window.showToast(message, type);
+    };
+})();
+
 (function () {
     // Unique client ID persisted per session to survive refreshes
     let clientId = sessionStorage.getItem('wp_client_id');
