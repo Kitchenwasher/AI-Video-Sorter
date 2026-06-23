@@ -4606,6 +4606,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (data.admin_token) {
                         localStorage.setItem(`wp_admin_token_${data.party_id}`, data.admin_token);
                     }
+                    if (password) {
+                        sessionStorage.setItem(`wp_password_${data.party_id}`, password);
+                    }
                     
                     // Construct absolute URL (use public tunnel URL if provided by backend)
                     if (data.public_url) {

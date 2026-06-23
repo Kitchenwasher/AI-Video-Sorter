@@ -2616,6 +2616,35 @@ def create_watch_party():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/api/watch-party/<party_id>/details')
+def watch_party_details(party_id):
+    """Returns metadata for the watch party (no plaintext passwords)."""
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        remaining_seconds = max(0, int((party.expires_at - datetime.utcnow()).total_seconds()))
+        
+        res_data = {
+            'status': 'success',
+            'party_id': party_id,
+            'folder_name': party.folder_name,
+            'expires_at': party.expires_at.isoformat() + 'Z',
+            'remaining_seconds': remaining_seconds,
+            'password_protected': party.password_hash is not None and len(party.password_hash) > 0
+        }
+        
+        if public_tunnel_url:
+            res_data['public_url'] = f"{public_tunnel_url}/watch-party/{party_id}"
+            
+        return jsonify(res_data)
+    except Exception as e:
+        logger.error(f"Error fetching watch party details: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/watch-party/<party_id>')
 def watch_party_page(party_id):
     """Serves the standalone watch party viewer template."""

@@ -1035,6 +1035,7 @@
         </span>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="btn-wp-admin-panel" class="btn" style="display: none; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; align-items: center; gap: 0.25rem; background: #eab308; color: #101013; border: none; cursor: pointer; transition: transform 0.1s;"><i class="fa-solid fa-crown"></i> Admin Panel</button>
+            <button id="btn-wp-share-modal" class="btn" style="padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.25rem; background: var(--accent-pink); color: #000; border: none; cursor: pointer; transition: transform 0.1s;"><i class="fa-solid fa-share-nodes"></i> Invite</button>
             <span class="badge" style="background: rgba(236,72,153,0.15); color: var(--accent); padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
                 <i class="fa-solid fa-users"></i> WATCH PARTY
             </span>
@@ -1266,6 +1267,73 @@
             <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">This watch party has been ended by the host.</p>
             <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Invite/Share Modal -->
+    <div class="modal-overlay" id="wp-invite-overlay">
+        <div class="modal-box" style="max-width: 480px; position: relative;">
+            <button id="btn-wp-invite-close" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i class="fa-solid fa-xmark"></i></button>
+            
+            <h3 style="margin-top: 0; color: var(--accent-pink); display: flex; align-items: center; gap: 0.5rem; font-size: 1.3rem;">
+                <i class="fa-solid fa-paper-plane"></i> Invite Friends
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Share this room details with your crew to watch in sync!</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                
+                <!-- Party Link Section -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; margin-bottom: 0.5rem; color: var(--text-main);">Party Link</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="wp-invite-link-input" class="input-field" readonly style="font-size: 0.85rem; flex-grow: 1;">
+                        <button id="btn-wp-invite-copy-link" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;"><i class="fa-solid fa-copy"></i> Copy</button>
+                    </div>
+                </div>
+                
+                <!-- Password Section -->
+                <div id="wp-invite-password-section" style="display: none;">
+                    <label style="display: block; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; margin-bottom: 0.5rem; color: var(--text-main);">Room Password</label>
+                    
+                    <!-- Plaintext Password Display container -->
+                    <div id="wp-invite-password-display-container" style="display: none; gap: 0.5rem; align-items: center;">
+                        <div style="position: relative; flex-grow: 1;">
+                            <input type="password" id="wp-invite-password-input" class="input-field" readonly style="font-size: 0.85rem; width: 100%; padding-right: 2.5rem;">
+                            <button id="btn-wp-invite-toggle-password" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer;"><i class="fa-solid fa-eye"></i></button>
+                        </div>
+                        <button id="btn-wp-invite-copy-password" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: rgba(255,255,255,0.05); color: var(--text-main);"><i class="fa-solid fa-copy"></i> Copy</button>
+                    </div>
+                    
+                    <!-- Safe Fallback Text when plaintext password isn't in sessionStorage -->
+                    <div id="wp-invite-password-fallback-container" style="display: block; padding: 0.75rem; border: 1px dashed var(--border); border-radius: 6px; background: rgba(255,255,255,0.02); font-size: 0.85rem; color: var(--text-muted);">
+                        <i class="fa-solid fa-shield-halved" style="color: var(--accent); margin-right: 0.25rem;"></i> Password protected. Ask the host for the code.
+                    </div>
+                </div>
+
+                <!-- Expiry & QR Section in 2 columns -->
+                <div style="display: grid; grid-template-columns: 1fr 140px; gap: 1rem; align-items: start;">
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; margin-bottom: 0.25rem; color: var(--text-main);">Expires In</label>
+                            <span id="wp-invite-expiry-time" style="font-size: 0.9rem; font-weight: 600; color: var(--accent);">Calculating...</span>
+                        </div>
+                        <button id="btn-wp-invite-copy-text" class="btn" style="width: 100%; font-size: 0.8rem; background: rgba(255,255,255,0.05); color: var(--text-main); margin-top: 0.5rem;">
+                            <i class="fa-solid fa-message"></i> Copy Invite Text
+                        </button>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; border: var(--bw) solid var(--border); padding: 0.5rem; background: white; border-radius: 4px; box-shadow: 4px 4px 0px var(--border); width: 140px; min-height: 160px; position: relative; box-sizing: border-box;">
+                        <!-- Fallback container shown if image fails or is loading -->
+                        <div id="wp-invite-qr-fallback" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #101013; padding: 0.25rem; font-size: 0.75rem; font-weight: bold; width: 100%; height: 120px; border: 1px dashed #ccc; box-sizing: border-box;">
+                            <i class="fa-solid fa-qrcode" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                            <span>Scan link</span>
+                        </div>
+                        <img id="wp-invite-qrcode" style="width: 120px; height: 120px; object-fit: contain; display: none;" alt="QR Code" onload="this.style.display='block'; document.getElementById('wp-invite-qr-fallback').style.display='none';" onerror="this.style.display='none'; document.getElementById('wp-invite-qr-fallback').style.display='flex';">
+                        <span style="font-size: 0.55rem; color: #000; font-weight: bold; text-transform: uppercase; margin-top: 0.35rem;">Scan to Join</span>
+                    </div>
+                </div>
+                
+            </div>
         </div>
     </div>
 

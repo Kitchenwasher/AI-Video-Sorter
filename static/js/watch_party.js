@@ -420,6 +420,7 @@ if (!window.safeSessionStorage) {
         startWatchParty();
         initChat();
         initReactions();
+        initInviteModal();
     }
 
     function showNicknameModal() {
@@ -2031,9 +2032,210 @@ if (!window.safeSessionStorage) {
             if (data.status === 'success' && data.is_admin) {
                 adminToken = storedToken;
                 setupAdminUI();
+
+                // Auto-open invite modal if it hasn't been shown yet in this session
+                const shownKey = `wp_invite_shown_${window.PARTY_ID}`;
+                if (!sessionStorage.getItem(shownKey)) {
+                    sessionStorage.setItem(shownKey, 'true');
+                    const modal = document.getElementById('wp-invite-overlay');
+                    if (modal) {
+                        modal.classList.add('active');
+                        refreshInviteModalDetails();
+                    }
+                }
             }
         })
         .catch(err => console.error('Error verifying admin token:', err));
+    }
+
+    function initInviteModal() {
+        const btnShareModal = document.getElementById('btn-wp-share-modal');
+        const overlay = document.getElementById('wp-invite-overlay');
+        const btnClose = document.getElementById('btn-wp-invite-close');
+        
+        if (btnShareModal && overlay) {
+            btnShareModal.onclick = () => {
+                overlay.classList.add('active');
+                refreshInviteModalDetails();
+            };
+        }
+        
+        if (btnClose && overlay) {
+            btnClose.onclick = () => {
+                overlay.classList.remove('active');
+            };
+        }
+
+        // Copy link event listener
+        const btnCopyLink = document.getElementById('btn-wp-invite-copy-link');
+        const linkInput = document.getElementById('wp-invite-link-input');
+        if (btnCopyLink && linkInput) {
+            btnCopyLink.onclick = () => {
+                linkInput.select();
+                linkInput.setSelectionRange(0, 99999);
+                try {
+                    navigator.clipboard.writeText(linkInput.value);
+                    showToast('Link copied to clipboard!', 'success');
+                } catch (err) {
+                    document.execCommand('copy');
+                    showToast('Link copied to clipboard!', 'success');
+                }
+                // Visual feedback
+                const icon = btnCopyLink.querySelector('i');
+                if (icon) {
+                    icon.className = 'fa-solid fa-check';
+                    setTimeout(() => { icon.className = 'fa-solid fa-copy'; }, 2000);
+                }
+            };
+        }
+
+        // Toggle password visibility
+        const btnTogglePwd = document.getElementById('btn-wp-invite-toggle-password');
+        const pwdInput = document.getElementById('wp-invite-password-input');
+        if (btnTogglePwd && pwdInput) {
+            btnTogglePwd.onclick = () => {
+                if (pwdInput.type === 'password') {
+                    pwdInput.type = 'text';
+                    btnTogglePwd.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+                } else {
+                    pwdInput.type = 'password';
+                    btnTogglePwd.innerHTML = '<i class="fa-solid fa-eye"></i>';
+                }
+            };
+        }
+
+        // Copy password
+        const btnCopyPwd = document.getElementById('btn-wp-invite-copy-password');
+        if (btnCopyPwd && pwdInput) {
+            btnCopyPwd.onclick = () => {
+                pwdInput.select();
+                pwdInput.setSelectionRange(0, 99999);
+                try {
+                    navigator.clipboard.writeText(pwdInput.value);
+                    showToast('Password copied to clipboard!', 'success');
+                } catch (err) {
+                    document.execCommand('copy');
+                    showToast('Password copied to clipboard!', 'success');
+                }
+                const icon = btnCopyPwd.querySelector('i');
+                if (icon) {
+                    icon.className = 'fa-solid fa-check';
+                    setTimeout(() => { icon.className = 'fa-solid fa-copy'; }, 2000);
+                }
+            };
+        }
+
+        // Copy invite text
+        const btnCopyText = document.getElementById('btn-wp-invite-copy-text');
+        if (btnCopyText) {
+            btnCopyText.onclick = () => {
+                const inviteLink = document.getElementById('wp-invite-link-input').value;
+                const isPasswordProtected = document.getElementById('wp-invite-password-section').style.display !== 'none';
+                let passwordText = '';
+                if (isPasswordProtected) {
+                    const pwd = sessionStorage.getItem('wp_password_' + window.PARTY_ID);
+                    if (pwd) {
+                        passwordText = `\n🔑 Password: ${pwd}`;
+                    } else {
+                        passwordText = `\n🔑 Password: (Ask host for code)`;
+                    }
+                }
+                const remainingText = document.getElementById('wp-invite-expiry-time').innerText;
+                
+                const message = `🍿 You're invited to a Chehro Watch Party! Let's stream together in sync.\n\n🔗 Join here: ${inviteLink}${passwordText}\n⏰ Expires in: ${remainingText}`;
+                
+                try {
+                    navigator.clipboard.writeText(message);
+                    showToast('Invite text copied!', 'success');
+                } catch (err) {
+                    const tempTextArea = document.createElement('textarea');
+                    tempTextArea.value = message;
+                    document.body.appendChild(tempTextArea);
+                    tempTextArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempTextArea);
+                    showToast('Invite text copied!', 'success');
+                }
+            };
+        }
+    }
+
+    function refreshInviteModalDetails() {
+        fetch(`/api/watch-party/${window.PARTY_ID}/details`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Update Link
+                const linkInput = document.getElementById('wp-invite-link-input');
+                let inviteUrl = '';
+                if (data.public_url) {
+                    inviteUrl = data.public_url;
+                } else {
+                    const port = window.location.port ? `:${window.location.port}` : '';
+                    inviteUrl = `${window.location.protocol}//${window.location.hostname}${port}/watch-party/${window.PARTY_ID}`;
+                }
+                if (linkInput) {
+                    linkInput.value = inviteUrl;
+                }
+
+                // Update QR Code
+                const qrImage = document.getElementById('wp-invite-qrcode');
+                const qrFallback = document.getElementById('wp-invite-qr-fallback');
+                if (qrImage) {
+                    qrImage.style.display = 'none';
+                    if (qrFallback) qrFallback.style.display = 'flex';
+                    qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(inviteUrl)}`;
+                }
+
+                // Update Expiry Time
+                const expiryLabel = document.getElementById('wp-invite-expiry-time');
+                if (expiryLabel) {
+                    const secs = data.remaining_seconds;
+                    if (secs <= 0) {
+                        expiryLabel.innerText = 'Expired';
+                    } else {
+                        const h = Math.floor(secs / 3600);
+                        const m = Math.floor((secs % 3600) / 60);
+                        if (h > 0) {
+                            expiryLabel.innerText = `${h}h ${m}m remaining`;
+                        } else {
+                            expiryLabel.innerText = `${m}m remaining`;
+                        }
+                    }
+                }
+
+                // Update Password Section
+                const pwdSection = document.getElementById('wp-invite-password-section');
+                const pwdDisplay = document.getElementById('wp-invite-password-display-container');
+                const pwdFallback = document.getElementById('wp-invite-password-fallback-container');
+                const pwdInput = document.getElementById('wp-invite-password-input');
+
+                if (pwdSection) {
+                    if (data.password_protected) {
+                        pwdSection.style.display = 'block';
+                        const pwd = sessionStorage.getItem('wp_password_' + window.PARTY_ID);
+                        if (pwd) {
+                            if (pwdDisplay) pwdDisplay.style.display = 'flex';
+                            if (pwdFallback) pwdFallback.style.display = 'none';
+                            if (pwdInput) {
+                                pwdInput.value = pwd;
+                                pwdInput.type = 'password';
+                                const btnTogglePwd = document.getElementById('btn-wp-invite-toggle-password');
+                                if (btnTogglePwd) btnTogglePwd.innerHTML = '<i class="fa-solid fa-eye"></i>';
+                            }
+                        } else {
+                            if (pwdDisplay) pwdDisplay.style.display = 'none';
+                            if (pwdFallback) pwdFallback.style.display = 'block';
+                        }
+                    } else {
+                        pwdSection.style.display = 'none';
+                    }
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching watch party details:', err);
+        });
     }
 
     function setupAdminUI() {
@@ -2154,6 +2356,8 @@ if (!window.safeSessionStorage) {
                     if (data.status === 'success') {
                         showToast('Access password set successfully.', 'success');
                         adminPasswordInput.value = '';
+                        sessionStorage.setItem(`wp_password_${window.PARTY_ID}`, pwd);
+                        refreshInviteModalDetails();
                     } else {
                         showToast('Error setting password.', 'error');
                     }
@@ -2176,6 +2380,8 @@ if (!window.safeSessionStorage) {
                 .then(data => {
                     if (data.status === 'success') {
                         showToast('Password protection removed.', 'success');
+                        sessionStorage.removeItem(`wp_password_${window.PARTY_ID}`);
+                        refreshInviteModalDetails();
                     }
                 });
             };
