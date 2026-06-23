@@ -168,6 +168,77 @@ def save_settings(config_obj):
 # Load config
 current_config = load_settings()
 
+def cleanup_expired_parties():
+    try:
+        from utils.models import WatchParty, db
+        from datetime import datetime
+        import shutil
+        
+        # 1. First, delete expired watch parties from database
+        expired_parties = WatchParty.query.filter(WatchParty.expires_at < datetime.utcnow()).all()
+        if expired_parties:
+            logger.info(f"Background cleanup: Found {len(expired_parties)} expired watch parties in DB.")
+            for party in expired_parties:
+                db.session.delete(party)
+            db.session.commit()
+            
+        # 2. Next, scan output_dir for orphaned single_ folders not in database at all
+        active_parties = WatchParty.query.filter(WatchParty.expires_at >= datetime.utcnow()).all()
+        active_folders = {p.folder_name for p in active_parties if p.folder_name}
+        
+        # Scan output_dir
+        if os.path.exists(current_config.output_dir):
+            for item in os.listdir(current_config.output_dir):
+                item_path = os.path.join(current_config.output_dir, item)
+                if os.path.isdir(item_path) and item.startswith('single_'):
+                    if item not in active_folders:
+                        try:
+                            shutil.rmtree(item_path)
+                            logger.info(f"Cleaned up orphaned custom watch party directory: {item_path}")
+                        except Exception as clean_err:
+                            logger.error(f"Error cleaning up orphaned directory {item}: {clean_err}")
+                            
+        # Scan output_dir/.hls_cache
+        hls_cache_base = os.path.join(current_config.output_dir, ".hls_cache")
+        if os.path.exists(hls_cache_base):
+            for item in os.listdir(hls_cache_base):
+                item_path = os.path.join(hls_cache_base, item)
+                if os.path.isdir(item_path) and item.startswith('single_'):
+                    if item not in active_folders:
+                        try:
+                            shutil.rmtree(item_path)
+                            logger.info(f"Cleaned up orphaned HLS cache directory: {item_path}")
+                        except Exception as clean_err:
+                            logger.error(f"Error cleaning up orphaned HLS cache directory {item}: {clean_err}")
+                            
+    except Exception as e:
+        logger.error(f"Error running cleanup_expired_parties: {e}")
+
+def start_cleanup_scheduler():
+    def run_loop():
+        # Sleep for a bit initially to let startup finish
+        time.sleep(10)
+        while True:
+            try:
+                with app.app_context():
+                    cleanup_expired_parties()
+            except Exception as e:
+                logger.error(f"Error in cleanup scheduler loop: {e}")
+            # Run cleanup every 1 hour (3600 seconds)
+            time.sleep(3600)
+            
+    t = threading.Thread(target=run_loop, daemon=True)
+    t.start()
+
+with app.app_context():
+    try:
+        # Clean up any expired watch parties and their temporary single_ folders
+        cleanup_expired_parties()
+        # Start periodic cleanup scheduler
+        start_cleanup_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to run startup cleanup: {e}")
+
 
 # Socket.IO Event Handlers
 @socketio.on('join')
@@ -510,6 +581,7 @@ def restrict_public_access():
 
 @app.route('/')
 def index():
+    cleanup_expired_parties()
     return render_template('index.html')
 
 @app.route('/api/config', methods=['GET', 'POST'])
@@ -2266,6 +2338,7 @@ def upload_watch_party_media():
 @app.route('/api/watch-party/create', methods=['POST'])
 def create_watch_party():
     """Generates a new watch party with optional password protection."""
+    cleanup_expired_parties()
     data = request.json or {}
     folder_name = data.get('folder_name')
     password = data.get('password')
