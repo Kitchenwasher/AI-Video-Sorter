@@ -632,6 +632,43 @@ if (!window.safeSessionStorage) {
             handleSSEMessage({ type: 'chat_clear', ...data });
         });
 
+        socket.on('emoji_reaction_broadcast', (data) => {
+            handleIncomingEmojiReaction(data.emoji, data.client_name);
+        });
+
+        // Bind emoji buttons click
+        const emojiBar = document.getElementById('emoji-action-bar');
+        if (emojiBar) {
+            emojiBar.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const emoji = btn.getAttribute('data-emoji');
+                    sendEmojiReaction(emoji);
+                });
+            });
+        }
+        
+        // Bind numeric keydown hotkeys
+        window.addEventListener('keydown', (e) => {
+            // Safety check: ignore if user is typing in chat, nickname, or password inputs
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+                return;
+            }
+            
+            // Map keys 1-5 to emojis
+            const emojiMap = {
+                '1': '❤️',
+                '2': '🔥',
+                '3': '😂',
+                '4': '👏',
+                '5': '🎉'
+            };
+            if (emojiMap[e.key]) {
+                e.preventDefault();
+                sendEmojiReaction(emojiMap[e.key]);
+            }
+        });
+
         // Bind local player events to broadcast modifications
         player.on('play', () => {
             if (ignorePlayerEvents) return;
@@ -662,6 +699,49 @@ if (!window.safeSessionStorage) {
             }
             broadcastSync('seek', player.currentTime);
         });
+    }
+
+    function sendEmojiReaction(emoji) {
+        if (!window.socket) return;
+        window.socket.emit('emoji_reaction', {
+            party_id: window.PARTY_ID,
+            client_id: clientId,
+            client_name: clientName,
+            emoji: emoji
+        });
+    }
+
+    function handleIncomingEmojiReaction(emoji, senderName) {
+        const container = document.getElementById('emoji-overlay-container');
+        if (!container) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'floating-emoji-wrapper';
+        
+        // Random horizontal position between 10% and 90%
+        const leftOffset = Math.random() * 80 + 10; 
+        wrapper.style.left = `${leftOffset}%`;
+        
+        // Random rotation angle for floatUp keyframe
+        const rotation = Math.random() * 60 - 30; // -30 to +30 deg
+        wrapper.style.setProperty('--rot', `${rotation}deg`);
+
+        const emojiEl = document.createElement('span');
+        emojiEl.className = 'floating-emoji';
+        emojiEl.innerText = emoji;
+
+        const senderEl = document.createElement('span');
+        senderEl.className = 'floating-emoji-sender';
+        senderEl.innerText = senderName || 'Guest';
+
+        wrapper.appendChild(emojiEl);
+        wrapper.appendChild(senderEl);
+        container.appendChild(wrapper);
+
+        // Remove element after animation finishes (2.5s)
+        setTimeout(() => {
+            wrapper.remove();
+        }, 2500);
     }
 
     function renderPlaylist(files) {

@@ -436,13 +436,70 @@ def handle_chat_event(data):
         party_state['message_id_counter'] += 1
         msg_id = party_state['message_id_counter']
         
-        emit('chat_event', {
+        emit('chat_message', {
             'id': msg_id,
             'client_id': client_id,
             'name': client_info['name'],
             'message': message,
             'is_admin': is_admin
         }, to=party_id)
+
+@socketio.on('emoji_reaction')
+def handle_emoji_reaction(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    client_name = data.get('client_name')
+    emoji = data.get('emoji')
+    
+    if not party_id or not client_id or not emoji:
+        return
+        
+    emit('emoji_reaction_broadcast', {
+        'client_id': client_id,
+        'client_name': client_name,
+        'emoji': emoji
+    }, to=party_id)
+
+@socketio.on('laser_move')
+def handle_laser_move(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    client_name = data.get('client_name')
+    x = data.get('x')
+    y = data.get('y')
+    active = data.get('active', True)
+    
+    if not party_id or not client_id:
+        return
+        
+    emit('laser_update', {
+        'client_id': client_id,
+        'client_name': client_name,
+        'x': x,
+        'y': y,
+        'active': active
+    }, to=party_id, include_self=False)
+
+@socketio.on('draw_stroke')
+def handle_draw_stroke(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    stroke = data.get('stroke')
+    
+    if not party_id or not client_id or not stroke:
+        return
+        
+    emit('draw_stroke_broadcast', {
+        'client_id': client_id,
+        'stroke': stroke
+    }, to=party_id, include_self=False)
+
+@socketio.on('clear_drawings')
+def handle_clear_drawings(data):
+    party_id = data.get('party_id')
+    if not party_id:
+        return
+    emit('clear_drawings_broadcast', {}, to=party_id)
 
 @socketio.on('signal')
 def handle_signal_event(data):

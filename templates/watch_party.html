@@ -633,6 +633,194 @@
             from { transform: translateX(-100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
+        
+        /* Floating Emoji Reactions */
+        .emoji-overlay-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 15;
+        }
+        
+        .floating-emoji-wrapper {
+            position: absolute;
+            bottom: -50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+            animation: floatUp 2.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        
+        .floating-emoji {
+            font-size: 2.2rem;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
+            transform-origin: center;
+        }
+        
+        .floating-emoji-sender {
+            background: rgba(18, 18, 22, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            color: #F3F3F3;
+            font-weight: 600;
+            white-space: nowrap;
+            margin-top: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            opacity: 0.9;
+        }
+        
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: translateY(-10%) scale(1.1);
+            }
+            100% {
+                transform: translateY(-120vh) scale(0.8) rotate(var(--rot, 15deg));
+                opacity: 0;
+            }
+        }
+        
+        /* Emoji Action Bar */
+        .emoji-action-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            background: rgba(25, 25, 30, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 8px 16px;
+            width: fit-content;
+            margin: 0.5rem auto 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .emoji-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+            position: relative;
+        }
+        
+        .emoji-btn:hover {
+            transform: scale(1.25) translateY(-4px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .emoji-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .emoji-btn::after {
+            content: attr(data-key);
+            position: absolute;
+            bottom: -6px;
+            right: -2px;
+            background: var(--accent);
+            color: #121216;
+            font-size: 0.6rem;
+            font-weight: 800;
+            border-radius: 4px;
+            padding: 1px 3px;
+            line-height: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        /* Synced Laser Pointer & Drawing Canvas */
+        .laser-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 12;
+        }
+        .laser-canvas.interactive {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+        
+        .laser-toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(18, 18, 22, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 4px 6px;
+            z-index: 20;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            opacity: 0.4;
+            transition: opacity 0.25s ease;
+        }
+        .video-wrapper:hover .laser-toolbar,
+        .laser-toolbar:hover {
+            opacity: 1;
+        }
+        
+        .laser-toolbar-btn {
+            background: transparent;
+            border: none;
+            color: #888890;
+            cursor: pointer;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .laser-toolbar-btn:hover {
+            color: #F3F3F3;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .laser-toolbar-btn.active {
+            color: #121216;
+            background: var(--accent);
+            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
+        }
+        
+        .color-dot-picker {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .color-dot-picker.selected {
+            transform: scale(1.25);
+            border-color: #F3F3F3;
+        }
     </style>
 </head>
 <body>
@@ -662,7 +850,41 @@
                 <div class="player-lock-overlay" id="wp-player-lock-overlay">
                     <i class="fa-solid fa-lock"></i> Playback Locked by Host
                 </div>
+                <div class="emoji-overlay-container" id="emoji-overlay-container"></div>
+                <canvas class="laser-canvas" id="laser-canvas"></canvas>
+                
+                <!-- Laser & Drawing Floating Toolbar -->
+                <div class="laser-toolbar" id="laser-toolbar">
+                    <button class="laser-toolbar-btn active" id="tool-select-none" title="Select / Move Player">
+                        <i class="fa-solid fa-arrow-pointer"></i>
+                    </button>
+                    <button class="laser-toolbar-btn" id="tool-select-laser" title="Laser Pointer">
+                        <i class="fa-solid fa-circle-radiation"></i> Laser
+                    </button>
+                    <button class="laser-toolbar-btn" id="tool-select-draw" title="Drawing Brush">
+                        <i class="fa-solid fa-pen-fancy"></i> Draw
+                    </button>
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                    <div class="color-dot-picker selected" data-color="#ff4757" style="background: #ff4757;" title="Red"></div>
+                    <div class="color-dot-picker" data-color="#2ed573" style="background: #2ed573;" title="Green"></div>
+                    <div class="color-dot-picker" data-color="#1e90ff" style="background: #1e90ff;" title="Blue"></div>
+                    <div class="color-dot-picker" data-color="#ffa502" style="background: #ffa502;" title="Orange"></div>
+                    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
+                    <button class="laser-toolbar-btn" id="btn-clear-drawings" title="Clear All Drawings" style="color: #ef4444; padding: 4px 8px;">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+                
                 <video id="lightbox-video" controls playsinline></video>
+            </div>
+            
+            <!-- Emoji Reaction Bar -->
+            <div class="emoji-action-bar" id="emoji-action-bar">
+                <button class="emoji-btn" data-emoji="❤️" data-key="1">❤️</button>
+                <button class="emoji-btn" data-emoji="🔥" data-key="2">🔥</button>
+                <button class="emoji-btn" data-emoji="😂" data-key="3">😂</button>
+                <button class="emoji-btn" data-emoji="👏" data-key="4">👏</button>
+                <button class="emoji-btn" data-emoji="🎉" data-key="5">🎉</button>
             </div>
             
             <div class="playlist-card">
@@ -864,5 +1086,7 @@
     <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
     <!-- Standalone Watch Party client handler script -->
     <script src="{{ url_for('static', filename='js/watch_party.js') }}"></script>
+    <!-- Modular Laser Pointer and Drawing Canvas script -->
+    <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}"></script>
 </body>
 </html>
