@@ -1,5 +1,5 @@
 /**
- * AuraSort — Watch Party Client Controller
+ * Chehro — Watch Party Client Controller
  * Handles synchronization, WebRTC P2P voice mesh, and playlist controls.
  */
 
@@ -232,6 +232,10 @@ if (!window.safeSessionStorage) {
 (function () {
     const localStorage = window.safeLocalStorage;
     const sessionStorage = window.safeSessionStorage;
+
+    // Apply theme on load
+    const savedTheme = localStorage.getItem('chehro-theme') || 'dark';
+    document.body.setAttribute('data-theme', savedTheme);
 
     // Unique client ID persisted per session to survive refreshes
     let clientId = sessionStorage.getItem('wp_client_id');

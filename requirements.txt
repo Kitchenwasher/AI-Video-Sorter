@@ -12,3 +12,4 @@ tenacity
 flask-cors
 pytest
 flask-socketio
+beautifulsoup4
