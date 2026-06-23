@@ -1,4 +1,4 @@
-// AURA SORT — FRONTEND JAVASCRIPT
+// CHEHRO — FRONTEND JAVASCRIPT
 
 // SAFE STORAGE WRAPPERS FOR BROWSER STORAGE RESTRICTIONS / TRACKING PREVENTION
 if (!window.safeLocalStorage) {
@@ -230,6 +230,146 @@ document.addEventListener('DOMContentLoaded', () => {
     const localStorage = window.safeLocalStorage;
     const sessionStorage = window.safeSessionStorage;
 
+    // Theme Switcher Logic
+    const themeToggleBtn = document.getElementById('btn-theme-toggle');
+    const landingThemeToggleBtn = document.getElementById('btn-landing-theme-toggle');
+    
+    const getSavedTheme = () => {
+        return localStorage.getItem('chehro-theme') || 'dark';
+    };
+    const applyTheme = (theme) => {
+        document.body.setAttribute('data-theme', theme);
+        
+        // Update sidebar button
+        if (themeToggleBtn) {
+            const icon = themeToggleBtn.querySelector('i');
+            const label = themeToggleBtn.querySelector('span');
+            if (theme === 'light') {
+                if (icon) icon.className = 'fa-solid fa-sun';
+                if (label) label.textContent = 'Light';
+            } else {
+                if (icon) icon.className = 'fa-solid fa-moon';
+                if (label) label.textContent = 'Dark';
+            }
+        }
+        
+        // Update landing page button
+        if (landingThemeToggleBtn) {
+            const icon = landingThemeToggleBtn.querySelector('i');
+            if (theme === 'light') {
+                if (icon) icon.className = 'fa-solid fa-sun';
+            } else {
+                if (icon) icon.className = 'fa-solid fa-moon';
+            }
+        }
+    };
+    
+    applyTheme(getSavedTheme());
+    
+    const handleThemeToggle = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const currentTheme = getSavedTheme();
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('chehro-theme', newTheme);
+        applyTheme(newTheme);
+    };
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', handleThemeToggle);
+    }
+    if (landingThemeToggleBtn) {
+        landingThemeToggleBtn.addEventListener('click', handleThemeToggle);
+    }
+
+    // Landing Page Navigation and Actions
+    const landingPage = document.getElementById('landing-page');
+    const appShell = document.getElementById('app-shell');
+    const enterHostBtn = document.getElementById('btn-landing-host');
+    const backHomeLogo = document.getElementById('logo-back-home');
+    const landingJoinInput = document.getElementById('landing-join-input');
+    const btnLandingJoin = document.getElementById('btn-landing-join');
+
+    // SPA View Router (Landing vs Sorter Dashboard)
+    const updateViewFromHash = () => {
+        const hash = window.location.hash;
+        const dashboardHashes = ['#dashboard', '#sort-home', '#results', '#profiles', '#duplicates', '#configuration'];
+        if (dashboardHashes.includes(hash)) {
+            // Show Dashboard
+            if (landingPage) landingPage.classList.add('is-hidden');
+            if (appShell) appShell.classList.remove('is-hidden');
+            
+            // Sync active section content view
+            const targetId = hash.replace('#', 'sec-');
+            if (typeof window.switchSection === 'function') {
+                window.switchSection(targetId);
+            }
+        } else {
+            // Show Landing Page
+            if (appShell) appShell.classList.add('is-hidden');
+            if (landingPage) landingPage.classList.remove('is-hidden');
+        }
+    };
+
+    // Listen to hash changes for browser Back/Forward support
+    window.addEventListener('hashchange', updateViewFromHash);
+
+    // Initial check on load
+    updateViewFromHash();
+
+    if (enterHostBtn) {
+        enterHostBtn.addEventListener('click', () => {
+            window.location.hash = '#sort-home';
+        });
+    }
+
+    if (backHomeLogo) {
+        backHomeLogo.addEventListener('click', () => {
+            window.location.hash = '#home';
+        });
+    }
+
+    const performWatchPartyJoin = () => {
+        if (!landingJoinInput) return;
+        const inputVal = landingJoinInput.value.trim();
+        if (!inputVal) {
+            window.showToast("Please enter a watch party ID or link.", "warning");
+            return;
+        }
+
+        // Robust validation and extraction of watch-party ID
+        let partyId = null;
+        
+        // Extract watch-party ID from URL or path
+        const wpMatch = inputVal.match(/\/watch-party\/([a-zA-Z0-9-]+)/);
+        if (wpMatch) {
+            partyId = wpMatch[1];
+        } else if (!inputVal.includes('/') && !inputVal.includes(':')) {
+            if (/^[a-zA-Z0-9-]+$/.test(inputVal)) {
+                partyId = inputVal;
+            }
+        }
+
+        if (partyId) {
+            window.location.href = '/watch-party/' + partyId;
+        } else {
+            window.showToast("Invalid Watch Party ID or Link. Please check and try again.", "warning");
+        }
+    };
+
+    if (btnLandingJoin) {
+        btnLandingJoin.addEventListener('click', performWatchPartyJoin);
+    }
+    if (landingJoinInput) {
+        landingJoinInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                performWatchPartyJoin();
+            }
+        });
+    }
+
     // Hover video preview helpers
     let hoverPreviewTimeout = null;
     let activeHoverVideo = null;
@@ -320,15 +460,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Navigation Tabs
-    const navItems = document.querySelectorAll('.nav-item');
+    const navItems = document.querySelectorAll('.nav-item[href]');
     const sections = document.querySelectorAll('.content-section');
     const pageHeading = document.getElementById('page-heading');
     const pageSubheading = document.getElementById('page-subheading');
 
     const headings = {
+        'sec-sort-home': { title: 'Home / Sort', sub: 'Sort your media files locally using local AI' },
         'sec-results': { title: 'Library', sub: 'View identified profiles and sorted media folders' },
         'sec-profiles': { title: 'Face Profiles', sub: 'Manage detected identities, assign images, and merge duplicates' },
-        'sec-dashboard': { title: 'Pipeline', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
+        'sec-dashboard': { title: 'Sorting Progress', sub: 'Real-time status of local AI sorting pipeline' },
         'sec-duplicates': { title: 'Duplicate Finder', sub: 'Scan library folders using perceptual hashing to group duplicate photos and videos' },
         'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
         'sec-gallery': { title: 'Profile Gallery', sub: 'Browse media files and correct sorting' }
@@ -368,14 +509,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof checkInitialStatus === 'function') {
                 checkInitialStatus();
             }
+        } else if (targetId === 'sec-sort-home') {
+            if (typeof updateFolderStatusCard === 'function') {
+                updateFolderStatusCard();
+            }
         }
     };
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            const targetId = item.getAttribute('href').replace('#', 'sec-');
-            window.switchSection(targetId);
+            const hash = item.getAttribute('href');
+            window.location.hash = hash;
         });
     });
 
@@ -400,6 +545,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Helper: Strip accidental quotes, handle windows drive prefix duplication, and trim whitespace
+    const cleanPath = (pathStr) => {
+        if (!pathStr) return '';
+        let cleaned = pathStr.trim();
+        
+        // Strip leading/trailing quotes (both double and single)
+        cleaned = cleaned.replace(/^['"]|['"]$/g, '');
+        cleaned = cleaned.trim();
+        
+        // Split by quotes to find nested absolute paths (e.g. C:\Users\x"C:\Users\y")
+        const parts = cleaned.split(/["']/);
+        for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i].trim();
+            if (/^[A-Za-z]:\\/.test(p) || p.startsWith('/')) {
+                cleaned = p;
+                break;
+            }
+        }
+        
+        // Strip any remaining quotes
+        cleaned = cleaned.replace(/['"]/g, '').trim();
+        
+        return cleaned;
+    };
+
     // Fetch Config on Load
     const loadConfig = async () => {
         try {
@@ -407,8 +577,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             
             // Populate form inputs
-            document.getElementById('input_dir').value = data.input_dir || '';
-            document.getElementById('output_dir').value = data.output_dir || '';
+            const cleanInDir = cleanPath(data.input_dir || '');
+            const cleanOutDir = cleanPath(data.output_dir || '');
+            if (document.getElementById('input_dir')) document.getElementById('input_dir').value = cleanInDir;
+            if (document.getElementById('output_dir')) document.getElementById('output_dir').value = cleanOutDir;
+            if (document.getElementById('input_dir_home')) document.getElementById('input_dir_home').value = cleanInDir;
+            if (document.getElementById('output_dir_home')) document.getElementById('output_dir_home').value = cleanOutDir;
             document.getElementById('mode').value = data.mode || 'move';
             document.getElementById('model_pack').value = data.model_pack || 'buffalo_l';
             document.getElementById('keyframe_interval').value = data.keyframe_interval !== undefined ? data.keyframe_interval : 0;
@@ -458,21 +632,229 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('wp_hls_resolution').value = data.wp_hls_resolution || '1280x720';
             
             appendLog('info', 'Loaded current configuration settings.');
+            
+            // Dynamic UI updates based on loaded paths
+            if (typeof updateFolderStatusCard === 'function') {
+                updateFolderStatusCard();
+            }
         } catch (err) {
             appendLog('error', `Failed to load configuration: ${err.message}`);
         }
     };
 
+    // Helper: Update folder selection status cards
+    const updateFolderStatusCard = () => {
+        const inputDirEl = document.getElementById('input_dir_home') || document.getElementById('input_dir');
+        const outputDirEl = document.getElementById('output_dir_home') || document.getElementById('output_dir');
+        const inputDir = inputDirEl ? cleanPath(inputDirEl.value) : '';
+        const outputDir = outputDirEl ? cleanPath(outputDirEl.value) : '';
+        
+        const foldersCard = document.getElementById('status-card-folders');
+        const foldersText = document.getElementById('status-text-folders');
+        
+        if (inputDir && outputDir) {
+            if (foldersCard) {
+                foldersCard.className = 'status-box box-lime box-success';
+            }
+            if (foldersText) {
+                foldersText.textContent = 'Configured';
+            }
+        } else {
+            if (foldersCard) {
+                foldersCard.className = 'status-box box-orange box-pending';
+            }
+            if (foldersText) {
+                foldersText.textContent = 'Required';
+            }
+        }
+    };
+
+    // Synchronize and clean folder path inputs across Home and Settings tabs
+    const inputDirHome = document.getElementById('input_dir_home');
+    const outputDirHome = document.getElementById('output_dir_home');
+    const settingsInputDir = document.getElementById('input_dir');
+    const settingsOutputDir = document.getElementById('output_dir');
+
+    const syncAndCleanInput = (srcEl, destEl) => {
+        if (!srcEl) return;
+        const val = cleanPath(srcEl.value);
+        srcEl.value = val;
+        if (destEl) destEl.value = val;
+        updateFolderStatusCard();
+    };
+
+    if (inputDirHome && settingsInputDir) {
+        inputDirHome.addEventListener('input', () => {
+            settingsInputDir.value = inputDirHome.value;
+            updateFolderStatusCard();
+        });
+        inputDirHome.addEventListener('blur', () => {
+            syncAndCleanInput(inputDirHome, settingsInputDir);
+        });
+        
+        settingsInputDir.addEventListener('input', () => {
+            inputDirHome.value = settingsInputDir.value;
+            updateFolderStatusCard();
+        });
+        settingsInputDir.addEventListener('blur', () => {
+            syncAndCleanInput(settingsInputDir, inputDirHome);
+        });
+    } else {
+        if (inputDirHome) {
+            inputDirHome.addEventListener('input', updateFolderStatusCard);
+            inputDirHome.addEventListener('blur', () => syncAndCleanInput(inputDirHome, null));
+        }
+        if (settingsInputDir) {
+            settingsInputDir.addEventListener('input', updateFolderStatusCard);
+            settingsInputDir.addEventListener('blur', () => syncAndCleanInput(settingsInputDir, null));
+        }
+    }
+
+    if (outputDirHome && settingsOutputDir) {
+        outputDirHome.addEventListener('input', () => {
+            settingsOutputDir.value = outputDirHome.value;
+            updateFolderStatusCard();
+        });
+        outputDirHome.addEventListener('blur', () => {
+            syncAndCleanInput(outputDirHome, settingsOutputDir);
+        });
+        
+        settingsOutputDir.addEventListener('input', () => {
+            outputDirHome.value = settingsOutputDir.value;
+            updateFolderStatusCard();
+        });
+        settingsOutputDir.addEventListener('blur', () => {
+            syncAndCleanInput(settingsOutputDir, outputDirHome);
+        });
+    } else {
+        if (outputDirHome) {
+            outputDirHome.addEventListener('input', updateFolderStatusCard);
+            outputDirHome.addEventListener('blur', () => syncAndCleanInput(outputDirHome, null));
+        }
+        if (settingsOutputDir) {
+            settingsOutputDir.addEventListener('input', updateFolderStatusCard);
+            settingsOutputDir.addEventListener('blur', () => syncAndCleanInput(settingsOutputDir, null));
+        }
+    }
+
+    // Helper: Handle folder browsing dialog from backend api
+    const handleBrowseFolder = async (targetInputHome, targetInputSettings) => {
+        console.log("[DEBUG] handleBrowseFolder called. targetInputHome:", !!targetInputHome, "targetInputSettings:", !!targetInputSettings);
+        try {
+            console.log("[DEBUG] Sending POST fetch request to /api/select-folder...");
+            const res = await fetch('/api/select-folder', { method: 'POST' });
+            console.log("[DEBUG] Fetch response status:", res.status);
+            const data = await res.json();
+            console.log("[DEBUG] Response JSON:", data);
+            
+            if (data.status === 'success') {
+                const cleanedPath = cleanPath(data.path);
+                console.log("[DEBUG] Folder selected successfully. Cleaned path:", cleanedPath);
+                if (targetInputHome) targetInputHome.value = cleanedPath;
+                if (targetInputSettings) targetInputSettings.value = cleanedPath;
+                
+                updateFolderStatusCard();
+                
+                // Automatically save updated folders to configuration
+                await window.saveConfigSettings(false);
+            } else if (data.status === 'error') {
+                console.warn("[DEBUG] Folder picker returned error:", data.message);
+                if (window.showToast) {
+                    window.showToast(data.message || "Failed to select folder.", "error");
+                } else {
+                    alert(data.message || "Failed to select folder.");
+                }
+            } else {
+                console.log("[DEBUG] Folder picker status:", data.status);
+            }
+        } catch (err) {
+            console.error('[DEBUG] Folder picker error:', err);
+            if (window.showToast) {
+                window.showToast("Folder picker unavailable. Paste the folder path manually.", "warning");
+            } else {
+                alert("Folder picker unavailable. Paste the folder path manually.");
+            }
+        }
+    };
+
+    // Click listeners for folder picker buttons
+    const btnBrowseInputHome = document.getElementById('btn-browse-input-home');
+    const btnBrowseOutputHome = document.getElementById('btn-browse-output-home');
+    const btnBrowseInput = document.getElementById('btn-browse-input');
+    const btnBrowseOutput = document.getElementById('btn-browse-output');
+
+    if (btnBrowseInputHome) {
+        console.log("[DEBUG] Found btn-browse-input-home in DOM, binding listener");
+        btnBrowseInputHome.addEventListener('click', () => {
+            console.log("[DEBUG] btnBrowseInputHome clicked");
+            handleBrowseFolder(inputDirHome, settingsInputDir);
+        });
+    } else {
+        console.warn("[DEBUG] btn-browse-input-home NOT found in DOM");
+    }
+    if (btnBrowseOutputHome) {
+        console.log("[DEBUG] Found btn-browse-output-home in DOM, binding listener");
+        btnBrowseOutputHome.addEventListener('click', () => {
+            console.log("[DEBUG] btnBrowseOutputHome clicked");
+            handleBrowseFolder(outputDirHome, settingsOutputDir);
+        });
+    } else {
+        console.warn("[DEBUG] btn-browse-output-home NOT found in DOM");
+    }
+    if (btnBrowseInput) {
+        console.log("[DEBUG] Found btn-browse-input in DOM, binding listener");
+        btnBrowseInput.addEventListener('click', () => {
+            console.log("[DEBUG] btnBrowseInput clicked");
+            handleBrowseFolder(inputDirHome, settingsInputDir);
+        });
+    } else {
+        console.warn("[DEBUG] btn-browse-input NOT found in DOM");
+    }
+    if (btnBrowseOutput) {
+        console.log("[DEBUG] Found btn-browse-output in DOM, binding listener");
+        btnBrowseOutput.addEventListener('click', () => {
+            console.log("[DEBUG] btnBrowseOutput clicked");
+            handleBrowseFolder(outputDirHome, settingsOutputDir);
+        });
+    } else {
+        console.warn("[DEBUG] btn-browse-output NOT found in DOM");
+    }
+
+    // Load initial config
     loadConfig();
 
-    // Save Config Form
-    const configForm = document.getElementById('config-form');
-    configForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // Helper: Save current configuration options globally
+    window.saveConfigSettings = async (showNotification = true) => {
+        const inputDirEl = document.getElementById('input_dir');
+        const outputDirEl = document.getElementById('output_dir');
         
+        const inputDir = inputDirEl ? cleanPath(inputDirEl.value) : '';
+        const outputDir = outputDirEl ? cleanPath(outputDirEl.value) : '';
+        
+        // Clean values in DOM elements
+        if (inputDirEl) inputDirEl.value = inputDir;
+        if (outputDirEl) outputDirEl.value = outputDir;
+        
+        const inputDirHome = document.getElementById('input_dir_home');
+        const outputDirHome = document.getElementById('output_dir_home');
+        if (inputDirHome) inputDirHome.value = inputDir;
+        if (outputDirHome) outputDirHome.value = outputDir;
+
+        // Front-end validations
+        if (inputDir && outputDir && inputDir.toLowerCase() === outputDir.toLowerCase()) {
+            if (showNotification) {
+                if (window.showToast) {
+                    window.showToast("Input and output folders should be different.", "warning");
+                } else {
+                    alert("Input and output folders should be different.");
+                }
+            }
+            return false;
+        }
+
         const payload = {
-            input_dir: document.getElementById('input_dir').value,
-            output_dir: document.getElementById('output_dir').value,
+            input_dir: inputDir,
+            output_dir: outputDir,
             mode: document.getElementById('mode').value,
             model_pack: document.getElementById('model_pack').value,
             keyframe_interval: parseInt(document.getElementById('keyframe_interval').value),
@@ -515,13 +897,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.status === 'success') {
                 appendLog('info', 'Configuration saved successfully!');
-                alert('Configuration saved successfully!');
+                if (showNotification) {
+                    if (window.showToast) {
+                        window.showToast('Configuration saved successfully!', 'success');
+                    } else {
+                        alert('Configuration saved successfully!');
+                    }
+                }
+                updateFolderStatusCard();
+                return true;
             } else {
                 appendLog('error', `Failed to save configuration: ${data.message}`);
+                if (showNotification) {
+                    if (window.showToast) {
+                        window.showToast(`Failed to save configuration: ${data.message}`, 'error');
+                    } else {
+                        alert(`Failed to save configuration: ${data.message}`);
+                    }
+                }
+                return false;
             }
         } catch (err) {
             appendLog('error', `Error sending configuration: ${err.message}`);
+            if (showNotification) {
+                if (window.showToast) {
+                    window.showToast(`Error saving configuration: ${err.message}`, 'error');
+                } else {
+                    alert(`Error saving configuration: ${err.message}`);
+                }
+            }
+            return false;
         }
+    };
+
+    // Save Config Form Submitter
+    const configForm = document.getElementById('config-form');
+    configForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await window.saveConfigSettings(true);
     });
 
     // Settings Sub-Tab Switching Logic
@@ -601,6 +1014,14 @@ document.addEventListener('DOMContentLoaded', () => {
             progressMessage.textContent = data.message;
             currentStage.textContent = data.stage.toUpperCase();
 
+            // Checklist & Status card sync
+            if (typeof updateProgressChecklist === 'function') {
+                updateProgressChecklist(data.stage);
+            }
+            if (typeof updateSortingStatusCard === 'function') {
+                updateSortingStatusCard(data.running, data.stage);
+            }
+
             // Append logs
             if (data.new_logs && data.new_logs.length > 0) {
                 data.new_logs.forEach(logStr => {
@@ -609,7 +1030,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (logStr.includes('ERROR') || logStr.includes('Failed') || logStr.includes('error')) level = 'error';
                     
                     // Strip timestamp prefix if logger already has one to avoid double timestamp
-                    // E.g. "2026-06-08 01:23:45,678 - INFO - ..."
                     const cleanMsg = logStr.replace(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - \w+ - /, '');
                     appendLog(level, cleanMsg);
                 });
@@ -643,6 +1063,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     systemDot.className = 'status-indicator-dot';
                     systemStatusText.textContent = 'System Idle';
                 }
+
+                if (typeof updateSortingStatusCard === 'function') {
+                    updateSortingStatusCard(false, data.stage);
+                }
             }
         };
 
@@ -652,9 +1076,128 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
+    // Helper: Reset checklist steps
+    const resetProgressChecklist = () => {
+        const ids = ['stage-scan', 'stage-detect', 'stage-cluster', 'stage-move', 'stage-done'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.className = 'stage-item pending';
+                const iconEl = el.querySelector('i');
+                if (iconEl) {
+                    iconEl.className = 'fa-regular fa-circle';
+                }
+            }
+        });
+    };
+
+    // Helper: Sync checklist status
+    const updateProgressChecklist = (stage) => {
+        const stageItems = {
+            'stage-scan': {
+                active: ['scanning', 'init_models'],
+                completed: ['analysis', 'clustering', 'sorting', 'assignment', 'auto_naming', 'completed']
+            },
+            'stage-detect': {
+                active: ['analysis'],
+                completed: ['clustering', 'sorting', 'assignment', 'auto_naming', 'completed']
+            },
+            'stage-cluster': {
+                active: ['clustering'],
+                completed: ['sorting', 'assignment', 'auto_naming', 'completed']
+            },
+            'stage-move': {
+                active: ['sorting', 'assignment', 'auto_naming'],
+                completed: ['completed']
+            },
+            'stage-done': {
+                active: ['completed'],
+                completed: ['completed']
+            }
+        };
+
+        Object.keys(stageItems).forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            
+            const config = stageItems[id];
+            const iconEl = el.querySelector('i');
+            
+            if (config.completed.includes(stage)) {
+                el.className = 'stage-item completed';
+                if (iconEl) {
+                    iconEl.className = 'fa-solid fa-circle-check';
+                }
+            } else if (config.active.includes(stage)) {
+                el.className = 'stage-item active';
+                if (iconEl) {
+                    iconEl.className = 'fa-solid fa-spinner fa-spin';
+                }
+            } else {
+                el.className = 'stage-item pending';
+                if (iconEl) {
+                    iconEl.className = 'fa-regular fa-circle';
+                }
+            }
+        });
+    };
+
+    // Helper: Update sorting card status
+    const updateSortingStatusCard = (running, stage) => {
+        const sortingText = document.getElementById('status-text-sorting');
+        const sortingCard = document.getElementById('status-card-sorting');
+        if (!sortingCard || !sortingText) return;
+        
+        if (running) {
+            sortingText.textContent = 'Sorting...';
+            sortingCard.className = 'status-box box-pink box-pending';
+        } else if (stage === 'completed') {
+            sortingText.textContent = 'Completed';
+            sortingCard.className = 'status-box box-pink box-success';
+        } else if (stage === 'error') {
+            sortingText.textContent = 'Failed';
+            sortingCard.className = 'status-box box-pink';
+        } else {
+            sortingText.textContent = 'Idle';
+            sortingCard.className = 'status-box box-pink';
+        }
+    };
+
+    // Helper: Validate paths before start sorting
+    const validatePathsBeforeStart = () => {
+        const inputDirEl = document.getElementById('input_dir_home') || document.getElementById('input_dir');
+        const outputDirEl = document.getElementById('output_dir_home') || document.getElementById('output_dir');
+        const inputDir = inputDirEl ? cleanPath(inputDirEl.value) : '';
+        const outputDir = outputDirEl ? cleanPath(outputDirEl.value) : '';
+
+        if (!inputDir) {
+            const msg = "Input folder cannot be empty before Start Sorting.";
+            if (window.showToast) window.showToast(msg, "warning");
+            else alert(msg);
+            return false;
+        }
+        if (!outputDir) {
+            const msg = "Output folder cannot be empty before Start Sorting.";
+            if (window.showToast) window.showToast(msg, "warning");
+            else alert(msg);
+            return false;
+        }
+        if (inputDir.toLowerCase() === outputDir.toLowerCase()) {
+            const msg = "Input and output folders should be different.";
+            if (window.showToast) window.showToast(msg, "warning");
+            else alert(msg);
+            return false;
+        }
+        return true;
+    };
+
     // Start Sorting Process
     startBtn.addEventListener('click', async () => {
+        if (!validatePathsBeforeStart()) {
+            return;
+        }
         try {
+            resetProgressChecklist();
             // First save config just in case
             appendLog('info', 'Triggering pipeline launch...');
             const res = await fetch('/api/start', { method: 'POST' });
@@ -670,6 +1213,31 @@ document.addEventListener('DOMContentLoaded', () => {
             appendLog('error', `Launch HTTP Error: ${err.message}`);
         }
     });
+
+    // Home / Sort Step 3 CTA Button Click Handler
+    const btnStartSortHome = document.getElementById('btn-start-sort-home');
+    if (btnStartSortHome) {
+        btnStartSortHome.addEventListener('click', async () => {
+            if (!validatePathsBeforeStart()) {
+                return;
+            }
+            
+            // Save configuration settings silently (no success alert/toast)
+            const saveSuccess = await window.saveConfigSettings(false);
+            if (saveSuccess) {
+                // Navigate to Sorting Progress page
+                window.location.hash = '#dashboard';
+                
+                // Automatically click Start Sorting button
+                const btnStart = document.getElementById('btn-start');
+                if (btnStart) {
+                    setTimeout(() => {
+                        btnStart.click();
+                    }, 200);
+                }
+            }
+        });
+    }
 
     // Clear Cache Button
     clearCacheBtn.addEventListener('click', async () => {
@@ -860,9 +1428,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!data.folders || data.folders.length === 0) {
                 libraryGrid.innerHTML = `
-                    <div class="no-results-placeholder" style="grid-column: 1/-1;">
-                        <i class="fa-solid fa-folder-open placeholder-icon"></i>
-                        <p>No sorted directories found. Start sorting from the Pipeline tab.</p>
+                    <div class="no-results-placeholder" style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem 1.5rem; text-align: center;">
+                        <i class="fa-solid fa-folder-open placeholder-icon" style="font-size: 3.5rem; color: var(--text-muted); margin-bottom: 0.5rem;"></i>
+                        <h3 style="font-size: 1.5rem; font-weight: 800; margin: 0; text-transform: uppercase;">No sorted folders yet</h3>
+                        <p style="color: var(--text-dim); max-width: 400px; margin: 0 auto; line-height: 1.4; font-size: 0.95rem;">Choose a media folder and start sorting to see people here.</p>
+                        <button class="btn btn-primary" onclick="window.location.hash='#sort-home'" style="margin-top: 1rem; padding: 0.75rem 1.5rem; box-shadow: 4px 4px 0px var(--border); font-weight: 800; text-transform: uppercase;">
+                            <i class="fa-solid fa-play"></i> Start Sorting
+                        </button>
                     </div>
                 `;
                 libraryCountTitle.textContent = 'No library processed yet';

@@ -579,6 +579,87 @@ def restrict_public_access():
             
         return jsonify({'status': 'error', 'message': 'Access denied: Public viewers are only permitted to access watch parties.'}), 403
 
+@app.route('/api/select-folder', methods=['POST'])
+def select_folder():
+    print("[DEBUG] Backend /api/select-folder endpoint called!")
+    # Security check: only local access allowed
+    host = request.headers.get('Host', '').lower().strip()
+    host_name = host.split(':')[0]
+    
+    is_local_host = host_name in ('127.0.0.1', 'localhost', '[::1]', '::1')
+    is_local_ip = request.remote_addr in ('127.0.0.1', '::1', 'localhost')
+    
+    is_public = (
+        'lhr.life' in host_name or 
+        'localhost.run' in host_name or 
+        'trycloudflare.com' in host_name or
+        (public_tunnel_url and host_name in public_tunnel_url)
+    )
+    
+    print(f"[DEBUG] host={host}, host_name={host_name}, remote_addr={request.remote_addr}")
+    print(f"[DEBUG] is_local_host={is_local_host}, is_local_ip={is_local_ip}, is_public={is_public}")
+    
+    if not is_local_host or not is_local_ip or is_public:
+        print("[DEBUG] Access denied for /api/select-folder request")
+        return jsonify({'status': 'error', 'message': 'Access denied: Folder picker is only accessible locally.'}), 403
+
+    try:
+        import subprocess
+        import sys
+        
+        # Build creationflags to hide console window on Windows
+        creationflags = 0
+        if sys.platform == 'win32':
+            creationflags = 0x08000000 # CREATE_NO_WINDOW
+            
+        picker_code = """
+import sys
+try:
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.lift()
+    root.attributes("-topmost", True)
+    path = filedialog.askdirectory(parent=root, title="Choose folder")
+    root.destroy()
+    sys.stdout.write(path or "")
+except Exception as e:
+    sys.stderr.write(str(e))
+    sys.exit(1)
+"""
+        proc = subprocess.Popen(
+            [sys.executable, '-'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=creationflags,
+            text=True
+        )
+        try:
+            selected, stderr = proc.communicate(input=picker_code, timeout=120)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            selected, stderr = proc.communicate()
+            logger.error("Folder picker process timed out.")
+            return jsonify({'status': 'error', 'message': 'Folder picker timed out.'}), 500
+            
+        if proc.returncode != 0:
+            logger.error(f"Folder picker subprocess error: {stderr}")
+            return jsonify({'status': 'error', 'message': 'Folder picker unavailable. Paste the path manually.'}), 500
+            
+        selected = selected.strip()
+        if selected:
+            # Normalize path for Windows backslashes
+            selected = os.path.normpath(selected)
+            return jsonify({'status': 'success', 'path': selected})
+        else:
+            return jsonify({'status': 'cancelled'})
+            
+    except Exception as e:
+        logger.error(f"Failed to launch folder picker subprocess: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Folder picker unavailable. Paste the path manually.'}), 500
+
 @app.route('/')
 def index():
     cleanup_expired_parties()
@@ -589,8 +670,10 @@ def handle_config():
     global current_config
     if request.method == 'POST':
         data = request.json
-        current_config.input_dir = os.path.abspath(data.get('input_dir', current_config.input_dir))
-        current_config.output_dir = os.path.abspath(data.get('output_dir', current_config.output_dir))
+        input_dir_val = data.get('input_dir', '').strip().replace('"', '').replace("'", "")
+        output_dir_val = data.get('output_dir', '').strip().replace('"', '').replace("'", "")
+        current_config.input_dir = os.path.abspath(input_dir_val) if input_dir_val else ""
+        current_config.output_dir = os.path.abspath(output_dir_val) if output_dir_val else ""
         current_config.mode = data.get('mode', current_config.mode)
         current_config.keyframe_interval = int(data.get('keyframe_interval', current_config.keyframe_interval))
         current_config.max_keyframes = int(data.get('max_keyframes', current_config.max_keyframes))
