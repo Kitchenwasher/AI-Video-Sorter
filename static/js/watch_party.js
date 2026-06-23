@@ -259,32 +259,101 @@
             addLogEntry('System', 'Failed to retrieve media playlist.');
         }
 
-        // Establish the EventSource connection
+        // Establish Socket.IO connection
         const storedToken = localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
-        let streamUrl = `/api/watch-party/${window.PARTY_ID}/stream?client_id=${encodeURIComponent(clientId)}&client_name=${encodeURIComponent(clientName)}`;
-        if (storedToken) {
-            streamUrl += `&admin_token=${encodeURIComponent(storedToken)}`;
-        }
-        sseSource = new EventSource(streamUrl);
+        const socket = io({
+            transports: ['websocket', 'polling']
+        });
+        window.socket = socket;
 
-        sseSource.onopen = () => {
+        socket.on('connect', () => {
             addLogEntry('System', 'Connected! Waiting for synchronizations...');
-        };
+            socket.emit('join', {
+                party_id: window.PARTY_ID,
+                client_id: clientId,
+                client_name: clientName,
+                admin_token: storedToken
+            });
+        });
 
-        sseSource.onerror = (err) => {
-            console.error('SSE Stream Error:', err);
+        socket.on('disconnect', () => {
             addLogEntry('System', 'Connection lost. Reconnecting...');
-        };
+        });
 
-        sseSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'ping') return;
-                handleSSEMessage(data);
-            } catch (e) {
-                console.error('Failed to parse SSE payload:', e);
+        socket.on('error', (errData) => {
+            console.error('Socket.IO Error:', errData);
+            showToast(errData.message || 'Connection error', 'danger');
+        });
+
+        socket.on('init_payload', (data) => {
+            if (data.turn_server) {
+                rtcConfig.iceServers = [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { 
+                        urls: data.turn_server,
+                        username: data.turn_username,
+                        credential: data.turn_credential
+                    }
+                ];
             }
-        };
+            handleSSEMessage({ type: 'init', ...data });
+        });
+
+        socket.on('peer_joined', (data) => {
+            handleSSEMessage({ type: 'peer_joined', ...data });
+        });
+
+        socket.on('peer_left', (data) => {
+            handleSSEMessage({ type: 'peer_left', ...data });
+        });
+
+        socket.on('sync_event', (data) => {
+            handleSSEMessage({ type: 'sync', ...data });
+        });
+
+        socket.on('chat_event', (data) => {
+            handleSSEMessage({ type: 'chat', ...data });
+        });
+
+        socket.on('signal_event', (data) => {
+            handleSSEMessage({ type: 'signal', ...data });
+        });
+
+        socket.on('folder_changed', (data) => {
+            handleSSEMessage({ type: 'folder_changed', ...data });
+        });
+
+        socket.on('playback_locked', (data) => {
+            handleSSEMessage({ type: 'playback_locked', ...data });
+        });
+
+        socket.on('settings_changed', (data) => {
+            handleSSEMessage({ type: 'settings_changed', ...data });
+        });
+
+        socket.on('kicked', (data) => {
+            handleSSEMessage({ type: 'kicked', ...data });
+        });
+
+        socket.on('kicked_direct', () => {
+            handleSSEMessage({ type: 'kicked' });
+        });
+
+        socket.on('force_mute', (data) => {
+            handleSSEMessage({ type: 'force_mute', ...data });
+        });
+
+        socket.on('party_ended', (data) => {
+            handleSSEMessage({ type: 'party_ended', ...data });
+        });
+
+        socket.on('chat_delete', (data) => {
+            handleSSEMessage({ type: 'chat_delete', ...data });
+        });
+
+        socket.on('chat_clear', (data) => {
+            handleSSEMessage({ type: 'chat_clear', ...data });
+        });
 
         // Bind local player events to broadcast modifications
         player.on('play', () => {
@@ -373,7 +442,7 @@
     }
 
     function loadMediaFile(filename) {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
             console.log('Loading file:', filename);
             currentFilename = filename;
 
@@ -413,19 +482,77 @@
                 imagePlayer.style.display = 'none';
                 if (plyrContainer) plyrContainer.style.display = 'block';
 
-                player.source = {
-                    type: 'video',
-                    sources: [
-                        {
-                            src: mediaUrl,
-                            type: 'video/mp4'
+                // Check for HLS optimization on the server
+                let activeUrl = mediaUrl;
+                let isHlsPlaying = false;
+                try {
+                    const trRes = await fetch(`/api/watch-party/${window.PARTY_ID}/transcode`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ folder_name: window.FOLDER_NAME, filename: filename })
+                    });
+                    const trData = await trRes.json();
+                    if (trData.status === 'ready' || trData.status === 'converting') {
+                        activeUrl = trData.hls_url;
+                        isHlsPlaying = true;
+                        if (trData.status === 'converting') {
+                            showToast('Optimizing video stream (HLS)...', 'info');
                         }
-                    ]
-                };
+                    }
+                } catch (err) {
+                    console.warn('HLS request failed, playing raw file instead.', err);
+                }
 
-                player.once('ready', () => {
-                    resolve();
-                });
+                // Clean up previous HLS instance
+                if (window.hlsInstance) {
+                    window.hlsInstance.destroy();
+                    window.hlsInstance = null;
+                }
+
+                const videoEl = document.getElementById('lightbox-video');
+
+                if (isHlsPlaying && Hls.isSupported() && videoEl) {
+                    const hls = new Hls({
+                        maxMaxBufferLength: 8,
+                        liveSyncPosition: 1.5
+                    });
+                    hls.loadSource(activeUrl);
+                    hls.attachMedia(videoEl);
+                    window.hlsInstance = hls;
+
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        resolve();
+                    });
+
+                    hls.on(Hls.Events.ERROR, (event, data) => {
+                        if (data.fatal) {
+                            console.warn('HLS stream fatal error, falling back to raw MP4:', data);
+                            hls.destroy();
+                            window.hlsInstance = null;
+                            player.source = {
+                                type: 'video',
+                                sources: [{ src: mediaUrl, type: 'video/mp4' }]
+                            };
+                            resolve();
+                        }
+                    });
+                } else {
+                    player.source = {
+                        type: 'video',
+                        sources: [
+                            {
+                                src: mediaUrl,
+                                type: 'video/mp4'
+                            }
+                        ]
+                    };
+                    player.once('ready', () => {
+                        resolve();
+                    });
+                }
+            }
+        });
+    }
 
                 // Fallback in case Plyr ready is delayed
                 setTimeout(resolve, 800);
@@ -560,12 +687,12 @@
                 break;
 
             case 'chat':
-                if (data.sender_id === clientId) return;
-                addChatMessage(data.sender_name, data.message, data.time, false, data.message_id, data.is_admin || false);
+                const isSelf = data.sender_id === clientId;
+                addChatMessage(data.sender_name, data.message, data.time, isSelf, data.message_id, data.is_admin || false);
                 break;
 
             case 'kicked':
-                if (sseSource) sseSource.close();
+                if (window.socket) window.socket.disconnect();
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
@@ -611,7 +738,7 @@
                 break;
                 
             case 'party_ended':
-                if (sseSource) sseSource.close();
+                if (window.socket) window.socket.disconnect();
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
@@ -692,17 +819,15 @@
 
     function broadcastSync(action, position) {
         if (!currentFilename) return;
-
-        fetch(`/api/watch-party/${window.PARTY_ID}/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+        if (window.socket && window.socket.connected) {
+            window.socket.emit('sync', {
+                party_id: window.PARTY_ID,
                 client_id: clientId,
                 action: action,
                 position: position,
                 filename: currentFilename
-            })
-        }).catch(err => console.error('Error broadcasting sync:', err));
+            });
+        }
     }
 
     /**
@@ -804,15 +929,14 @@
     }
 
     function sendSignal(targetId, signalData) {
-        fetch(`/api/watch-party/${window.PARTY_ID}/signal`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+        if (window.socket && window.socket.connected) {
+            window.socket.emit('signal', {
+                party_id: window.PARTY_ID,
                 sender_id: clientId,
                 target_id: targetId,
                 signal: signalData
-            })
-        }).catch(err => console.error('Signaling relay error:', err));
+            });
+        }
     }
 
     function handleCandidate(peerId, candidate) {
@@ -1068,31 +1192,19 @@
             chatInput.value = '';
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-            fetch(`/api/watch-party/${window.PARTY_ID}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            if (window.socket && window.socket.connected) {
+                window.socket.emit('chat', {
+                    party_id: window.PARTY_ID,
                     client_id: clientId,
-                    client_name: clientName,
                     message: msgText
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    lastChatSentTime = Date.now();
-                    if (isSlowMode && !adminToken) {
-                        startSlowModeCooldown();
-                    }
-                    addChatMessage(clientName, msgText, timeStr, true, data.message_id, adminToken !== null);
-                } else if (data.status === 'error') {
-                    showToast(data.message, 'error');
+                });
+                lastChatSentTime = Date.now();
+                if (isSlowMode && !adminToken) {
+                    startSlowModeCooldown();
                 }
-            })
-            .catch(err => {
-                console.error('Failed to send chat message:', err);
-                addSystemChatMessage('Error sending message.');
-            });
+            } else {
+                showToast('Disconnected from server.', 'error');
+            }
         };
 
         sendBtn.onclick = sendMessage;

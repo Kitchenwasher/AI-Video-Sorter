@@ -215,6 +215,17 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('name_search_delay').value = data.name_search_delay !== undefined ? data.name_search_delay : 4.0;
             document.getElementById('default_video_player').value = data.default_video_player || 'browser';
             
+            // Watch Party Settings Loading
+            document.getElementById('wp_use_cloudflare').checked = data.wp_use_cloudflare !== false;
+            document.getElementById('wp_cloudflare_token').value = data.wp_cloudflare_token || '';
+            document.getElementById('wp_custom_domain').value = data.wp_custom_domain || '';
+            document.getElementById('wp_turn_server').value = data.wp_turn_server || '';
+            document.getElementById('wp_turn_username').value = data.wp_turn_username || '';
+            document.getElementById('wp_turn_credential').value = data.wp_turn_credential || '';
+            document.getElementById('wp_use_hls').checked = data.wp_use_hls === true;
+            document.getElementById('wp_hls_bitrate').value = data.wp_hls_bitrate || '2500k';
+            document.getElementById('wp_hls_resolution').value = data.wp_hls_resolution || '1280x720';
+            
             appendLog('info', 'Loaded current configuration settings.');
         } catch (err) {
             appendLog('error', `Failed to load configuration: ${err.message}`);
@@ -250,7 +261,18 @@ document.addEventListener('DOMContentLoaded', () => {
             merge_on_name_conflict: document.getElementById('merge_on_name_conflict').checked,
             name_confidence_threshold: parseFloat(document.getElementById('name_confidence_threshold').value),
             name_search_delay: parseFloat(document.getElementById('name_search_delay').value),
-            default_video_player: document.getElementById('default_video_player').value
+            default_video_player: document.getElementById('default_video_player').value,
+            
+            // Watch Party configuration fields
+            wp_use_cloudflare: document.getElementById('wp_use_cloudflare').checked,
+            wp_cloudflare_token: document.getElementById('wp_cloudflare_token').value,
+            wp_custom_domain: document.getElementById('wp_custom_domain').value,
+            wp_turn_server: document.getElementById('wp_turn_server').value,
+            wp_turn_username: document.getElementById('wp_turn_username').value,
+            wp_turn_credential: document.getElementById('wp_turn_credential').value,
+            wp_use_hls: document.getElementById('wp_use_hls').checked,
+            wp_hls_bitrate: document.getElementById('wp_hls_bitrate').value,
+            wp_hls_resolution: document.getElementById('wp_hls_resolution').value
         };
 
         try {
@@ -270,6 +292,23 @@ document.addEventListener('DOMContentLoaded', () => {
             appendLog('error', `Error sending configuration: ${err.message}`);
         }
     });
+
+    // Settings Sub-Tab Switching Logic
+    const tabBtns = document.querySelectorAll('.settings-tab-btn');
+    const tabPanels = document.querySelectorAll('.settings-tab-panel');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-settings-tab');
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanels.forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            const activePanel = document.getElementById('tab-' + target);
+            if (activePanel) {
+                activePanel.classList.add('active');
+            }
+        });
+    });
+
 
     // Logging & Console utilities
     const consoleOutput = document.getElementById('console-logs');

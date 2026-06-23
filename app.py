@@ -13,6 +13,8 @@ from utils.logger import logger, ui_log_handler
 
 app = Flask(__name__)
 CORS(app)
+from flask_socketio import SocketIO, emit, join_room, leave_room
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 WORKSPACE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Configure SQLAlchemy (Postgres in production, SQLite fallback for local development)
@@ -106,7 +108,16 @@ def load_settings():
                     name_confidence_threshold=data.get('name_confidence_threshold', 0.5),
                     name_search_delay=data.get('name_search_delay', 4.0),
                     merge_on_name_conflict=data.get('merge_on_name_conflict', False),
-                    default_video_player=data.get('default_video_player', 'browser')
+                    default_video_player=data.get('default_video_player', 'browser'),
+                    wp_use_cloudflare=data.get('wp_use_cloudflare', True),
+                    wp_cloudflare_token=data.get('wp_cloudflare_token', ''),
+                    wp_custom_domain=data.get('wp_custom_domain', ''),
+                    wp_turn_server=data.get('wp_turn_server', ''),
+                    wp_turn_username=data.get('wp_turn_username', ''),
+                    wp_turn_credential=data.get('wp_turn_credential', ''),
+                    wp_use_hls=data.get('wp_use_hls', False),
+                    wp_hls_bitrate=data.get('wp_hls_bitrate', '2500k'),
+                    wp_hls_resolution=data.get('wp_hls_resolution', '1280x720')
                 )
         except Exception as e:
             logger.error(f"Failed to load settings.json: {e}")
@@ -136,7 +147,16 @@ def save_settings(config_obj):
             'name_confidence_threshold': config_obj.name_confidence_threshold,
             'name_search_delay': config_obj.name_search_delay,
             'merge_on_name_conflict': config_obj.merge_on_name_conflict,
-            'default_video_player': config_obj.default_video_player
+            'default_video_player': config_obj.default_video_player,
+            'wp_use_cloudflare': config_obj.wp_use_cloudflare,
+            'wp_cloudflare_token': config_obj.wp_cloudflare_token,
+            'wp_custom_domain': config_obj.wp_custom_domain,
+            'wp_turn_server': config_obj.wp_turn_server,
+            'wp_turn_username': config_obj.wp_turn_username,
+            'wp_turn_credential': config_obj.wp_turn_credential,
+            'wp_use_hls': config_obj.wp_use_hls,
+            'wp_hls_bitrate': config_obj.wp_hls_bitrate,
+            'wp_hls_resolution': config_obj.wp_hls_resolution
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(data, f, indent=4)
@@ -144,8 +164,192 @@ def save_settings(config_obj):
     except Exception as e:
         logger.error(f"Failed to save settings.json: {e}")
 
+
 # Load config
 current_config = load_settings()
+
+
+# Socket.IO Event Handlers
+@socketio.on('join')
+def handle_join_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    client_name = data.get('client_name', 'Viewer')
+    admin_token = data.get('admin_token')
+    
+    if not party_id or not client_id:
+        return
+        
+    join_room(party_id)
+    
+    is_admin = False
+    from datetime import datetime
+    from utils.models import WatchParty
+    party = WatchParty.query.get(party_id)
+    if not party or party.expires_at < datetime.utcnow():
+        emit('error', {'message': 'Watch party expired or not found'})
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            watch_parties_state[party_id] = {
+                'admin_token': party.admin_token,
+                'clients': {},
+                'playback_state': {
+                    'filename': None,
+                    'position': 0.0,
+                    'playing': False,
+                    'last_updated': time.time()
+                },
+                'playback_locked': False,
+                'slow_mode': False,
+                'kicked_clients': [],
+                'cooldowns': {}
+            }
+        
+        party_state = watch_parties_state[party_id]
+        if client_id in party_state.get('kicked_clients', []):
+            emit('kicked_direct')
+            return
+            
+        if admin_token and party_state['admin_token'] == admin_token:
+            is_admin = True
+            
+        party_state['clients'][client_id] = {
+            'name': client_name,
+            'sid': request.sid,
+            'is_admin': is_admin
+        }
+        
+        # Broadcast join message to room
+        emit('peer_joined', {
+            'client_id': client_id,
+            'name': client_name,
+            'is_admin': is_admin
+        }, to=party_id, include_self=False)
+        
+        # Send init payload to client
+        emit('init_payload', {
+            'playback_state': party_state['playback_state'],
+            'playback_locked': party_state.get('playback_locked', False),
+            'slow_mode': party_state.get('slow_mode', False),
+            'is_admin': is_admin,
+            'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
+            'turn_server': current_config.wp_turn_server,
+            'turn_username': current_config.wp_turn_username,
+            'turn_credential': current_config.wp_turn_credential
+        })
+        
+    logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
+
+@socketio.on('sync')
+def handle_sync_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    action = data.get('action')
+    position = data.get('position', 0.0)
+    filename = data.get('filename')
+    
+    if not party_id or not client_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        
+        if party_state.get('playback_locked', False):
+            client_info = party_state['clients'].get(client_id)
+            is_admin = client_info.get('is_admin', False) if client_info else False
+            if not is_admin:
+                return
+                
+        party_state['playback_state'] = {
+            'filename': filename,
+            'position': position,
+            'playing': action == 'play',
+            'last_updated': time.time()
+        }
+        
+        emit('sync_event', {
+            'action': action,
+            'position': position,
+            'filename': filename,
+            'client_id': client_id
+        }, to=party_id, include_self=False)
+
+@socketio.on('chat')
+def handle_chat_event(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    message = data.get('message', '').strip()
+    
+    if not party_id or not client_id or not message:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        client_info = party_state['clients'].get(client_id)
+        if not client_info:
+            return
+            
+        is_admin = client_info.get('is_admin', False)
+        if party_state.get('slow_mode', False) and not is_admin:
+            last_msg_time = party_state['cooldowns'].get(client_id, 0)
+            if time.time() - last_msg_time < 10.0:
+                return
+            party_state['cooldowns'][client_id] = time.time()
+            
+        if 'message_id_counter' not in party_state:
+            party_state['message_id_counter'] = 0
+        party_state['message_id_counter'] += 1
+        msg_id = party_state['message_id_counter']
+        
+        emit('chat_event', {
+            'id': msg_id,
+            'client_id': client_id,
+            'name': client_info['name'],
+            'message': message,
+            'is_admin': is_admin
+        }, to=party_id)
+
+@socketio.on('signal')
+def handle_signal_event(data):
+    party_id = data.get('party_id')
+    sender_id = data.get('sender_id')
+    target_id = data.get('target_id')
+    signal_payload = data.get('signal')
+    
+    if not party_id or not sender_id or not target_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        target_client = party_state['clients'].get(target_id)
+        if target_client:
+            emit('signal_event', {
+                'sender_id': sender_id,
+                'signal': signal_payload
+            }, to=target_client['sid'])
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    with watch_parties_lock:
+        for party_id, party_state in watch_parties_state.items():
+            for client_id, client in list(party_state['clients'].items()):
+                if client['sid'] == request.sid:
+                    del party_state['clients'][client_id]
+                    emit('peer_left', {
+                        'client_id': client_id,
+                        'name': client['name']
+                    }, to=party_id)
+                    logger.info(f"Socket.IO client {client['name']} ({client_id}) disconnected from room {party_id}")
+                    return
+
 
 def run_pipeline_thread(config_obj):
     global pipeline_state
@@ -307,6 +511,17 @@ def handle_config():
         current_config.merge_on_name_conflict = bool(data.get('merge_on_name_conflict', current_config.merge_on_name_conflict))
         current_config.default_video_player = data.get('default_video_player', current_config.default_video_player)
         
+        # Watch Party settings
+        current_config.wp_use_cloudflare = bool(data.get('wp_use_cloudflare', current_config.wp_use_cloudflare))
+        current_config.wp_cloudflare_token = data.get('wp_cloudflare_token', current_config.wp_cloudflare_token)
+        current_config.wp_custom_domain = data.get('wp_custom_domain', current_config.wp_custom_domain)
+        current_config.wp_turn_server = data.get('wp_turn_server', current_config.wp_turn_server)
+        current_config.wp_turn_username = data.get('wp_turn_username', current_config.wp_turn_username)
+        current_config.wp_turn_credential = data.get('wp_turn_credential', current_config.wp_turn_credential)
+        current_config.wp_use_hls = bool(data.get('wp_use_hls', current_config.wp_use_hls))
+        current_config.wp_hls_bitrate = data.get('wp_hls_bitrate', current_config.wp_hls_bitrate)
+        current_config.wp_hls_resolution = data.get('wp_hls_resolution', current_config.wp_hls_resolution)
+        
         logger.info("Configuration updated.")
         save_settings(current_config)
         return jsonify({'status': 'success', 'message': 'Configuration updated successfully.'})
@@ -333,8 +548,20 @@ def handle_config():
             'name_confidence_threshold': current_config.name_confidence_threshold,
             'name_search_delay': current_config.name_search_delay,
             'merge_on_name_conflict': current_config.merge_on_name_conflict,
-            'default_video_player': current_config.default_video_player
+            'default_video_player': current_config.default_video_player,
+            
+            # Watch Party settings
+            'wp_use_cloudflare': current_config.wp_use_cloudflare,
+            'wp_cloudflare_token': current_config.wp_cloudflare_token,
+            'wp_custom_domain': current_config.wp_custom_domain,
+            'wp_turn_server': current_config.wp_turn_server,
+            'wp_turn_username': current_config.wp_turn_username,
+            'wp_turn_credential': current_config.wp_turn_credential,
+            'wp_use_hls': current_config.wp_use_hls,
+            'wp_hls_bitrate': current_config.wp_hls_bitrate,
+            'wp_hls_resolution': current_config.wp_hls_resolution
         })
+
 
 @app.route('/api/start', methods=['POST'])
 def start_pipeline():
@@ -1745,12 +1972,122 @@ def list_profile_media(folder_name):
         
         cache_dir = os.path.join(WORKSPACE_DIR, ".cache")
         cache_db = EmbeddingCache(cache_dir)
-        
         media_files = get_profile_media(folder_name, cache_db, current_config)
         return jsonify({'status': 'success', 'files': media_files})
     except Exception as e:
         logger.error(f"Error in list_profile_media for {folder_name}: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+import queue
+
+transcode_queue = queue.Queue()
+active_transcode_task = None
+transcode_lock = threading.Lock()
+
+def hls_transcode_worker():
+    """Background worker that serializes FFmpeg HLS transcoding tasks."""
+    global active_transcode_task
+    while True:
+        try:
+            task = transcode_queue.get()
+            if task is None:
+                break
+                
+            folder_name, filename, input_path, hls_dir, playlist_path = task
+            with transcode_lock:
+                active_transcode_task = {
+                    'folder_name': folder_name,
+                    'filename': filename
+                }
+            
+            logger.info(f"Starting HLS transcoding for {folder_name}/{filename}")
+            os.makedirs(hls_dir, exist_ok=True)
+            
+            res_val = current_config.wp_hls_resolution.split('x')[1] if 'x' in current_config.wp_hls_resolution else '720'
+            cmd = [
+                'ffmpeg', '-y', '-i', input_path,
+                '-codec:v', 'libx264', '-profile:v', 'main', '-level', '3.1',
+                '-preset', 'veryfast', '-b:v', current_config.wp_hls_bitrate,
+                '-maxrate', current_config.wp_hls_bitrate, '-bufsize', '5000k',
+                '-vf', f'scale=-2:{res_val}',
+                '-codec:a', 'aac', '-b:a', '128k',
+                '-f', 'hls', '-hls_time', '4', '-hls_playlist_type', 'event',
+                '-hls_segment_filename', os.path.join(hls_dir, 'seg%03d.ts'),
+                playlist_path
+            ]
+            
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo)
+            if res.returncode == 0:
+                logger.info(f"Successfully transcoded {folder_name}/{filename} to HLS")
+            else:
+                logger.error(f"FFmpeg HLS error for {filename}: {res.stderr.decode('utf-8', errors='ignore')}")
+                
+        except Exception as e:
+            logger.error(f"Error in HLS transcode worker: {e}")
+        finally:
+            with transcode_lock:
+                active_transcode_task = None
+            transcode_queue.task_done()
+
+# Start background transcoding thread
+transcode_t = threading.Thread(target=hls_transcode_worker, daemon=True)
+transcode_t.start()
+
+
+@app.route('/api/watch-party/<party_id>/transcode', methods=['POST'])
+def transcode_video_api(party_id):
+    """Triggers HLS transcoding for a specific video file if enabled and not already cached."""
+    data = request.json or {}
+    folder_name = data.get('folder_name')
+    filename = data.get('filename')
+    
+    if not folder_name or not filename:
+        return jsonify({'status': 'error', 'message': 'folder_name and filename are required'}), 400
+        
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'status': 'error', 'message': 'Invalid filename'}), 400
+        
+    # Check if HLS is enabled
+    if not current_config.wp_use_hls:
+        return jsonify({'status': 'skipped', 'message': 'HLS transcoding is disabled.'})
+        
+    try:
+        input_path = os.path.join(current_config.output_dir, folder_name, filename)
+        if not os.path.exists(input_path):
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            
+        filename_no_ext = os.path.splitext(filename)[0]
+        hls_dir = os.path.join(current_config.output_dir, ".hls_cache", folder_name, filename_no_ext)
+        playlist_path = os.path.join(hls_dir, "playlist.m3u8")
+        hls_url = f"/media/.hls_cache/{folder_name}/{filename_no_ext}/playlist.m3u8"
+        
+        # Check if already completed
+        if os.path.exists(playlist_path):
+            return jsonify({'status': 'ready', 'hls_url': hls_url})
+            
+        # Add to transcode queue if not already there
+        in_queue = False
+        with transcode_lock:
+            if active_transcode_task and active_transcode_task['folder_name'] == folder_name and active_transcode_task['filename'] == filename:
+                in_queue = True
+                
+        if not in_queue:
+            task = (folder_name, filename, input_path, hls_dir, playlist_path)
+            transcode_queue.put(task)
+            
+        return jsonify({'status': 'converting', 'hls_url': hls_url, 'message': 'Optimizing video for streaming...'})
+    except Exception as e:
+        logger.error(f"Error in transcode_video_api: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 @app.route('/api/profile/extract-avatar', methods=['POST'])
@@ -2648,6 +2985,10 @@ def end_watch_party(party_id):
                 if os.path.exists(target_dir):
                     shutil.rmtree(target_dir)
                     logger.info(f"Cleaned up custom watch party directory: {target_dir}")
+                hls_dir = os.path.join(current_config.output_dir, ".hls_cache", party.folder_name)
+                if os.path.exists(hls_dir):
+                    shutil.rmtree(hls_dir)
+                    logger.info(f"Cleaned up custom watch party HLS cache directory: {hls_dir}")
             except Exception as clean_err:
                 logger.error(f"Error cleaning up custom watch party directory {party.folder_name}: {clean_err}")
         
@@ -2845,6 +3186,90 @@ def monitor_parent_process():
     except Exception as e:
         logger.warning(f"Error in parent process monitor thread: {e}")
 
+def download_cloudflared(dest_path):
+    import urllib.request
+    logger.info("Downloading cloudflared.exe from Cloudflare official release...")
+    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as response:
+        with open(dest_path, 'wb') as out_file:
+            out_file.write(response.read())
+    logger.info("cloudflared.exe downloaded successfully!")
+
+def start_cloudflare_tunnel():
+    global public_tunnel_url, active_tunnel_proc, tunnel_should_run, windows_job_handle
+    import re
+    
+    cloudflared_path = os.path.join(WORKSPACE_DIR, "cloudflared.exe")
+    if not os.path.exists(cloudflared_path):
+        from shutil import which
+        path_bin = which("cloudflared")
+        if path_bin:
+            cloudflared_path = path_bin
+        else:
+            try:
+                download_cloudflared(cloudflared_path)
+            except Exception as e:
+                logger.error(f"Failed to auto-download cloudflared.exe: {e}")
+                time.sleep(10)
+                return
+
+    # Check for custom token
+    token = current_config.wp_cloudflare_token.strip()
+    if token:
+        logger.info("Starting Cloudflare Tunnel with custom token...")
+        cmd = [cloudflared_path, 'tunnel', '--no-autoupdate', 'run', '--token', token]
+        custom_domain = current_config.wp_custom_domain.strip()
+        if custom_domain:
+            if not custom_domain.startswith("http://") and not custom_domain.startswith("https://"):
+                public_tunnel_url = f"https://{custom_domain}"
+            else:
+                public_tunnel_url = custom_domain
+            logger.info(f"Using custom domain for Cloudflare Tunnel: {public_tunnel_url}")
+    else:
+        logger.info("Starting Cloudflare Quick Tunnel...")
+        cmd = [cloudflared_path, 'tunnel', '--url', 'http://127.0.0.1:5000']
+
+    startupinfo = None
+    if os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        if not windows_job_handle:
+            setup_windows_job_object()
+            
+    try:
+        active_tunnel_proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            startupinfo=startupinfo,
+            bufsize=1
+        )
+        
+        if os.name == 'nt' and windows_job_handle:
+            try:
+                import ctypes
+                ctypes.windll.kernel32.AssignProcessToJobObject(windows_job_handle, int(active_tunnel_proc._handle))
+            except Exception as e:
+                logger.warning(f"Error assigning process to Job Object: {e}")
+                
+        for line in active_tunnel_proc.stdout:
+            if not tunnel_should_run:
+                break
+            match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
+            if match:
+                public_tunnel_url = match.group(1)
+                logger.info(f"Cloudflare Tunnel initialized: {public_tunnel_url}")
+                
+        active_tunnel_proc.wait()
+    except Exception as e:
+        logger.error(f"Error in Cloudflare Tunnel process: {e}")
+    finally:
+        if not token:
+            public_tunnel_url = None
+        active_tunnel_proc = None
+
 def start_localhost_run_tunnel():
     """Background worker that opens a localhost.run SSH tunnel to make local Watch Parties shareable online."""
     global public_tunnel_url, active_tunnel_proc, tunnel_should_run, windows_job_handle
@@ -2857,52 +3282,54 @@ def start_localhost_run_tunnel():
     if os.name == 'nt':
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        
         if not windows_job_handle:
             setup_windows_job_object()
         
     try:
-        while tunnel_should_run:
-            active_tunnel_proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                startupinfo=startupinfo,
-                bufsize=1
-            )
-            
-            if os.name == 'nt' and windows_job_handle:
-                try:
-                    res = ctypes.windll.kernel32.AssignProcessToJobObject(windows_job_handle, int(active_tunnel_proc._handle))
-                    if res:
-                        logger.info("Assigned SSH tunnel subprocess to Windows Job Object.")
-                    else:
-                        logger.warning("Failed to assign SSH tunnel subprocess to Windows Job Object.")
-                except Exception as e:
-                    logger.warning(f"Error assigning process to Job Object: {e}")
-            
-            for line in active_tunnel_proc.stdout:
-                if not tunnel_should_run:
-                    break
-                # Find the https URL in the stdout line
-                match = re.search(r'(https://[a-zA-Z0-9-]+\.lhr\.life)', line)
-                if match:
-                    public_tunnel_url = match.group(1)
-                    logger.info(f"Watch Party public sharing URL initialized: {public_tunnel_url}")
-                    
-            active_tunnel_proc.wait()
-            public_tunnel_url = None
-            active_tunnel_proc = None
-            
-            if tunnel_should_run:
-                logger.warning("Localhost.run SSH tunnel disconnected. Reconnecting in 5 seconds...")
-                for _ in range(50):
-                    if not tunnel_should_run:
-                        break
-                    time.sleep(0.1)
+        active_tunnel_proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            startupinfo=startupinfo,
+            bufsize=1
+        )
+        
+        if os.name == 'nt' and windows_job_handle:
+            try:
+                import ctypes
+                ctypes.windll.kernel32.AssignProcessToJobObject(windows_job_handle, int(active_tunnel_proc._handle))
+            except Exception as e:
+                logger.warning(f"Error assigning process to Job Object: {e}")
+        
+        for line in active_tunnel_proc.stdout:
+            if not tunnel_should_run:
+                break
+            match = re.search(r'(https://[a-zA-Z0-9-]+\.lhr\.life)', line)
+            if match:
+                public_tunnel_url = match.group(1)
+                logger.info(f"Watch Party public sharing URL initialized: {public_tunnel_url}")
+                
+        active_tunnel_proc.wait()
     except Exception as e:
         logger.error(f"Failed to run localhost.run tunnel: {e}")
+    finally:
+        public_tunnel_url = None
+        active_tunnel_proc = None
+
+def start_tunnel_manager():
+    """Manages the background tunnel process based on settings."""
+    global tunnel_should_run
+    time.sleep(1.0)
+    while tunnel_should_run:
+        try:
+            if current_config.wp_use_cloudflare:
+                start_cloudflare_tunnel()
+            else:
+                start_localhost_run_tunnel()
+        except Exception as e:
+            logger.error(f"Error in tunnel manager: {e}")
+        time.sleep(5)
 
 
 if __name__ == '__main__':
@@ -2916,8 +3343,9 @@ if __name__ == '__main__':
             monitor_t = threading.Thread(target=monitor_parent_process, daemon=True)
             monitor_t.start()
             
-        t = threading.Thread(target=start_localhost_run_tunnel, daemon=True)
+        t = threading.Thread(target=start_tunnel_manager, daemon=True)
         t.start()
         
     logger.info("Starting Face Sorter Web Interface...")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    socketio.run(app, host='127.0.0.1', port=5000, debug=True)
+

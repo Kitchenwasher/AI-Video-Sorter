@@ -11,3 +11,4 @@ redis
 tenacity
 flask-cors
 pytest
+flask-socketio

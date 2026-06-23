@@ -34,5 +34,5 @@ yandex_results.html
 # Scratch and verification scripts
 scratch/
 scratch_*
-verify_setup.py
+cloudflared.exe
 

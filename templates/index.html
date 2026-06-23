@@ -37,8 +37,79 @@
             border-color: var(--accent);
             background: rgba(255, 140, 0, 0.05);
         }
+        
+        /* Settings Tab Styling */
+        .settings-tabs-header {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            padding-bottom: 0.5rem;
+        }
+        .settings-tab-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .settings-tab-btn:hover {
+            color: var(--text-light);
+            background: rgba(255,255,255,0.03);
+        }
+        .settings-tab-btn.active {
+            color: var(--accent);
+            background: rgba(255, 140, 0, 0.08);
+            border-color: rgba(255, 140, 0, 0.2);
+        }
+        .settings-tab-panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .settings-tab-panel.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Help Cards / Guides */
+        .guide-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-top: 1rem;
+        }
+        .guide-card h4 {
+            margin-top: 0;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.05rem;
+            margin-bottom: 0.75rem;
+        }
+        .guide-card ol, .guide-card ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+        .guide-card li {
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
+
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
@@ -406,8 +477,20 @@
             <section id="sec-configuration" class="content-section">
                 <div class="config-grid">
                     <form id="config-form" class="config-form">
-                        <!-- Path Configuration Card -->
-                        <div class="dashboard-card glass">
+                        <!-- Settings Tabs Header -->
+                        <div class="settings-tabs-header">
+                            <button type="button" class="settings-tab-btn active" data-settings-tab="processing-settings">
+                                <i class="fa-solid fa-sliders"></i> App Processing
+                            </button>
+                            <button type="button" class="settings-tab-btn" data-settings-tab="watchparty-settings">
+                                <i class="fa-solid fa-users"></i> Watch Party & Tunnels
+                            </button>
+                        </div>
+
+                        <!-- PANEL 1: App Processing -->
+                        <div id="tab-processing-settings" class="settings-tab-panel active">
+                            <!-- Path Configuration Card -->
+                            <div class="dashboard-card glass">
                             <div class="card-header">
                                 <h3>Directory Paths</h3>
                             </div>
@@ -623,7 +706,132 @@
                             </div>
                         </div>
 
+                        <!-- PANEL 2: Watch Party Settings & Tutorial -->
+                        <div id="tab-watchparty-settings" class="settings-tab-panel">
+                            <!-- Cloudflare Tunnel Configuration -->
+                            <div class="dashboard-card glass">
+                                <div class="card-header">
+                                    <h3>Cloudflare Tunnel Configuration</h3>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
+                                        <label class="switch-label" for="wp_use_cloudflare">
+                                            <span>Use Cloudflare Tunnel (Recommended)</span>
+                                            <p class="input-desc">Replaces localhost.run. Completely free, low-latency, and zero timeouts.</p>
+                                        </label>
+                                        <label class="switch">
+                                            <input type="checkbox" id="wp_use_cloudflare" checked>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                    <div class="input-group half" style="margin-left: 0.75rem;">
+                                        <label for="wp_custom_domain">Custom Domain Name (Optional)</label>
+                                        <input type="text" id="wp_custom_domain" placeholder="watch.yourname.com">
+                                        <p class="input-desc">Enter only if you configured a custom domain for your tunnel.</p>
+                                    </div>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group">
+                                        <label for="wp_cloudflare_token">Cloudflare Tunnel Token (Optional)</label>
+                                        <input type="text" id="wp_cloudflare_token" placeholder="eyJhbGciOiJSUzI1NiIsImtpZCI6IkM...">
+                                        <p class="input-desc">Leave blank to use a **Free Quick Tunnel** (generates a temporary random `*.trycloudflare.com` URL automatically!).</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- WebRTC STUN/TURN Configuration -->
+                            <div class="dashboard-card glass">
+                                <div class="card-header">
+                                    <h3>Voice Chat Relay (STUN/TURN)</h3>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group">
+                                        <label for="wp_turn_server">TURN Server URL</label>
+                                        <input type="text" id="wp_turn_server" placeholder="turn:global.metered.ca:80">
+                                        <p class="input-desc">Resolves microphone/audio connection errors behind symmetric NATs or cellular data.</p>
+                                    </div>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group half" style="margin-right: 0.75rem;">
+                                        <label for="wp_turn_username">TURN Username</label>
+                                        <input type="text" id="wp_turn_username" placeholder="username-or-api-key">
+                                    </div>
+                                    <div class="input-group half" style="margin-left: 0.75rem;">
+                                        <label for="wp_turn_credential">TURN Password / Credential</label>
+                                        <input type="password" id="wp_turn_credential" placeholder="••••••••••••••••">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- HLS Transcoding Options -->
+                            <div class="dashboard-card glass">
+                                <div class="card-header">
+                                    <h3>HLS Video Stream Optimization</h3>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group toggle-group">
+                                        <label class="switch-label" for="wp_use_hls">
+                                            <span>Enable HLS Transcoding</span>
+                                            <p class="input-desc">Converts videos into small HLS chunks locally. Drastically reduces host upload bandwidth by caching chunks on Cloudflare CDN edge servers. Disable if you have super-fast fiber upload bandwidth (>50Mbps) to play files instantly without conversion.</p>
+                                        </label>
+                                        <label class="switch">
+                                            <input type="checkbox" id="wp_use_hls">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="config-row">
+                                    <div class="input-group half" style="margin-right: 0.75rem;">
+                                        <label for="wp_hls_bitrate">Target Streaming Bitrate</label>
+                                        <select id="wp_hls_bitrate">
+                                            <option value="1500k">1500 kbps (Good for slow connections)</option>
+                                            <option value="2500k" selected>2500 kbps (Standard 720p)</option>
+                                            <option value="4000k">4000 kbps (High Quality 1080p)</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group half" style="margin-left: 0.75rem;">
+                                        <label for="wp_hls_resolution">Target Resolution</label>
+                                        <select id="wp_hls_resolution">
+                                            <option value="854x480">480p</option>
+                                            <option value="1280x720" selected>720p</option>
+                                            <option value="1920x1080">1080p</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Setup Tutorial -->
+                            <div class="dashboard-card glass">
+                                <div class="card-header">
+                                    <h3><i class="fa-solid fa-book" style="color: var(--accent); margin-right: 0.5rem;"></i> Setup Guide & Tutorial</h3>
+                                </div>
+                                <div class="guide-card">
+                                    <h4>1. How to use Cloudflare Tunnels (100% Free)</h4>
+                                    <ol>
+                                        <li>You don't need any local setup! If you leave the **Cloudflare Tunnel Token** empty, AuraSort will automatically download `cloudflared.exe` and generate a temporary shareable URL for you when you run a Watch Party.</li>
+                                        <li>If you want a persistent, custom domain (e.g. `watch.mywebsite.com`), log in to your **Cloudflare Dashboard**, navigate to **Access / Zero Trust** -> **Tunnels**, create a new tunnel, copy your **Tunnel Token**, and paste it above along with your domain name.</li>
+                                    </ol>
+                                </div>
+                                <div class="guide-card">
+                                    <h4>2. How to get a Free TURN Server (for Voice Chat)</h4>
+                                    <ol>
+                                        <li>WebRTC voice chat needs a public relay server to cross NAT/firewalls.</li>
+                                        <li>Go to [Metered.ca](https://www.metered.ca/) and sign up for a **Free Account** (includes 50GB of TURN data per month, enough for ~2,700 hours of talk time!).</li>
+                                        <li>On your Metered dashboard, copy the **TURN Server URL**, **Username**, and **Password (Credential)**, and paste them in the fields above.</li>
+                                    </ol>
+                                </div>
+                                <div class="guide-card">
+                                    <h4>3. How to choose HLS Transcoding</h4>
+                                    <ul>
+                                        <li>**Toggle ON**: If your home upload bandwidth is limited. AuraSort will slice the video into 4-second segments. Viewers fetch only the current segment and Cloudflare's CDN caches them so that multiple viewers do not pull duplicate data from your machine.</li>
+                                        <li>**Toggle OFF (Default)**: Viewers stream the raw MP4 file directly from your computer. Playback starts instantly with no conversion overhead, but uses more upload speed per viewer.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-actions">
+
                             <button type="submit" class="btn btn-primary" id="btn-save-config">
                                 <i class="fa-solid fa-floppy-disk"></i> Save Settings
                             </button>

@@ -40,3 +40,14 @@ class Config:
     
     # Video player preference
     default_video_player: str = "browser"  # "browser" or "vlc"
+
+    # Watch Party Configuration
+    wp_use_cloudflare: bool = True
+    wp_cloudflare_token: str = ""
+    wp_custom_domain: str = ""
+    wp_turn_server: str = ""
+    wp_turn_username: str = ""
+    wp_turn_credential: str = ""
+    wp_use_hls: bool = False
+    wp_hls_bitrate: str = "2500k"
+    wp_hls_resolution: str = "1280x720"
