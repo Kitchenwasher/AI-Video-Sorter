@@ -3655,28 +3655,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnCreateWatchParty) {
-        btnCreateWatchParty.addEventListener('click', () => {
-            if (watchPartyModal) {
-                // Reset steps
-                if (wpCreateStep) wpCreateStep.style.display = 'flex';
-                if (wpShareStep) wpShareStep.style.display = 'none';
-                if (wpPassword) wpPassword.value = '';
-                if (wpCustomFile) wpCustomFile.value = '';
-                if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'none';
-                
-                if (currentGalleryFolder) {
-                    if (wpSourceFolderName) wpSourceFolderName.innerText = currentGalleryFolder;
-                    if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'flex';
-                    if (radioWpSourceFolder) radioWpSourceFolder.checked = true;
-                } else {
-                    if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'none';
-                    if (radioWpSourceCustom) radioWpSourceCustom.checked = true;
-                    if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'flex';
-                }
-                
-                watchPartyModal.classList.add('active');
+    const triggerWatchPartyModal = () => {
+        if (watchPartyModal) {
+            // Reset steps
+            if (wpCreateStep) wpCreateStep.style.display = 'flex';
+            if (wpShareStep) wpShareStep.style.display = 'none';
+            if (wpPassword) wpPassword.value = '';
+            if (wpCustomFile) wpCustomFile.value = '';
+            if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'none';
+            
+            if (currentGalleryFolder) {
+                if (wpSourceFolderName) wpSourceFolderName.innerText = currentGalleryFolder;
+                if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'flex';
+                if (radioWpSourceFolder) radioWpSourceFolder.checked = true;
+            } else {
+                if (wpSourceFolderLabel) wpSourceFolderLabel.style.display = 'none';
+                if (radioWpSourceCustom) radioWpSourceCustom.checked = true;
+                if (wpCustomFileContainer) wpCustomFileContainer.style.display = 'flex';
             }
+            
+            watchPartyModal.classList.add('active');
+        }
+    };
+
+    if (btnCreateWatchParty) {
+        btnCreateWatchParty.addEventListener('click', triggerWatchPartyModal);
+    }
+    const btnGlobalWatchParty = document.getElementById('btn-global-watch-party');
+    if (btnGlobalWatchParty) {
+        btnGlobalWatchParty.addEventListener('click', (e) => {
+            e.preventDefault();
+            triggerWatchPartyModal();
         });
     }
 
