@@ -877,6 +877,52 @@ def get_status():
     status_copy['logs'] = logs
     return jsonify(status_copy)
 
+@app.route('/api/system-info', methods=['GET'])
+def get_system_info():
+    """Detects system GPU name and checks if DirectML/GPU acceleration is active."""
+    try:
+        import subprocess
+        import onnxruntime as ort
+        
+        # 1. Detect GPU Name on Windows via PowerShell
+        gpu_name = "CPU Only"
+        try:
+            cmd = ["powershell", "-Command", "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if proc.returncode == 0:
+                lines = [line.strip() for line in proc.stdout.split('\n') if line.strip()]
+                # Filter out basic display adapters
+                filtered_lines = [l for l in lines if "Basic Display" not in l and l]
+                if filtered_lines:
+                    gpu_name = " + ".join(filtered_lines)
+                elif lines:
+                    gpu_name = lines[0]
+        except Exception as e:
+            logger.error(f"Error detecting GPU name: {e}")
+            gpu_name = "Display Controller"
+            
+        # 2. Check if DirectML execution provider is available in onnxruntime
+        available_providers = ort.get_available_providers()
+        has_dml = 'DmlExecutionProvider' in available_providers
+        
+        acceleration = "DirectML Accelerated" if has_dml else "CPU Only"
+        
+        return jsonify({
+            'status': 'success',
+            'gpu_name': gpu_name,
+            'acceleration': acceleration,
+            'has_dml': has_dml
+        })
+    except Exception as e:
+        logger.error(f"Error in get_system_info: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'gpu_name': 'Unknown GPU',
+            'acceleration': 'CPU Only',
+            'has_dml': False
+        }), 500
+
 @app.route('/api/clear-cache', methods=['POST'])
 def clear_cache():
     try:

@@ -230,6 +230,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const localStorage = window.safeLocalStorage;
     const sessionStorage = window.safeSessionStorage;
 
+    // Fetch and display dynamic system GPU/acceleration status
+    const loadSystemInfo = async () => {
+        const gpuNameDisplay = document.getElementById('gpu-name-display');
+        const gpuAccelPill = document.getElementById('gpu-accel-pill');
+        if (!gpuNameDisplay || !gpuAccelPill) return;
+
+        try {
+            const res = await fetch('/api/system-info');
+            const data = await res.json();
+            if (data.status === 'success') {
+                gpuNameDisplay.textContent = data.gpu_name;
+                gpuAccelPill.textContent = data.acceleration;
+                
+                if (data.has_dml) {
+                    gpuAccelPill.className = 'dml-pill';
+                } else {
+                    gpuAccelPill.className = 'cpu-pill';
+                }
+            } else {
+                gpuNameDisplay.textContent = 'Unknown GPU';
+                gpuAccelPill.textContent = 'CPU Only';
+                gpuAccelPill.className = 'cpu-pill';
+            }
+        } catch (err) {
+            console.error('Error fetching system info:', err);
+            gpuNameDisplay.textContent = 'Unknown GPU';
+            gpuAccelPill.textContent = 'CPU Only';
+            gpuAccelPill.className = 'cpu-pill';
+        }
+    };
+
+    loadSystemInfo();
+
     // Hover video preview helpers removed completely on user request
 
     // Navigation Tabs
