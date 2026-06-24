@@ -1051,183 +1051,7 @@ if (!window.safeSessionStorage) {
         }
     }
 
-    function initFolderDropdown() {
-        const select = document.getElementById('wp-folder-dropdown-select');
-        if (!select) return;
 
-        fetch('/api/profiles?party_id=' + encodeURIComponent(window.PARTY_ID))
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success' && data.profiles) {
-                    select.innerHTML = '<option value="" disabled>LOCAL FOLDER (ACTIVE)</option>';
-                    data.profiles.forEach(profile => {
-                        const opt = document.createElement('option');
-                        opt.value = profile.folder_name;
-                        opt.innerText = profile.display_name;
-                        if (profile.folder_name === window.FOLDER_NAME) {
-                            opt.selected = true;
-                        }
-                        select.appendChild(opt);
-                    });
-                }
-            })
-            .catch(err => console.error('Error fetching profiles for dropdown:', err));
-
-        select.onchange = () => {
-            if (!adminToken) {
-                showToast('Only the host can switch the folder.', 'warning');
-                select.value = window.FOLDER_NAME;
-                return;
-            }
-
-            const targetFolder = select.value;
-            if (!targetFolder) return;
-
-            select.disabled = true;
-
-            fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    admin_token: adminToken,
-                    folder_name: targetFolder
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                select.disabled = false;
-                if (data.status !== 'success') {
-                    showToast('Error changing folder: ' + data.message, 'error');
-                    select.value = window.FOLDER_NAME;
-                }
-            })
-            .catch(err => {
-                console.error('Error switching folder:', err);
-                showToast('An error occurred while switching the folder.', 'error');
-                select.disabled = false;
-                select.value = window.FOLDER_NAME;
-            });
-        };
-    }
-
-    async function setupVoiceAndStart() {
-        updateLocalProfileUI();
-        initProfileModal();
-        initInviteButton();
-        initCustomMedia();
-        initFolderDropdown();
-        initThemeToggle();
-        // Request microphone permission for P2P voice chat
-        try {
-            addLogEntry('System', 'Requesting microphone access...');
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 1,
-                    sampleRate: 48000
-                }
-            });
-            localStream = stream;
-            
-            // Mute microphone by default to prevent sudden feedback/noise
-            localStream.getAudioTracks().forEach(track => {
-                track.enabled = false;
-            });
-            
-            updateMicUI(false);
-            const btnMic = document.getElementById('btn-mic-toggle');
-            btnMic.disabled = false;
-            document.getElementById('local-voice-status').innerText = 'Muted';
-        } catch (err) {
-            console.warn('Microphone access denied or not available:', err);
-            addLogEntry('System', 'Voice chat in receive-only mode (mic not allowed).');
-            updateMicUI(false);
-            const btnMic = document.getElementById('btn-mic-toggle');
-            btnMic.disabled = true;
-            document.getElementById('local-voice-status').innerText = 'Listen only';
-        }
-
-        // Bind mic toggle action
-        const btnMic = document.getElementById('btn-mic-toggle');
-        btnMic.onclick = () => {
-            if (!localStream) return;
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = !audioTrack.enabled;
-                updateMicUI(audioTrack.enabled);
-                document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
-            }
-        };
-
-        // Start watch party connection and load playlist
-        startWatchParty();
-        initChat();
-    }
-
-    function showNicknameModal() {
-        // Only bypass nickname modal if we have a session name, or if we are the admin/creator of this specific party
-        const isAdmin = !!localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
-        const storedName = sessionStorage.getItem('wp_client_name') || (isAdmin ? localStorage.getItem('wp_nickname') : null);
-        
-        if (storedName && storedName.trim() !== '' && storedName !== 'Viewer') {
-            clientName = storedName.trim();
-            sessionStorage.setItem('wp_client_name', clientName);
-            
-            // Setup local nickname display
-            const nameDisplay = document.getElementById('local-display-name');
-            if (nameDisplay) {
-                nameDisplay.innerText = `${clientName} (You)`;
-            }
-            
-            setupVoiceAndStart();
-            return;
-        }
-
-        const overlay = document.getElementById('wp-nickname-overlay');
-        overlay.classList.add('active');
-
-        const submitBtn = document.getElementById('btn-wp-nickname-submit');
-        const nicknameInput = document.getElementById('wp-join-nickname');
-
-        // Restore nickname if any
-        if (sessionStorage.getItem('wp_client_name')) {
-            nicknameInput.value = sessionStorage.getItem('wp_client_name');
-        }
-
-        const handleNicknameSubmit = async () => {
-            const name = nicknameInput.value.trim() || 'Viewer';
-            clientName = name;
-            sessionStorage.setItem('wp_client_name', name);
-            overlay.classList.remove('active');
-
-            // Setup local nickname display
-            const nameDisplay = document.getElementById('local-display-name');
-            if (nameDisplay) {
-                nameDisplay.innerText = `${clientName} (You)`;
-            }
-
-            setupVoiceAndStart();
-        };
-
-        submitBtn.onclick = handleNicknameSubmit;
-        nicknameInput.onkeydown = (e) => {
-            if (e.key === 'Enter') handleNicknameSubmit();
-        };
-        nicknameInput.focus();
-    }
-
-    function updateMicUI(isActive) {
-        const btnMic = document.getElementById('btn-mic-toggle');
-        if (isActive) {
-            btnMic.classList.add('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        } else {
-            btnMic.classList.remove('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
-        }
-    }
 
     /**
      * 2. Playlist & Media Loading
@@ -2865,6 +2689,16 @@ if (!window.safeSessionStorage) {
     }
 
     function setupAdminUI() {
+        const btnCustomMedia = document.getElementById('btn-wp-custom-media');
+        if (btnCustomMedia) {
+            btnCustomMedia.style.display = 'inline-block';
+        }
+
+        const folderSelectContainer = document.getElementById('wp-folder-select-container');
+        if (folderSelectContainer) {
+            folderSelectContainer.style.display = 'flex';
+        }
+
         const btnChangeFolder = document.getElementById('btn-wp-change-folder');
         if (btnChangeFolder) {
             btnChangeFolder.style.display = 'inline-block';

@@ -2193,10 +2193,10 @@
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <!-- Invite and Custom Media -->
-            <button id="btn-wp-custom-media" class="wp-brutal-btn" style="background: var(--accent-pink) !important;" title="Load Custom Media URL"><i class="fa-solid fa-compact-disc"></i> Custom Media</button>
+            <button id="btn-wp-custom-media" class="wp-brutal-btn" style="display: none; background: var(--accent-pink) !important;" title="Load Custom Media URL"><i class="fa-solid fa-compact-disc"></i> Custom Media</button>
             
             <!-- Active folder selector -->
-            <div style="display: flex; align-items: center; border: var(--bw) solid #000000; background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px #000000; overflow: hidden; padding-right: 0.5rem;">
+            <div id="wp-folder-select-container" style="display: none; align-items: center; border: var(--bw) solid #000000; background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px #000000; overflow: hidden; padding-right: 0.5rem;">
                 <select id="wp-folder-dropdown-select" style="background: transparent; border: none; color: var(--text); font-family: inherit; font-weight: 800; font-size: 0.75rem; padding: 0.4rem 0.65rem; outline: none; cursor: pointer;">
                     <option value="" disabled selected>LOCAL FOLDER (ACTIVE)</option>
                 </select>
