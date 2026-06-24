@@ -1,6 +1,15 @@
 import logging
 import sys
 
+# Force standard streams to use UTF-8 on Windows to prevent UnicodeEncodeError crashes
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')
+except Exception:
+    pass
+
 # Global log listener/buffer for UI updates
 class UILogHandler(logging.Handler):
     def __init__(self):
