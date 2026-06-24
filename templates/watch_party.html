@@ -226,13 +226,14 @@
             padding: 0px !important;
             overflow: hidden !important;
         }
-        .video-wrapper, .playlist-card, .wp-playback-settings-bar {
+        .video-wrapper, .playlist-card, .brutal-playlist-container, .wp-playback-settings-bar {
             /* Toggles instantly to avoid continuous video texture scaling stutter */
         }
         .main-container.theater-mode .video-wrapper {
             max-width: 100% !important;
         }
-        .main-container.theater-mode .playlist-card {
+        .main-container.theater-mode .playlist-card,
+        .main-container.theater-mode .brutal-playlist-container {
             max-width: 100% !important;
         }
         .main-container.theater-mode .wp-playback-settings-bar {
@@ -1922,67 +1923,67 @@
             transform: scale(0.95);
         }
 
-        /* Horizontal UP NEXT Playlist Row */
+        /* YouTube Grid style UP NEXT Playlist */
         .brutal-playlist-container {
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
-                rgba(17, 17, 22, 0.92) !important;
-            border: 1px solid rgba(255, 255, 255, 0.09) !important;
-            border-radius: 8px;
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
-            padding: 1rem 1rem 0.85rem;
+            background: var(--bg-raised) !important;
+            border: var(--bw) solid var(--border) !important;
+            border-radius: 12px !important;
+            box-shadow: var(--shadow-main) !important;
+            padding: 1.25rem !important;
             width: 100%;
             max-width: 1100px;
             align-self: center;
             display: flex;
             flex: 0 0 auto;
             flex-direction: column;
-            gap: 0.8rem;
+            gap: 1rem;
             overflow: hidden;
+            margin-top: 1.25rem;
+            margin-bottom: 2rem;
         }
         .playlist-title-row {
-            font-size: 0.78rem;
+            font-size: 0.85rem;
             font-weight: 800;
-            color: rgba(243, 243, 243, 0.82);
+            color: var(--text);
             letter-spacing: 0.08em;
             text-transform: uppercase;
             display: flex;
             align-items: center;
-            gap: 0.45rem;
+            gap: 0.5rem;
             min-height: 1.2rem;
         }
         .playlist-title-row i {
             color: var(--accent);
-            filter: drop-shadow(0 0 8px rgba(255, 140, 0, 0.22));
+            filter: drop-shadow(0 0 8px rgba(255, 107, 53, 0.25));
         }
         .horizontal-playlist-row {
-            display: flex;
-            gap: 1rem;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 0.2rem 0.2rem 0.9rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 1.25rem;
             width: 100%;
-            min-height: 126px;
+            max-height: 520px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0.25rem 0.5rem 0.5rem 0.25rem;
             scrollbar-width: thin;
-            scrollbar-color: rgba(255, 140, 0, 0.75) rgba(255, 255, 255, 0.06);
+            scrollbar-color: var(--accent) rgba(255, 255, 255, 0.06);
             scroll-behavior: smooth;
-            scroll-padding-inline: 1rem;
         }
         .horizontal-playlist-row::-webkit-scrollbar {
-            height: 9px !important;
+            width: 8px !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.055) !important;
-            border: 1px solid rgba(255, 255, 255, 0.06) !important;
-            border-radius: 999px !important;
+            background: rgba(255, 255, 255, 0.03) !important;
+            border-radius: 4px !important;
+            border: none !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-thumb {
-            background: linear-gradient(90deg, rgba(255, 140, 0, 0.9), rgba(255, 208, 0, 0.9)) !important;
-            border-radius: 999px !important;
-            border: 2px solid rgba(12, 12, 14, 0.95) !important;
+            background: var(--accent) !important;
+            border-radius: 4px !important;
+            border: 1px solid var(--border) !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(90deg, var(--accent), var(--accent-yellow)) !important;
+            background: var(--accent-yellow) !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-button {
             display: none !important;
@@ -1991,25 +1992,25 @@
             display: none !important;
         }
         .playlist-thumbnail-card {
-            flex: 0 0 clamp(132px, 14vw, 172px);
+            width: 100%;
             aspect-ratio: 16/9;
             background: rgba(8, 8, 11, 0.96) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border: var(--bw) solid var(--border) !important;
             border-radius: 8px !important;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28) !important;
+            box-shadow: var(--shadow-small) !important;
             overflow: hidden;
             position: relative;
             cursor: pointer;
-            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+            transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.18s ease, box-shadow 0.18s ease !important;
         }
         .playlist-thumbnail-card:hover {
-            border-color: rgba(255, 140, 0, 0.72) !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(255, 140, 0, 0.18), 0 0 22px rgba(255, 140, 0, 0.12) !important;
+            border-color: var(--accent) !important;
+            transform: translate(-3px, -3px) !important;
+            box-shadow: 6px 6px 0px #000000 !important;
         }
         .playlist-thumbnail-card.active {
-            border-color: rgba(57, 255, 20, 0.78) !important;
-            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(57, 255, 20, 0.22), 0 0 18px rgba(57, 255, 20, 0.14) !important;
+            border-color: var(--accent-lime) !important;
+            box-shadow: 4px 4px 0px #000000, 0 0 18px rgba(57, 255, 20, 0.25) !important;
         }
         .playlist-thumbnail-card::after {
             content: "";
