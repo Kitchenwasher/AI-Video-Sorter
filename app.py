@@ -282,6 +282,7 @@ def handle_join_event(data):
     party_id = data.get('party_id')
     client_id = data.get('client_id')
     client_name = data.get('client_name', 'Viewer')
+    avatar = data.get('avatar', 'cool_kid')
     admin_token = data.get('admin_token')
     
     if not party_id or not client_id:
@@ -326,6 +327,7 @@ def handle_join_event(data):
             
         party_state['clients'][client_id] = {
             'name': client_name,
+            'avatar': avatar,
             'sid': request.sid,
             'is_admin': is_admin
         }
@@ -334,6 +336,7 @@ def handle_join_event(data):
         emit('peer_joined', {
             'client_id': client_id,
             'name': client_name,
+            'avatar': avatar,
             'is_admin': is_admin
         }, to=party_id, include_self=False)
         
@@ -365,7 +368,7 @@ def handle_join_event(data):
             'playback_locked': party_state.get('playback_locked', False),
             'slow_mode': party_state.get('slow_mode', False),
             'is_admin': is_admin,
-            'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
+            'peers': [{'client_id': c_id, 'name': c['name'], 'avatar': c.get('avatar', 'cool_kid'), 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
             'turn_server': turn_server,
             'turn_username': turn_username,
             'turn_credential': turn_credential,
@@ -373,6 +376,29 @@ def handle_join_event(data):
         })
         
     logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
+
+@socketio.on('profile_update')
+def handle_profile_update(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    name = data.get('name')
+    avatar = data.get('avatar')
+    
+    if not party_id or not client_id or not name:
+        return
+        
+    with watch_parties_lock:
+        if party_id in watch_parties_state and client_id in watch_parties_state[party_id]['clients']:
+            client = watch_parties_state[party_id]['clients'][client_id]
+            client['name'] = name
+            if avatar:
+                client['avatar'] = avatar
+                
+            emit('peer_profile_updated', {
+                'client_id': client_id,
+                'name': name,
+                'avatar': avatar
+            }, to=party_id)
 
 @socketio.on('sync')
 def handle_sync_event(data):

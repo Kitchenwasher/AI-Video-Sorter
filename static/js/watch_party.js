@@ -251,7 +251,41 @@ if (!window.safeSessionStorage) {
         sessionStorage.setItem('wp_client_id', clientId);
     }
 
-    let clientName = sessionStorage.getItem('wp_client_name') || 'Viewer';
+    const AVATAR_MAP = {
+        cool_kid: { icon: 'fa-grin-cool', color: 'var(--accent-pink)', label: 'Cool Kid' },
+        cat_ears: { icon: 'fa-cat', color: 'var(--accent-blue)', label: 'Cat Ears' },
+        nerd: { icon: 'fa-glasses', color: 'var(--accent-lime)', label: 'Nerd' },
+        robot: { icon: 'fa-robot', color: 'var(--accent-yellow)', label: 'Robot' },
+        ghost: { icon: 'fa-ghost', color: '#a855f7', label: 'Ghost' },
+        alien: { icon: 'fa-user-astronaut', color: '#10b981', label: 'Alien' },
+        headphones: { icon: 'fa-headphones', color: '#f97316', label: 'Headphones' },
+        ninja: { icon: 'fa-user-ninja', color: '#64748b', label: 'Ninja' },
+        punk: { icon: 'fa-guitar', color: '#ec4899', label: 'Punk' },
+        wizard: { icon: 'fa-hat-wizard', color: '#3b82f6', label: 'Wizard' },
+        crown: { icon: 'fa-crown', color: '#eab308', label: 'Crown' },
+        cyber: { icon: 'fa-microchip', color: '#06b6d4', label: 'Cyber' }
+    };
+
+    let clientName = localStorage.getItem('wp_nickname');
+    let localAvatar = localStorage.getItem('wp_avatar');
+
+    if (!clientName) {
+        const randomNames = [
+            "Cyber Ninja", "Neon Wizard", "Space Cat", "Retro Robot", "Acid Ghost",
+            "Crown Punk", "Laser Alien", "Disco Cat", "Pixel Nerd", "Techno Kid",
+            "Glitch Ghost", "Phantom Wizard", "Digital Crown", "Omega Cyber"
+        ];
+        clientName = randomNames[Math.floor(Math.random() * randomNames.length)];
+        localStorage.setItem('wp_nickname', clientName);
+    }
+    
+    if (!localAvatar) {
+        const avatars = Object.keys(AVATAR_MAP);
+        localAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+        localStorage.setItem('wp_avatar', localAvatar);
+    }
+
+    sessionStorage.setItem('wp_client_name', clientName);
     let partyPassword = sessionStorage.getItem(`wp_password_${window.PARTY_ID}`) || '';
     
     let localStream = null;
@@ -411,7 +445,206 @@ if (!window.safeSessionStorage) {
         };
     }
 
+    let selectedAvatarInModal = localAvatar;
+
+    function updateLocalProfileUI() {
+        const nameDisplay = document.getElementById('local-display-name');
+        if (nameDisplay) {
+            nameDisplay.innerText = `${clientName} (You)`;
+        }
+        const avatarCircle = document.getElementById('local-avatar-circle');
+        if (avatarCircle && localAvatar) {
+            const avatarData = AVATAR_MAP[localAvatar] || AVATAR_MAP.cool_kid;
+            avatarCircle.style.background = avatarData.color;
+            avatarCircle.innerHTML = `<i class="fa-solid ${avatarData.icon}"></i>`;
+        }
+    }
+
+    function initProfileModal() {
+        const editTriggerBtn = document.getElementById('btn-edit-profile');
+        const modal = document.getElementById('wp-profile-modal');
+        const cancelBtn = document.getElementById('btn-wp-profile-cancel');
+        const saveBtn = document.getElementById('btn-wp-profile-save');
+        const randomizeBtn = document.getElementById('btn-wp-profile-randomize');
+        const nicknameInput = document.getElementById('wp-profile-nickname');
+        const optionCards = document.querySelectorAll('.avatar-option-card');
+
+        if (!modal) return;
+
+        if (editTriggerBtn) {
+            editTriggerBtn.onclick = () => {
+                nicknameInput.value = clientName;
+                selectedAvatarInModal = localAvatar;
+                
+                optionCards.forEach(card => {
+                    if (card.getAttribute('data-avatar') === localAvatar) {
+                        card.classList.add('selected');
+                    } else {
+                        card.classList.remove('selected');
+                    }
+                });
+                
+                modal.classList.add('active');
+            };
+        }
+
+        optionCards.forEach(card => {
+            card.onclick = () => {
+                optionCards.forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedAvatarInModal = card.getAttribute('data-avatar');
+            };
+        });
+
+        cancelBtn.onclick = () => {
+            modal.classList.remove('active');
+        };
+
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        };
+
+        randomizeBtn.onclick = () => {
+            const adjectives = ["Cool", "Epic", "Neon", "Super", "Acid", "Hyper", "Cyber", "Wild", "Glitch", "Retro", "Cosmic", "Pixel"];
+            const nouns = ["Gamer", "Wizard", "Ninja", "Cyborg", "Alien", "Ghost", "Cat", "Panda", "Robot", "Hero", "Hacker", "Beast"];
+            const randomName = adjectives[Math.floor(Math.random() * adjectives.length)] + " " + nouns[Math.floor(Math.random() * nouns.length)];
+            nicknameInput.value = randomName;
+
+            const avatars = Object.keys(AVATAR_MAP);
+            const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+            selectedAvatarInModal = randomAvatar;
+
+            optionCards.forEach(card => {
+                if (card.getAttribute('data-avatar') === randomAvatar) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+        };
+
+        saveBtn.onclick = () => {
+            const newName = nicknameInput.value.trim() || 'Viewer';
+            clientName = newName;
+            localAvatar = selectedAvatarInModal;
+
+            localStorage.setItem('wp_nickname', clientName);
+            localStorage.setItem('wp_avatar', localAvatar);
+            sessionStorage.setItem('wp_client_name', clientName);
+
+            updateLocalProfileUI();
+
+            if (window.socket && window.socket.connected) {
+                window.socket.emit('profile_update', {
+                    party_id: window.PARTY_ID,
+                    client_id: clientId,
+                    name: clientName,
+                    avatar: localAvatar
+                });
+            }
+
+            modal.classList.remove('active');
+        };
+    }
+
+    function initInviteButton() {
+        const inviteBtn = document.getElementById('btn-wp-invite');
+        if (inviteBtn) {
+            inviteBtn.onclick = () => {
+                const url = window.location.href;
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('Invite link copied to clipboard!', 'success');
+                }).catch(err => {
+                    console.error('Failed to copy invite link:', err);
+                    showToast('Failed to copy invite link.', 'error');
+                });
+            };
+        }
+    }
+
+    function initCustomMedia() {
+        const customBtn = document.getElementById('btn-wp-custom-media');
+        if (customBtn) {
+            customBtn.onclick = () => {
+                if (!adminToken) {
+                    showToast('Only the host can load custom media URLs.', 'warning');
+                    return;
+                }
+                const url = prompt('Enter custom video or HLS (.m3u8) streaming URL:');
+                if (url && url.trim() !== '') {
+                    selectAndBroadcastMedia(url.trim());
+                }
+            };
+        }
+    }
+
+    function initFolderDropdown() {
+        const select = document.getElementById('wp-folder-dropdown-select');
+        if (!select) return;
+
+        fetch('/api/profiles')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' && data.profiles) {
+                    select.innerHTML = '<option value="" disabled>LOCAL FOLDER (ACTIVE)</option>';
+                    data.profiles.forEach(profile => {
+                        const opt = document.createElement('option');
+                        opt.value = profile.name;
+                        opt.innerText = profile.name;
+                        if (profile.name === window.FOLDER_NAME) {
+                            opt.selected = true;
+                        }
+                        select.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => console.error('Error fetching profiles for dropdown:', err));
+
+        select.onchange = () => {
+            if (!adminToken) {
+                showToast('Only the host can switch the folder.', 'warning');
+                select.value = window.FOLDER_NAME;
+                return;
+            }
+
+            const targetFolder = select.value;
+            if (!targetFolder) return;
+
+            select.disabled = true;
+
+            fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    folder_name: targetFolder
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                select.disabled = false;
+                if (data.status !== 'success') {
+                    showToast('Error changing folder: ' + data.message, 'error');
+                    select.value = window.FOLDER_NAME;
+                }
+            })
+            .catch(err => {
+                console.error('Error switching folder:', err);
+                showToast('An error occurred while switching the folder.', 'error');
+                select.disabled = false;
+                select.value = window.FOLDER_NAME;
+            });
+        };
+    }
+
     async function setupVoiceAndStart() {
+        updateLocalProfileUI();
+        initProfileModal();
+        initInviteButton();
+        initCustomMedia();
+        initFolderDropdown();
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');
@@ -578,6 +811,7 @@ if (!window.safeSessionStorage) {
                 party_id: window.PARTY_ID,
                 client_id: clientId,
                 client_name: clientName,
+                avatar: localAvatar,
                 admin_token: storedToken
             });
         });
@@ -630,6 +864,24 @@ if (!window.safeSessionStorage) {
 
         socket.on('peer_joined', (data) => {
             handleSSEMessage({ type: 'peer_joined', ...data });
+        });
+
+        socket.on('peer_profile_updated', (data) => {
+            const { client_id, name, avatar } = data;
+            if (client_id === clientId) {
+                clientName = name;
+                localAvatar = avatar;
+                localStorage.setItem('wp_nickname', name);
+                localStorage.setItem('wp_avatar', avatar);
+                sessionStorage.setItem('wp_client_name', name);
+                updateLocalProfileUI();
+            } else {
+                if (activePeers[client_id]) {
+                    activePeers[client_id].name = name;
+                    activePeers[client_id].avatar = avatar;
+                    updatePeersUI();
+                }
+            }
         });
 
         socket.on('peer_left', (data) => {
@@ -691,7 +943,7 @@ if (!window.safeSessionStorage) {
         // Bind emoji buttons click
         const emojiBar = document.getElementById('emoji-action-bar');
         if (emojiBar) {
-            emojiBar.querySelectorAll('.emoji-btn').forEach(btn => {
+            emojiBar.querySelectorAll('.emoji-btn, .emoji-btn-new').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const emoji = btn.getAttribute('data-emoji');
                     sendEmojiReaction(emoji);
@@ -707,13 +959,14 @@ if (!window.safeSessionStorage) {
                 return;
             }
             
-            // Map keys 1-5 to emojis
+            // Map keys 1-6 to emojis
             const emojiMap = {
-                '1': '❤️',
+                '1': '😂',
                 '2': '🔥',
-                '3': '😂',
-                '4': '👏',
-                '5': '🎉'
+                '3': '💀',
+                '4': '👁️',
+                '5': '💖',
+                '6': '👀'
             };
             if (emojiMap[e.key]) {
                 e.preventDefault();
@@ -823,7 +1076,7 @@ if (!window.safeSessionStorage) {
 
         mediaFiles.forEach(file => {
             const item = document.createElement('div');
-            item.className = 'playlist-item';
+            item.className = 'playlist-thumbnail-card playlist-item';
             item.setAttribute('data-filename', file.filename);
             if (file.filename === currentFilename) {
                 item.classList.add('active');
@@ -842,11 +1095,10 @@ if (!window.safeSessionStorage) {
             }
 
             item.innerHTML = `
-                <div class="playlist-item-thumb-wrapper" style="position: relative; width: 100%; height: 100%;">
-                    <img src="${thumbUrl}" alt="${displayName}" onerror="this.src='https://placehold.co/160x90/101013/ffffff?text=${encodeURIComponent(displayName)}'">
-                    <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" style="position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(16, 16, 19, 0.85); border: 1px solid rgba(255,255,255,0.15); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; cursor: pointer; z-index: 10; transition: all 0.2s;"><i class="fa-solid fa-plus"></i></button>
-                </div>
-                <div class="playlist-item-title">${displayName}</div>
+                <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="playlist-placeholder" style="display: none;">${displayName.substring(0, 2).toUpperCase()}</div>
+                <div class="card-filename-overlay">${displayName}</div>
+                <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" style="position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; background: rgba(16, 16, 19, 0.85); border: 1px solid rgba(255,255,255,0.15); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; cursor: pointer; z-index: 10; transition: all 0.2s;"><i class="fa-solid fa-plus"></i></button>
             `;
 
             item.onclick = (e) => {
@@ -886,7 +1138,7 @@ if (!window.safeSessionStorage) {
             currentFilename = filename;
 
             // Highlight in playlist grid
-            const items = document.querySelectorAll('.playlist-item');
+            const items = document.querySelectorAll('.playlist-item, .playlist-thumbnail-card');
             items.forEach(item => {
                 if (item.getAttribute('data-filename') === filename) {
                     item.classList.add('active');
@@ -895,8 +1147,9 @@ if (!window.safeSessionStorage) {
                 }
             });
 
-            const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(filename);
-            const mediaUrl = `/media/${window.FOLDER_NAME}/${filename}`;
+            const isCustomUrl = /^https?:\/\//i.test(filename);
+            const isImage = !isCustomUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(filename);
+            const mediaUrl = isCustomUrl ? filename : `/media/${window.FOLDER_NAME}/${filename}`;
 
             const plyrContainer = document.querySelector('.plyr');
             let imagePlayer = document.getElementById('lightbox-image');
@@ -925,6 +1178,48 @@ if (!window.safeSessionStorage) {
                 if (plyrContainer) plyrContainer.style.display = 'block';
                 if (window.onVideoLoaded) {
                     window.onVideoLoaded();
+                }
+
+                if (isCustomUrl) {
+                    if (window.hlsInstance) {
+                        window.hlsInstance.destroy();
+                        window.hlsInstance = null;
+                    }
+
+                    const videoEl = document.getElementById('lightbox-video');
+                    const isHls = filename.toLowerCase().includes('.m3u8');
+
+                    if (isHls && Hls.isSupported() && videoEl) {
+                        const hls = new Hls({
+                            maxMaxBufferLength: 8,
+                            liveSyncPosition: 1.5
+                        });
+                        hls.loadSource(filename);
+                        hls.attachMedia(videoEl);
+                        window.hlsInstance = hls;
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                            resolve();
+                        });
+                        hls.on(Hls.Events.ERROR, (event, data) => {
+                            if (data.fatal) {
+                                console.warn('Custom HLS fatal error, trying raw play:', data);
+                                hls.destroy();
+                                window.hlsInstance = null;
+                                player.source = {
+                                    type: 'video',
+                                    sources: [{ src: filename }]
+                                };
+                                resolve();
+                            }
+                        });
+                    } else {
+                        player.source = {
+                            type: 'video',
+                            sources: [{ src: filename }]
+                        };
+                        resolve();
+                    }
+                    return;
                 }
 
                 // Check for HLS optimization on the server
@@ -1044,7 +1339,7 @@ if (!window.safeSessionStorage) {
                 // Register existing peers
                 if (data.peers) {
                     data.peers.forEach(peer => {
-                        activePeers[peer.client_id] = { name: peer.name, is_admin: peer.is_admin || false };
+                        activePeers[peer.client_id] = { name: peer.name, avatar: peer.avatar || 'cool_kid', is_admin: peer.is_admin || false };
                     });
                     updatePeersUI();
                 }
@@ -1053,7 +1348,7 @@ if (!window.safeSessionStorage) {
             case 'peer_joined':
                 addLogEntry('System', `${data.name} joined the watch party.`);
                 addSystemChatMessage(`${data.name} joined the room.`);
-                activePeers[data.client_id] = { name: data.name, is_admin: data.is_admin || false };
+                activePeers[data.client_id] = { name: data.name, avatar: data.avatar || 'cool_kid', is_admin: data.is_admin || false };
                 updatePeersUI();
 
                 // Existing client initiates connection to the newly joined peer
@@ -1545,10 +1840,18 @@ if (!window.safeSessionStorage) {
                 </div>
             `;
 
+            const pAvatar = peer.avatar || 'cool_kid';
+            const avatarData = AVATAR_MAP[pAvatar] || AVATAR_MAP.cool_kid;
+            const peerAvatarHtml = `
+                <div class="peer-avatar-circle-mini" style="background: ${avatarData.color}; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: #000000; border: 1.5px solid #000000; box-shadow: 1px 1px 0px #000000; flex-shrink: 0;">
+                    <i class="fa-solid ${avatarData.icon}"></i>
+                </div>
+            `;
+
             peerItem.innerHTML = `
-                <div class="peer-name">
+                <div class="peer-name" style="display: flex; align-items: center; gap: 0.5rem;">
                     ${crownHtml}
-                    <i class="fa-solid fa-user"></i>
+                    ${peerAvatarHtml}
                     <span>${peer.name}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
