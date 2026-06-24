@@ -25,6 +25,7 @@
     // Throttling for laser moves
     let lastLaserBroadcast = 0;
     const BROADCAST_INTERVAL = 50; // 20 FPS (50ms)
+    let isLoopRunning = false;
     
     // Initialize the module when page loads
     window.addEventListener('load', () => {
@@ -41,12 +42,18 @@
         setupCanvasListeners();
         setupResizeListeners();
         
-        // Start the animation render loop
-        requestAnimationFrame(renderLoop);
+        // We start the render loop on-demand when drawing or lasers are active
+        // to ensure 0% idle CPU and GPU overhead.
+        isLoopRunning = false;
     }
     /**
      * Periodically check for window.socket and bind event listeners
      */
+    function startRenderLoop() {
+        if (isLoopRunning) return;
+        isLoopRunning = true;
+        requestAnimationFrame(renderLoop);
+    }
     function setupSocketBindingLoop() {
         const checkInterval = setInterval(() => {
             if (window.socket && window.socket.connected) {
@@ -73,6 +80,7 @@
                 active: data.active,
                 lastUpdate: Date.now()
             };
+            startRenderLoop();
         });
         
         // Listen for peer drawings
@@ -87,11 +95,13 @@
                 timestamp: Date.now(),
                 duration: 3000
             });
+            startRenderLoop();
         });
         
         // Listen for clear board command
         socket.on('clear_drawings_broadcast', () => {
             drawingSegments = [];
+            startRenderLoop();
         });
     }
     function setupToolbarListeners() {
@@ -139,6 +149,7 @@
             if (socket) {
                 socket.emit('clear_drawings', { party_id: window.PARTY_ID });
             }
+            startRenderLoop();
         };
         
         // Color pickers
@@ -171,6 +182,7 @@
             // 1. Handle Synced Laser Pointer
             if (currentTool === 'laser') {
                 broadcastLaserMove(relativeX, relativeY, true);
+                startRenderLoop();
             }
             
             // 2. Handle Drawing Brush
@@ -201,6 +213,7 @@
                 
                 lastX = relativeX;
                 lastY = relativeY;
+                startRenderLoop();
             }
         });
         
@@ -266,7 +279,7 @@
      */
     function renderLoop() {
         if (!canvas || !ctx) {
-            requestAnimationFrame(renderLoop);
+            isLoopRunning = false;
             return;
         }
         
@@ -297,10 +310,12 @@
         });
         
         // 2. Render other participants' active laser pointers
+        let activeRemoteLasers = 0;
         Object.keys(remoteLasers).forEach(id => {
             const laser = remoteLasers[id];
             // If active and updated within the last 4 seconds
             if (laser.active && (now - laser.lastUpdate < 4000)) {
+                activeRemoteLasers++;
                 const pxX = laser.x * canvas.width;
                 const pxY = laser.y * canvas.height;
                 
@@ -336,7 +351,20 @@
             }
         });
         
-        requestAnimationFrame(renderLoop);
+        // Check if there are active drawings or active remote lasers to continue looping
+        const hasDrawingSegments = drawingSegments.length > 0;
+        const hasActiveRemoteLasers = activeRemoteLasers > 0;
+        const userIsDrawing = isDrawing && currentTool === 'draw';
+        const userIsLaser = currentTool === 'laser';
+
+        if (hasDrawingSegments || hasActiveRemoteLasers || userIsDrawing || userIsLaser) {
+            requestAnimationFrame(renderLoop);
+        } else {
+            isLoopRunning = false;
+            // Clean canvas completely one last time on idle
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            console.log("[LaserModule] Render loop entered idle state.");
+        }
     }
     /**
      * Helper to convert HEX to RGBA string with custom opacity
