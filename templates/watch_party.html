@@ -1092,6 +1092,14 @@
             pointer-events: auto !important;
             cursor: crosshair;
         }
+        
+        /* Force canvas to lose pointer-events when hovering over any toolbars, allowing clicks to pass through to the buttons */
+        .laser-toolbar:hover ~ .laser-canvas,
+        .laser-canvas:has(~ .wp-gallery-toolbar:hover),
+        .wp-gallery-toolbar:hover ~ .laser-canvas {
+            pointer-events: none !important;
+        }
+
         .plyr__controls {
             z-index: 1010 !important;
         }
@@ -1112,10 +1120,12 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 10px;
             padding: 4px 6px;
-            z-index: 1005 !important;
+            z-index: 1050 !important; /* Higher than Plyr controls and gallery toolbar */
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             opacity: 0.4;
             transition: opacity 0.25s ease;
+            transform: translateZ(0); /* Force hardware accelerated compositor layer */
+            pointer-events: auto !important;
         }
         .video-wrapper:hover .laser-toolbar,
         .laser-toolbar:hover {
