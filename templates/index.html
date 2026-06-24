@@ -430,91 +430,94 @@
                     <span><strong>100% Local AI:</strong> Everything runs entirely on your own computer. Your photos and videos are never uploaded to the cloud or shared.</span>
                 </div>
 
-                <div class="sort-flow-grid">
-                    <!-- Step 1: Input Folder Card -->
-                    <div class="dashboard-card glass step-card">
-                        <div class="step-badge-icon">1</div>
-                        <div class="step-content">
-                            <h3>Choose Media Folder</h3>
-                            <p class="step-desc">Select the folder containing the raw photos and videos you want to sort. Subfolders will be scanned recursively.</p>
-                            <div class="input-group" style="margin-top: 1.2rem; margin-bottom: 0;">
-                                <div class="input-with-icon">
-                                    <i class="fa-solid fa-folder-open"></i>
-                                    <input type="text" id="input_dir" placeholder="C:\path\to\raw\media" required style="font-weight: 600;">
-                                </div>
-                            </div>
+                <!-- Unified Control Center Card -->
+                <div class="dashboard-card glass main-pipeline-card" style="display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem !important; border: 3px solid #000000 !important; box-shadow: var(--shadow-main) !important; border-radius: 4px; background: var(--bg-raised) !important; margin-bottom: 2rem;">
+                    
+                    <!-- Header -->
+                    <div style="display: flex; align-items: center; gap: 1.2rem; border-bottom: 2px solid rgba(0,0,0,0.15); padding-bottom: 1.2rem;">
+                        <div class="step-badge-icon" style="background: var(--accent-yellow); margin-top: 0; display: flex; align-items: center; justify-content: center;">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="color: #000000;"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.35rem; font-weight: 900; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px;">AI Face Sorter Control Center</h3>
+                            <p style="margin: 0.2rem 0 0 0; font-size: 0.85rem; color: var(--text-dim); line-height: 1.4;">Configure media directories, run the sorting pipeline, and view live processing logs.</p>
                         </div>
                     </div>
-
-                    <!-- Step 2: Output Folder Card -->
-                    <div class="dashboard-card glass step-card">
-                        <div class="step-badge-icon">2</div>
-                        <div class="step-content">
-                            <h3>Save Sorted Folders To</h3>
-                            <p class="step-desc">Choose where Chehro will create individual folders. Chehro will copy or move files into folders organized by person.</p>
-                            <div class="input-group" style="margin-top: 1.2rem; margin-bottom: 0;">
-                                <div class="input-with-icon">
-                                    <i class="fa-solid fa-folder-tree"></i>
-                                    <input type="text" id="output_dir" placeholder="C:\path\to\sorted\output" required style="font-weight: 600;">
-                                </div>
+                    
+                    <!-- Directory Configurations -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label for="input_dir" style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; letter-spacing: 0.5px;">
+                                <i class="fa-solid fa-folder-open" style="color: var(--accent-blue);"></i> Source Media Folder (To Scan)
+                            </label>
+                            <div class="input-with-icon" style="width: 100%;">
+                                <i class="fa-solid fa-folder-open" style="color: var(--text-muted); left: 0.9rem;"></i>
+                                <input type="text" id="input_dir" placeholder="C:\path\to\raw\media" required style="font-weight: 600; padding: 0.8rem 1rem 0.8rem 2.5rem; font-size: 0.95rem; border: var(--bw) solid #000000; background: var(--bg); width: 100%;">
                             </div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; display: block;">Videos and photos will be scanned recursively.</span>
+                        </div>
+                        
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label for="output_dir" style="font-weight: 800; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; letter-spacing: 0.5px;">
+                                <i class="fa-solid fa-folder-tree" style="color: var(--accent-lime);"></i> Output Organized Folder (To Save)
+                            </label>
+                            <div class="input-with-icon" style="width: 100%;">
+                                <i class="fa-solid fa-folder-tree" style="color: var(--text-muted); left: 0.9rem;"></i>
+                                <input type="text" id="output_dir" placeholder="C:\path\to\sorted\output" required style="font-weight: 600; padding: 0.8rem 1rem 0.8rem 2.5rem; font-size: 0.95rem; border: var(--bw) solid #000000; background: var(--bg); width: 100%;">
+                            </div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; display: block;">Identified faces will be grouped into individual folders.</span>
                         </div>
                     </div>
-
-                    <!-- Step 3: Action & Progress Card -->
-                    <div class="dashboard-card glass step-card start-sorting-card" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div style="display: flex; gap: 1.2rem; align-items: flex-start; width: 100%;">
-                            <div class="step-badge-icon">3</div>
-                            <div class="step-content" style="flex: 1;">
-                                <h3>Start Sorting Locally</h3>
-                                <p class="step-desc" style="margin-bottom: 1.2rem;">Launch Chehro's local AI facial recognition engine. We will analyze your files, group similar people together, and automatically organize them.</p>
+                    
+                    <!-- Actions & Progress -->
+                    <div style="border-top: 2px dashed rgba(0,0,0,0.15); padding-top: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <!-- Buttons Row -->
+                            <div class="sort-action-row" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                <button class="btn btn-primary" id="btn-start" style="padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-yellow) !important; color: #000000 !important; border-color: #000000 !important;">
+                                    <i class="fa-solid fa-circle-play"></i> Start AI Face Sorter
+                                </button>
+                                <button class="btn btn-danger" id="btn-stop" style="display: none; padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-red) !important; color: #ffffff !important; border-color: #000000 !important;">
+                                    <i class="fa-solid fa-circle-stop"></i> Stop Sorter
+                                </button>
                                 
-                                <div class="sort-action-row" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                    <button class="btn btn-primary" id="btn-start" style="padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-yellow) !important; color: #000000 !important; border-color: #000000 !important;">
-                                        <i class="fa-solid fa-circle-play"></i> Start AI Face Sorter
-                                    </button>
-                                    <button class="btn btn-danger" id="btn-stop" style="display: none; padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-red) !important; color: #ffffff !important; border-color: #000000 !important;">
-                                        <i class="fa-solid fa-circle-stop"></i> Stop Sorter
-                                    </button>
-                                    
-                                    <button type="button" class="btn" id="btn-view-library-shortcut" style="display: none; padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-lime) !important; color: #000000 !important; border-color: #000000 !important; box-shadow: var(--shadow-button);">
-                                        <i class="fa-solid fa-photo-film"></i> View Sorted Library
-                                    </button>
-                                </div>
+                                <button type="button" class="btn" id="btn-view-library-shortcut" style="display: none; padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-lime) !important; color: #000000 !important; border-color: #000000 !important; box-shadow: var(--shadow-button);">
+                                    <i class="fa-solid fa-photo-film"></i> View Sorted Library
+                                </button>
                             </div>
+                            
+                            <!-- Current Stage Indicator -->
+                            <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Current Stage: <strong id="current-stage" style="color: var(--accent-orange);">IDLE</strong></span>
                         </div>
-
+                        
                         <!-- Progress Section -->
-                        <div class="progress-details" style="width: 100%; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.2rem; margin-top: 0.5rem;">
-                            <div class="progress-meta" style="display: flex; justify-content: space-between; margin-bottom: 0.6rem; font-size: 0.9rem;">
+                        <div class="progress-details" style="width: 100%; background: rgba(0,0,0,0.15); padding: 1.2rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                            <div class="progress-meta" style="display: flex; justify-content: space-between; margin-bottom: 0.6rem; font-size: 0.88rem;">
                                 <span class="current-file" id="progress-message" style="font-weight: 700; color: var(--text-dim);">Ready to sort your folder.</span>
                                 <span class="percentage" id="progress-percent" style="font-family: var(--font-mono); font-weight: 900; color: var(--accent-lime);">0.0%</span>
                             </div>
                             <div class="progress-bar-container" style="height: 12px; border: var(--bw) solid #000000; background: var(--bg); border-radius: 4px; overflow: hidden; position: relative;">
                                 <div class="progress-bar-fill" id="progress-bar" style="width: 0%; height: 100%; background: var(--accent-lime); transition: width 0.3s ease;"></div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem;">
-                                <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Current Stage: <strong id="current-stage" style="color: var(--accent-orange);">IDLE</strong></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Developer Logs Details -->
+                    <details class="logs-details" style="width: 100%; border: var(--bw) solid #000000; border-radius: 4px; background: var(--bg);">
+                        <summary style="padding: 0.8rem 1.2rem; font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                            <span>Show Technical Details (Developer Logs)</span>
+                            <i class="fa-solid fa-chevron-down details-chevron" style="font-size: 0.8rem;"></i>
+                        </summary>
+                        <div style="padding: 0 1.2rem 1.2rem 1.2rem; border-top: var(--bw) solid #000000;">
+                            <div class="card-header" style="margin-bottom: 0.8rem; padding-top: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">Real-time console output</span>
+                                <button type="button" class="btn btn-icon-only" id="btn-clear-console" title="Clear console" style="color: var(--text-muted); padding: 0.2rem;"><i class="fa-solid fa-circle-xmark"></i></button>
+                            </div>
+                            <div class="console-output" id="console-logs" style="height: 160px; border: var(--bw) solid #000000; background: #000000; color: #FFFFFF; font-family: var(--font-mono); font-size: 0.78rem; padding: 0.8rem; overflow-y: auto;">
+                                <div class="log-line info">System initialized. Awaiting user commands...</div>
                             </div>
                         </div>
-
-                        <!-- Developer Logs details -->
-                        <details class="logs-details" style="width: 100%; border: var(--bw) solid #000000; border-radius: 4px; background: var(--bg);">
-                            <summary style="padding: 0.8rem 1.2rem; font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
-                                <span>Show Technical Details (Developer Logs)</span>
-                                <i class="fa-solid fa-chevron-down details-chevron" style="font-size: 0.8rem;"></i>
-                            </summary>
-                            <div style="padding: 0 1.2rem 1.2rem 1.2rem; border-top: var(--bw) solid #000000;">
-                                <div class="card-header" style="margin-bottom: 0.8rem; padding-top: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">Real-time console output</span>
-                                    <button type="button" class="btn btn-icon-only" id="btn-clear-console" title="Clear console" style="color: var(--text-muted); padding: 0.2rem;"><i class="fa-solid fa-circle-xmark"></i></button>
-                                </div>
-                                <div class="console-output" id="console-logs" style="height: 160px; border: var(--bw) solid #000000; background: #000000; color: #FFFFFF; font-family: var(--font-mono); font-size: 0.78rem; padding: 0.8rem; overflow-y: auto;">
-                                    <div class="log-line info">System initialized. Awaiting user commands...</div>
-                                </div>
-                            </div>
-                        </details>
-                    </div>
+                    </details>
                 </div>
 
                 <!-- Simple Status Row -->
