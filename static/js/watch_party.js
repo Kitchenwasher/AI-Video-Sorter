@@ -288,6 +288,10 @@ if (!window.safeSessionStorage) {
     const activePeers = {};
     const iceCandidateQueues = {};
 
+    // Feature 6: Expose audio maps/peers to window for modular audio controller
+    window.getRemoteAudioElements = () => remoteAudioElements;
+    window.getActivePeers = () => activePeers;
+
     // Google public STUN servers for WebRTC ICE exchange
     const rtcConfig = {
         iceServers: [
@@ -390,7 +394,15 @@ if (!window.safeSessionStorage) {
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 48000
+                }
+            });
             localStream = stream;
             
             // Mute microphone by default to prevent sudden feedback/noise
@@ -1492,6 +1504,26 @@ if (!window.safeSessionStorage) {
                 `;
             }
 
+            // Feature 6: Individual Volume Controls
+            const volValue = (window.getPeerVolume) ? window.getPeerVolume(peerId) : 1;
+            const sliderOpen = (window.isPeerVolumeSliderOpen) ? window.isPeerVolumeSliderOpen(peerId) : false;
+            const sliderDisplay = sliderOpen ? 'block' : 'none';
+            let volIconClass = 'fa-volume-high';
+            if (volValue === 0) {
+                volIconClass = 'fa-volume-xmark';
+            } else if (volValue < 0.5) {
+                volIconClass = 'fa-volume-low';
+            }
+
+            const volumeHtml = `
+                <div class="peer-audio-control" style="display: flex; align-items: center; gap: 0.35rem; position: relative;">
+                    <button class="peer-volume-btn" onclick="toggleVolumeSlider('${peerId}')" style="background: transparent; border: none; padding: 0; margin: 0; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px;" title="Adjust Volume">
+                        <i class="peer-volume-icon fa-solid ${volIconClass}" id="peer-vol-icon-${peerId}"></i>
+                    </button>
+                    <input type="range" class="peer-volume-slider" id="peer-vol-slider-${peerId}" min="0" max="1" step="0.05" value="${volValue}" oninput="adjustPeerVolume('${peerId}', this.value)" style="width: 50px; height: 3px; cursor: pointer; outline: none; margin: 0; display: ${sliderDisplay};">
+                </div>
+            `;
+
             peerItem.innerHTML = `
                 <div class="peer-name">
                     ${crownHtml}
@@ -1500,6 +1532,7 @@ if (!window.safeSessionStorage) {
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     ${actionsHtml}
+                    ${volumeHtml}
                     <div class="voice-indicator ${isMuted ? 'muted' : ''}" id="voice-${peerId}"></div>
                 </div>
             `;
