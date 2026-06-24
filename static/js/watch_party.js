@@ -1414,12 +1414,10 @@ if (!window.safeSessionStorage) {
                     <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="playlist-placeholder" style="display: none;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
                     <div class="playlist-media-pill"><i class="fa-solid ${mediaIcon}"></i>${mediaLabel}</div>
+                    <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
                 </div>
                 <div class="playlist-item-details">
                     <div class="playlist-item-title" title="${displayName}">${displayName}</div>
-                </div>
-                <div class="playlist-item-actions">
-                    <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
                 </div>
             `;
 

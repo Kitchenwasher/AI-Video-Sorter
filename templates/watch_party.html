@@ -1957,16 +1957,14 @@
             filter: drop-shadow(0 0 8px rgba(255, 107, 53, 0.25));
         }
         .horizontal-playlist-row {
-            display: flex;
-            flex-direction: column !important;
-            flex-wrap: nowrap !important;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+            gap: 16px !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
-            gap: 0.75rem !important;
-            width: 100% !important;
             max-height: 480px !important;
             min-height: auto !important;
-            padding: 0.25rem 0.5rem 0.25rem 0.25rem !important;
+            padding: 0.25rem 0.5rem 0.5rem 0.25rem !important;
             scrollbar-width: thin !important;
             scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.02) !important;
             scroll-behavior: smooth !important;
@@ -1997,55 +1995,56 @@
         .playlist-thumbnail-card,
         .playlist-thumbnail-card.playlist-item {
             display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 1rem !important;
-            padding: 0.5rem !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 0 !important;
+            padding: 0 !important;
             width: 100% !important;
             height: auto !important;
             aspect-ratio: auto !important;
             flex: 0 0 auto !important;
             background: rgba(26, 26, 34, 0.45) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border: var(--bw) solid var(--border) !important;
             border-radius: 8px !important;
             position: relative !important;
             cursor: pointer !important;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             overflow: hidden !important;
+            box-shadow: var(--shadow-small) !important;
         }
         .playlist-thumbnail-card:hover {
             border-color: var(--accent-pink) !important;
-            background: rgba(255, 0, 127, 0.03) !important;
-            box-shadow: 0 0 12px rgba(255, 0, 127, 0.12) !important;
-            transform: none !important;
+            background: rgba(255, 0, 127, 0.02) !important;
+            box-shadow: var(--shadow-small), 0 6px 14px rgba(255, 0, 127, 0.15) !important;
+            transform: translateY(-4px) !important;
         }
         .playlist-thumbnail-card.active {
             border-color: var(--accent-lime) !important;
-            background: rgba(57, 255, 20, 0.03) !important;
-            box-shadow: 0 0 14px rgba(57, 255, 20, 0.2) !important;
+            background: rgba(57, 255, 20, 0.02) !important;
+            box-shadow: var(--shadow-small), 0 0 16px rgba(57, 255, 20, 0.25) !important;
         }
         .playlist-thumbnail-card::after {
             display: none !important;
         }
         .playlist-thumb-wrapper {
-            width: 120px !important;
-            height: 68px !important;
-            flex: 0 0 120px !important;
+            width: 100% !important;
+            aspect-ratio: 16/9 !important;
             position: relative !important;
-            border-radius: 6px !important;
             overflow: hidden !important;
             background: #000000 !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-bottom: var(--bw) solid var(--border) !important;
+            flex: 0 0 auto !important;
         }
         .playlist-thumb-wrapper img {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover !important;
             display: block !important;
-            transition: transform 0.2s ease !important;
+            transition: transform 0.24s ease, filter 0.24s ease !important;
         }
         .playlist-thumbnail-card:hover .playlist-thumb-wrapper img {
-            transform: scale(1.05) !important;
+            transform: scale(1.04) !important;
+            filter: brightness(1.08) !important;
         }
         .playlist-thumb-wrapper .playlist-placeholder {
             width: 100% !important;
@@ -2056,21 +2055,21 @@
             justify-content: center !important;
             gap: 0.2rem !important;
             color: rgba(243, 243, 243, 0.6) !important;
-            font-size: 0.6rem !important;
-            font-weight: 800 !important;
+            font-size: 0.65rem !important;
+            font-weight: 800;
             text-transform: uppercase !important;
             background: radial-gradient(circle at 50% 20%, rgba(255, 140, 0, 0.1), rgba(13, 13, 16, 0.95) 75%) !important;
         }
         .playlist-thumb-wrapper .playlist-placeholder i {
-            font-size: 1.1rem !important;
+            font-size: 1.25rem !important;
             color: var(--accent-orange) !important;
         }
         .playlist-media-pill {
             position: absolute !important;
-            bottom: 4px !important;
-            right: 4px !important;
+            bottom: 8px !important;
+            left: 8px !important;
+            right: auto !important;
             top: auto !important;
-            left: auto !important;
             z-index: 4 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -2087,54 +2086,55 @@
             backdrop-filter: blur(8px) !important;
         }
         .playlist-item-details {
-            flex: 1 !important;
-            min-width: 0 !important;
+            padding: 0.75rem !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: center !important;
+            gap: 0.25rem !important;
+            min-width: 0 !important;
         }
         .playlist-item-title {
-            font-size: 0.8rem !important;
+            font-size: 0.78rem !important;
             font-weight: 700 !important;
             color: var(--text) !important;
+            display: -webkit-box !important;
+            -webkit-line-clamp: 2 !important;
+            -webkit-box-orient: vertical !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-            line-height: 1.4 !important;
+            white-space: normal !important;
+            line-height: 1.35 !important;
+            word-break: break-all !important;
             transition: color 0.18s ease !important;
         }
         .playlist-thumbnail-card:hover .playlist-item-title {
             color: var(--accent-pink) !important;
         }
-        .playlist-item-actions {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
         .btn-add-to-queue {
-            position: static !important;
+            position: absolute !important;
+            top: 8px !important;
+            right: 8px !important;
+            z-index: 5 !important;
             width: 32px !important;
             height: 32px !important;
             border-radius: 50% !important;
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            color: rgba(255, 255, 255, 0.7) !important;
+            background: rgba(13, 13, 16, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: rgba(255, 255, 255, 0.85) !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
             font-size: 0.8rem !important;
             cursor: pointer !important;
-            transition: all 0.2s ease !important;
-            box-shadow: none !important;
-            backdrop-filter: none !important;
+            transition: all 0.18s ease !important;
+            backdrop-filter: blur(4px) !important;
             opacity: 1 !important;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
         }
-        .playlist-thumbnail-card:hover .btn-add-to-queue,
         .btn-add-to-queue:hover {
             background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)) !important;
-            border-color: rgba(255, 255, 255, 0.25) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
             color: #0c0c0e !important;
-            transform: scale(1.1) !important;
+            transform: scale(1.08) !important;
             box-shadow: 0 0 10px rgba(255, 0, 127, 0.4) !important;
         }
         .btn-add-to-queue:active {
@@ -2166,25 +2166,29 @@
                 border-radius: 7px !important;
             }
             .horizontal-playlist-row {
-                gap: 0.5rem !important;
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+                gap: 10px !important;
                 max-height: 380px !important;
-            }
-            .playlist-thumb-wrapper {
-                width: 90px !important;
-                height: 52px !important;
-                flex: 0 0 90px !important;
-            }
-            .playlist-thumbnail-card.playlist-item {
-                gap: 0.5rem !important;
-                padding: 0.4rem !important;
             }
             .playlist-item-title {
                 font-size: 0.72rem !important;
+                -webkit-line-clamp: 2 !important;
+            }
+            .playlist-item-details {
+                padding: 0.5rem !important;
             }
             .btn-add-to-queue {
                 width: 28px !important;
                 height: 28px !important;
-                font-size: 0.7rem !important;
+                font-size: 0.75rem !important;
+                top: 6px !important;
+                right: 6px !important;
+            }
+            .playlist-media-pill {
+                bottom: 6px !important;
+                left: 6px !important;
+                font-size: 0.48rem !important;
+                padding: 0.12rem 0.3rem !important;
             }
         }
 
