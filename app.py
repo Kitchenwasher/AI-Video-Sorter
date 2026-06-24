@@ -2467,12 +2467,10 @@ def delete_media_api():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-@app.route('/api/search')
-def global_search():
+def perform_global_search(query):
     """Performs a full-text search on filenames, folders, and person names across the entire library."""
-    query = request.args.get('q', '').strip()
     if not query:
-        return jsonify({'status': 'success', 'results': []})
+        return []
         
     try:
         from utils.models import ProcessedFile, WatchHistory
@@ -2578,11 +2576,67 @@ def global_search():
                     
         # Sort results alphabetically by filename
         sorted_results = sorted(results_map.values(), key=lambda x: x['filename'])
+        return sorted_results
+    except Exception as e:
+        logger.error(f"Error performing global search helper: {e}")
+        raise e
+
+
+@app.route('/api/search')
+def global_search():
+    """Performs a full-text search on filenames, folders, and person names across the entire library."""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'status': 'success', 'results': []})
         
+    try:
+        sorted_results = perform_global_search(query)
         return jsonify({'status': 'success', 'results': sorted_results[:100]})
     except Exception as e:
         logger.error(f"Error in global search endpoint: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/library-search', methods=['POST'])
+def watch_party_library_search(party_id):
+    """Admin-only search endpoint for room hosts to query the full indexed library."""
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    query = data.get('q', '').strip()
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        if not query:
+            return jsonify({'status': 'success', 'results': []})
+            
+        results = perform_global_search(query)
+        safe_results = []
+        for item in results[:50]:
+            if is_safe_path_segment(item['folder_name']) and not item['filename'].startswith('.'):
+                safe_results.append({
+                    'filename': item['filename'],
+                    'folder_name': item['folder_name'],
+                    'display_folder_name': item['display_folder_name'],
+                    'file_type': item['file_type'],
+                    'is_video': item['is_video'],
+                    'ext': item['ext'],
+                    'has_thumbnail': item['has_thumbnail']
+                })
+        return jsonify({'status': 'success', 'results': safe_results})
+    except Exception as e:
+        logger.error(f"Error in watch party library search: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 @app.route('/api/search-by-image', methods=['POST'])
@@ -3605,6 +3659,7 @@ def change_watch_party_folder(party_id):
     data = request.json or {}
     admin_token = data.get('admin_token')
     new_folder_name = data.get('folder_name')
+    target_filename = data.get('filename')
     
     if not admin_token or not new_folder_name:
         return jsonify({'status': 'error', 'message': 'admin_token and folder_name are required'}), 400
@@ -3657,15 +3712,25 @@ def change_watch_party_folder(party_id):
             party_state = watch_parties_state[party_id]
             party_state['folder_name'] = new_folder_name
             previous_speed = party_state.get('playback_state', {}).get('speed', 1.0)
-            default_filename = next(
-                (
-                    item.get('filename') for item in new_media_files
-                    if os.path.splitext(item.get('filename') or '')[1].lower() in WATCH_PARTY_PLAYABLE_EXTENSIONS
-                ),
-                None
-            )
+            
+            selected_filename = None
+            if target_filename:
+                selected_filename = next(
+                    (item.get('filename') for item in new_media_files if item.get('filename') == target_filename),
+                    None
+                )
+            
+            if not selected_filename:
+                selected_filename = next(
+                    (
+                        item.get('filename') for item in new_media_files
+                        if os.path.splitext(item.get('filename') or '')[1].lower() in WATCH_PARTY_PLAYABLE_EXTENSIONS
+                    ),
+                    None
+                )
+                
             party_state['playback_state'] = {
-                'filename': default_filename,
+                'filename': selected_filename,
                 'position': 0.0,
                 'playing': False,
                 'last_updated': time.time(),
@@ -3679,6 +3744,7 @@ def change_watch_party_folder(party_id):
             socketio.emit('folder_changed', {
                 'folder_name': new_folder_name,
                 'files': new_media_files,
+                'target_filename': selected_filename,
                 'sender_id': 'system'
             }, to=party_id)
                 

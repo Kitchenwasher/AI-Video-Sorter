@@ -1358,6 +1358,14 @@ if (!window.safeSessionStorage) {
     }
 
     function renderPlaylist(files) {
+        if (files === mediaFilesList) {
+            // When loading/resetting the full folder list, clear search input
+            const searchInput = document.getElementById('wp-media-search-input');
+            const searchClear = document.getElementById('wp-media-search-clear');
+            if (searchInput) searchInput.value = '';
+            if (searchClear) searchClear.style.display = 'none';
+        }
+
         const playlistGrid = document.getElementById('wp-playlist-grid');
         playlistGrid.innerHTML = '';
 
@@ -1368,12 +1376,24 @@ if (!window.safeSessionStorage) {
         });
 
         if (mediaFiles.length === 0) {
-            playlistGrid.innerHTML = `
-                <div class="playlist-empty-state">
-                    <i class="fa-solid fa-clapperboard"></i>
-                    <span>No playable media is queued for this room yet.</span>
-                </div>
-            `;
+            const searchInput = document.getElementById('wp-media-search-input');
+            const isSearching = searchInput && searchInput.value.toLowerCase().trim() !== '';
+
+            if (isSearching) {
+                playlistGrid.innerHTML = `
+                    <div class="playlist-empty-state">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>No videos found for this search.</span>
+                    </div>
+                `;
+            } else {
+                playlistGrid.innerHTML = `
+                    <div class="playlist-empty-state">
+                        <i class="fa-solid fa-clapperboard"></i>
+                        <span>No playable media is queued for this room yet.</span>
+                    </div>
+                `;
+            }
             
             // Notify queue module to refresh subtitle list even if no media files are present
             if (window.refreshSubtitlesList) {
@@ -1968,9 +1988,10 @@ if (!window.safeSessionStorage) {
                 }
                 mediaFilesList = data.files || [];
                 renderPlaylist(mediaFilesList);
-                const defaultFile = getDefaultPlayableFile();
-                if (defaultFile) {
-                    loadMediaAndApplyState(defaultFile.filename, { position: 0.0, playing: false });
+                
+                const targetFilename = data.target_filename || (getDefaultPlayableFile() ? getDefaultPlayableFile().filename : null);
+                if (targetFilename) {
+                    loadMediaAndApplyState(targetFilename, { position: 0.0, playing: false });
                 } else {
                     currentFilename = null;
                     const plyrContainer = document.querySelector('.plyr');
@@ -2703,6 +2724,226 @@ if (!window.safeSessionStorage) {
             folderSelectContainer.style.display = 'flex';
         }
 
+        const globalSearchContainer = document.getElementById('wp-global-search-container');
+        if (globalSearchContainer) {
+            globalSearchContainer.style.display = 'flex';
+        }
+
+        // Global Library Search Bindings (Admin Only)
+        const globalSearchInput = document.getElementById('wp-global-search-input');
+        const globalSearchClear = document.getElementById('wp-global-search-clear');
+        const globalSearchResults = document.getElementById('wp-global-search-results');
+        
+        let globalSearchTimeout = null;
+        
+        if (globalSearchInput && globalSearchResults) {
+            globalSearchInput.addEventListener('input', () => {
+                const query = globalSearchInput.value.trim();
+                
+                if (globalSearchClear) {
+                    globalSearchClear.style.display = query ? 'flex' : 'none';
+                }
+                
+                if (globalSearchTimeout) {
+                    clearTimeout(globalSearchTimeout);
+                }
+                
+                if (!query) {
+                    globalSearchResults.innerHTML = '';
+                    globalSearchResults.style.display = 'none';
+                    return;
+                }
+                
+                globalSearchTimeout = setTimeout(() => {
+                    globalSearchResults.innerHTML = `
+                        <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.75rem;">
+                            <i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-blue);"></i> Searching library...
+                        </div>
+                    `;
+                    globalSearchResults.style.display = 'flex';
+                    
+                    fetch(`/api/watch-party/${window.PARTY_ID}/library-search`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            admin_token: adminToken,
+                            q: query
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status !== 'success') {
+                            globalSearchResults.innerHTML = `
+                                <div style="padding: 0.75rem; text-align: center; color: var(--accent-red); font-size: 0.75rem;">
+                                    Error: ${data.message}
+                                </div>
+                            `;
+                            return;
+                        }
+                        
+                        const results = data.results || [];
+                        if (results.length === 0) {
+                            globalSearchResults.innerHTML = `
+                                <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.75rem;">
+                                    No library videos found.
+                                </div>
+                            `;
+                            return;
+                        }
+                        
+                        globalSearchResults.innerHTML = '';
+                        results.forEach((item, idx) => {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'global-search-item';
+                            resultItem.style.display = 'flex';
+                            resultItem.style.alignItems = 'center';
+                            resultItem.style.gap = '0.5rem';
+                            resultItem.style.padding = '0.4rem';
+                            resultItem.style.borderRadius = '4px';
+                            resultItem.style.border = '1px solid transparent';
+                            resultItem.style.cursor = 'pointer';
+                            resultItem.style.transition = 'background 0.2s';
+                            if (idx === 0) {
+                                resultItem.setAttribute('data-first-result', 'true');
+                            }
+                            
+                            const isVideo = !!item.is_video;
+                            let thumbUrl = isVideo 
+                                ? `/api/video-thumbnail/${item.folder_name}/${item.filename}`
+                                : `/media/${item.folder_name}/${item.filename}`;
+                                
+                            const cleanFolder = item.display_folder_name || item.folder_name;
+                            
+                            resultItem.innerHTML = `
+                                <div style="width: 50px; aspect-ratio: 16/9; position: relative; border-radius: 2px; overflow: hidden; background: #000; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 0.75rem; color: var(--text-muted);">
+                                        ${isVideo ? '<i class="fa-solid fa-film"></i>' : '<i class="fa-solid fa-image"></i>'}
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem;">
+                                    <div class="result-title" style="font-size: 0.75rem; font-weight: 700; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.filename}">${item.filename}</div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.65rem; color: var(--text-muted); min-width: 0;">
+                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">Path: ${cleanFolder}</span>
+                                        <span style="background: var(--accent-blue); color: #000; padding: 0 3px; border-radius: 2px; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; flex-shrink: 0;">${item.file_type || 'media'}</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.25rem; flex-shrink: 0;">
+                                    <button class="btn-play-result wp-mini-btn" title="Play Room-wide" style="background: var(--accent-pink); color: #000; border: 1px solid #000; padding: 0.25rem 0.4rem; border-radius: 2px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;"><i class="fa-solid fa-play"></i></button>
+                                    <button class="btn-queue-result wp-mini-btn" title="Add to Queue" style="background: var(--accent-lime); color: #000; border: 1px solid #000; padding: 0.25rem 0.4rem; border-radius: 2px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;"><i class="fa-solid fa-plus"></i></button>
+                                </div>
+                            `;
+                            
+                            resultItem.addEventListener('mouseenter', () => {
+                                resultItem.style.background = 'rgba(255, 255, 255, 0.05)';
+                                resultItem.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                            });
+                            resultItem.addEventListener('mouseleave', () => {
+                                resultItem.style.background = 'transparent';
+                                resultItem.style.borderColor = 'transparent';
+                            });
+                            
+                            const playBtn = resultItem.querySelector('.btn-play-result');
+                            playBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                playGlobalResult(item.filename, item.folder_name);
+                            };
+                            
+                            const queueBtn = resultItem.querySelector('.btn-queue-result');
+                            queueBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                if (window.addToQueue) {
+                                    window.addToQueue(item.filename, item.folder_name);
+                                }
+                            };
+                            
+                            resultItem.onclick = () => {
+                                playGlobalResult(item.filename, item.folder_name);
+                            };
+                            
+                            globalSearchResults.appendChild(resultItem);
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Error fetching global search results:', err);
+                        globalSearchResults.innerHTML = `
+                            <div style="padding: 0.75rem; text-align: center; color: var(--accent-red); font-size: 0.75rem;">
+                                Search failed.
+                            </div>
+                        `;
+                    });
+                }, 300);
+            });
+            
+            globalSearchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    clearGlobalSearch();
+                } else if (e.key === 'Enter') {
+                    const firstResult = globalSearchResults.querySelector('[data-first-result="true"]');
+                    if (firstResult) {
+                        firstResult.click();
+                    }
+                }
+            });
+        }
+        
+        if (globalSearchClear) {
+            globalSearchClear.onclick = () => {
+                clearGlobalSearch();
+            };
+        }
+        
+        document.addEventListener('click', (e) => {
+            if (globalSearchContainer && !globalSearchContainer.contains(e.target)) {
+                if (globalSearchResults) {
+                    globalSearchResults.style.display = 'none';
+                }
+            }
+        });
+        
+        function clearGlobalSearch() {
+            if (globalSearchInput) {
+                globalSearchInput.value = '';
+                globalSearchInput.blur();
+            }
+            if (globalSearchClear) {
+                globalSearchClear.style.display = 'none';
+            }
+            if (globalSearchResults) {
+                globalSearchResults.innerHTML = '';
+                globalSearchResults.style.display = 'none';
+            }
+        }
+        
+        function playGlobalResult(filename, folderName) {
+            clearGlobalSearch();
+            if (folderName === window.FOLDER_NAME) {
+                if (window.selectAndBroadcastMedia) {
+                    window.selectAndBroadcastMedia(filename);
+                }
+            } else {
+                fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        folder_name: folderName,
+                        filename: filename
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        showToast('Error loading video: ' + data.message, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Error switching folder on playGlobalResult:', err);
+                    showToast('Failed to change room folder.', 'error');
+                });
+            }
+        }
+
         const btnChangeFolder = document.getElementById('btn-wp-change-folder');
         if (btnChangeFolder) {
             btnChangeFolder.style.display = 'inline-block';
@@ -2893,6 +3134,41 @@ if (!window.safeSessionStorage) {
                     });
                 });
             };
+        }
+
+        // Setup Media Search Pill for Admin
+        const searchContainer = document.getElementById('wp-media-search-container');
+        const searchInput = document.getElementById('wp-media-search-input');
+        const searchClear = document.getElementById('wp-media-search-clear');
+
+        if (searchContainer) {
+            searchContainer.style.display = 'flex';
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase().trim();
+                if (query) {
+                    if (searchClear) searchClear.style.display = 'flex';
+                    const filtered = mediaFilesList.filter(file => {
+                        const displayName = (file.filename || '').toLowerCase();
+                        return displayName.includes(query);
+                    });
+                    renderPlaylist(filtered);
+                } else {
+                    if (searchClear) searchClear.style.display = 'none';
+                    renderPlaylist(mediaFilesList);
+                }
+            });
+        }
+
+        if (searchClear) {
+            searchClear.addEventListener('click', () => {
+                searchInput.value = '';
+                searchClear.style.display = 'none';
+                renderPlaylist(mediaFilesList);
+                searchInput.focus();
+            });
         }
     }
 

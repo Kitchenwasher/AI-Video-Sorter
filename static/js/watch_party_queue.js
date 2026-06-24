@@ -249,7 +249,7 @@
                         window.showToast('Playback settings are locked by the host.', 'warning');
                     }
                     // Revert value
-                    this.value = player ? player.speed.toString() : "1.0";
+                    this.value = player ? player.speed.toString() : "1";
                     return;
                 }
 
@@ -404,11 +404,13 @@
     /**
      * Add a file to the room's collaborative media queue
      */
-    function addToQueue(filename) {
+    function addToQueue(filename, folderName = null) {
         if (!socket) return;
         
+        const queueItemStr = folderName ? `${folderName}::${filename}` : filename;
+        
         // 1. Prevent duplicate additions if already in queue
-        if (currentQueue.includes(filename)) {
+        if (currentQueue.includes(queueItemStr)) {
             const now = Date.now();
             if (window.showToast && now - lastWarningTime > 2000) {
                 window.showToast('Item is already in the queue.', 'warning');
@@ -418,18 +420,18 @@
         }
         
         // 2. Prevent spamming rapid clicks on the same item while pending
-        if (pendingAdditions.has(filename)) {
+        if (pendingAdditions.has(queueItemStr)) {
             return;
         }
         
-        pendingAdditions.add(filename);
+        pendingAdditions.add(queueItemStr);
         setTimeout(() => {
-            pendingAdditions.delete(filename);
+            pendingAdditions.delete(queueItemStr);
         }, 1000); // 1s cooldown per item
         
         socket.emit('queue_add', {
             party_id: window.PARTY_ID,
-            filename: filename
+            filename: queueItemStr
         });
         
         if (window.showToast) {
@@ -491,22 +493,65 @@
         }
 
         // Pop the first item
-        const nextFilename = currentQueue[0];
-        console.log("[QueueModule] Autoplay loading next file:", nextFilename);
+        const nextItem = currentQueue[0];
+        console.log("[QueueModule] Autoplay loading next file:", nextItem);
         
         // Remove from queue on server
         removeQueueItem(0);
 
+        let folderName = window.FOLDER_NAME;
+        let filename = nextItem;
+        if (nextItem.includes('::')) {
+            const parts = nextItem.split('::');
+            folderName = parts[0];
+            filename = parts[1];
+        }
+
         // Load and play the file room-wide
-        if (window.selectAndBroadcastMedia) {
-            window.selectAndBroadcastMedia(nextFilename);
-            
-            // Wait a moment for media to load, then trigger play synced
-            setTimeout(() => {
-                if (window.broadcastSync) {
-                    window.broadcastSync('play', 0.0);
+        if (folderName !== window.FOLDER_NAME) {
+            const adminToken = window.getAdminToken();
+            if (!adminToken) {
+                if (window.showToast) {
+                    window.showToast('Switching to next queued item requires host privileges.', 'warning');
                 }
-            }, 800);
+                return;
+            }
+            
+            fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    folder_name: folderName,
+                    filename: filename
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    if (window.showToast) {
+                        window.showToast('Error playing queued item: ' + data.message, 'error');
+                    }
+                } else {
+                    setTimeout(() => {
+                        if (window.broadcastSync) {
+                            window.broadcastSync('play', 0.0);
+                        }
+                    }, 1200);
+                }
+            })
+            .catch(err => console.error('Error changing folder on playNextInQueue:', err));
+        } else {
+            if (window.selectAndBroadcastMedia) {
+                window.selectAndBroadcastMedia(filename);
+                
+                // Wait a moment for media to load, then trigger play synced
+                setTimeout(() => {
+                    if (window.broadcastSync) {
+                        window.broadcastSync('play', 0.0);
+                    }
+                }, 800);
+            }
         }
     }
 
@@ -529,26 +574,37 @@
             return;
         }
 
-        currentQueue.forEach((filename, idx) => {
+        currentQueue.forEach((itemStr, idx) => {
             const item = document.createElement('div');
             item.className = 'queue-item';
             item.setAttribute('draggable', 'true');
             item.setAttribute('data-index', idx);
-            item.setAttribute('data-filename', filename);
+            item.setAttribute('data-filename', itemStr);
             
+            let folderName = window.FOLDER_NAME;
+            let filename = itemStr;
+            if (itemStr.includes('::')) {
+                const parts = itemStr.split('::');
+                folderName = parts[0];
+                filename = parts[1];
+            }
+
             // Clean display name
             let displayName = filename;
-            if (window.FOLDER_NAME && window.FOLDER_NAME.startsWith('single_') && filename.length > 9) {
+            if (folderName && folderName.startsWith('single_') && filename.length > 9) {
                 displayName = filename.substring(9);
+            }
+            if (folderName !== window.FOLDER_NAME) {
+                displayName = `[${folderName.replace('_', ' ').trim()}] ${displayName}`;
             }
 
             // Generate thumbnail
             const isVideo = /\.(mp4|mkv|avi|mov|wmv|webm|flv|m4v|mpg|mpeg)$/i.test(filename);
             let thumbUrl;
             if (isVideo) {
-                thumbUrl = `/api/video-thumbnail/${window.FOLDER_NAME}/${filename}`;
+                thumbUrl = `/api/video-thumbnail/${folderName}/${filename}`;
             } else {
-                thumbUrl = `/media/${window.FOLDER_NAME}/${filename}`;
+                thumbUrl = `/media/${folderName}/${filename}`;
             }
 
             item.innerHTML = `
