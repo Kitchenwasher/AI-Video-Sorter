@@ -3,7 +3,6 @@
  * Handles aspect-ratio relative coordinates mapping, real-time throttled Socket.IO sync,
  * and a smooth alpha-fading drawing render loop.
  */
-
 (function () {
     let socket = null;
     let canvas = null;
@@ -31,7 +30,6 @@
     window.addEventListener('load', () => {
         initLaserDrawingSystem();
     });
-
     function initLaserDrawingSystem() {
         canvas = document.getElementById('laser-canvas');
         if (!canvas) return;
@@ -46,7 +44,6 @@
         // Start the animation render loop
         requestAnimationFrame(renderLoop);
     }
-
     /**
      * Periodically check for window.socket and bind event listeners
      */
@@ -63,7 +60,6 @@
         // Stop checking after 15 seconds to avoid infinite loop if offline
         setTimeout(() => clearInterval(checkInterval), 15000);
     }
-
     function bindSocketListeners() {
         if (!socket) return;
         
@@ -98,7 +94,6 @@
             drawingSegments = [];
         });
     }
-
     function setupToolbarListeners() {
         const toolbar = document.getElementById('laser-toolbar');
         if (!toolbar) return;
@@ -156,7 +151,6 @@
             };
         });
     }
-
     function setupCanvasListeners() {
         if (!canvas) return;
         
@@ -221,7 +215,6 @@
         canvas.addEventListener('mouseup', stopTracking);
         canvas.addEventListener('mouseleave', stopTracking);
     }
-
     function broadcastLaserMove(x, y, active) {
         const now = Date.now();
         if (!active || (now - lastLaserBroadcast > BROADCAST_INTERVAL)) {
@@ -238,7 +231,6 @@
             lastLaserBroadcast = now;
         }
     }
-
     function setupResizeListeners() {
         window.addEventListener('resize', resizeCanvas);
         
@@ -253,7 +245,6 @@
         // Initial defer resize
         setTimeout(resizeCanvas, 500);
     }
-
     function resizeCanvas() {
         const video = document.getElementById('lightbox-video');
         if (!video || !canvas) return;
@@ -270,7 +261,6 @@
         canvas.style.top = `${video.offsetTop}px`;
         canvas.style.left = `${video.offsetLeft}px`;
     }
-
     /**
      * Main animation loop rendering lasers and fading drawings
      */
@@ -348,7 +338,6 @@
         
         requestAnimationFrame(renderLoop);
     }
-
     /**
      * Helper to convert HEX to RGBA string with custom opacity
      */
@@ -361,7 +350,6 @@
             ? `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`
             : `rgba(255, 71, 87, ${alpha})`;
     }
-
     /**
      * Helper to draw rounded rectangles on HTML5 Canvas
      */

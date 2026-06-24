@@ -3,7 +3,6 @@
  * Handles micro-drift speed adjustments, real-time RTT latency compensation,
  * smart buffering room-wide pauses, and frame-accurate real-time drag scrubbing.
  */
-
 (function () {
     let socket = null;
     let player = null;
@@ -33,12 +32,10 @@
     window.addEventListener('load', () => {
         initSyncInfrastructure();
     });
-
     function initSyncInfrastructure() {
         // Wait for Plyr and socket to initialize
         setupSocketAndPlayerBindingLoop();
     }
-
     /**
      * Periodically check for window.socket and window.player, then bind handlers
      */
@@ -59,7 +56,6 @@
             }
         }, 200);
     }
-
     function bindSocketListeners() {
         if (!socket) return;
         
@@ -160,7 +156,6 @@
             }
         });
     }
-
     function bindPlayerEvents() {
         if (!player) return;
         
@@ -198,7 +193,6 @@
             }
         });
     }
-
     function startSyncLoops() {
         // 1. Run RTT network calibration every 10 seconds
         pingRTT();
@@ -207,7 +201,6 @@
         // 2. Run Micro-Drift Speed Compensation Loop every 2 seconds
         driftCheckInterval = setInterval(checkMicroDrift, 2000);
     }
-
     function pingRTT() {
         if (socket && socket.connected) {
             lastPingTime = Date.now();
@@ -216,7 +209,6 @@
             });
         }
     }
-
     /**
      * Micro-Drift Speed Compensation logic
      * Compares local playhead with estimated room reference time and silently accelerates/decelerates playback
@@ -264,7 +256,6 @@
             setTimeout(() => { window.ignorePlayerEvents = false; }, 100);
         }
     }
-
     function emitBufferingState(isBuffering) {
         if (socket) {
             socket.emit('peer_buffering', {

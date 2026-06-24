@@ -642,6 +642,38 @@ def handle_audio_track_change(data):
         'client_id': client_id,
         'index': index
     }, to=party_id, include_self=False)
+@socketio.on('gallery_zoom_pan')
+def handle_gallery_zoom_pan(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    scale = data.get('scale', 1.0)
+    rel_x = data.get('relX', 0.0)
+    rel_y = data.get('relY', 0.0)
+    rotation = data.get('rotation', 0)
+    if not party_id:
+        return
+    emit('gallery_zoom_pan_broadcast', {
+        'client_id': client_id,
+        'scale': scale,
+        'relX': rel_x,
+        'relY': rel_y,
+        'rotation': rotation
+    }, to=party_id, include_self=False)
+
+@socketio.on('slideshow_state')
+def handle_slideshow_state(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    playing = data.get('playing', False)
+    interval = data.get('interval', 5000)
+    if not party_id:
+        return
+    emit('slideshow_state_broadcast', {
+        'client_id': client_id,
+        'playing': playing,
+        'interval': interval
+    }, to=party_id, include_self=False)
+
 @socketio.on('signal')
 def handle_signal_event(data):
     party_id = data.get('party_id')
