@@ -2039,6 +2039,12 @@
                 </select>
             </div>
             
+            <!-- Theme Toggle Button -->
+            <button id="btn-wp-theme-toggle" class="wp-brutal-btn" style="background: var(--accent-lime) !important;" title="Toggle Dark/Light Mode">
+                <i class="fa-solid fa-moon" id="wp-theme-toggle-icon"></i>
+                <span id="wp-theme-toggle-text">Dark</span>
+            </button>
+            
             <button id="btn-wp-invite" class="wp-brutal-btn" style="background: var(--accent-blue) !important;" title="Copy Invite Link"><i class="fa-solid fa-share-nodes"></i> Invite</button>
             <button id="btn-wp-admin-panel" class="wp-brutal-btn" style="display: none; background: var(--accent-yellow) !important;" title="Admin Controls"><i class="fa-solid fa-crown"></i> Admin Panel</button>
             
@@ -2524,18 +2530,18 @@
     <!-- Plyr custom video player JS -->
     <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
     <!-- Standalone Watch Party client handler script -->
-    <script src="{{ url_for('static', filename='js/watch_party.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular Laser Pointer and Drawing Canvas script -->
-    <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_laser.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular Top-Notch Playback Sync Infrastructure script -->
-    <script src="{{ url_for('static', filename='js/watch_party_sync.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_sync.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular Advanced Co-Watching Playback script -->
-    <script src="{{ url_for('static', filename='js/watch_party_queue.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_queue.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular Shared Image Gallery and Slideshow script -->
-    <script src="{{ url_for('static', filename='js/watch_party_gallery.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_gallery.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular High-Fidelity Audio Controls script -->
-    <script src="{{ url_for('static', filename='js/watch_party_audio.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_audio.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular Layout & UX Polish script (Feature 7) -->
-    <script src="{{ url_for('static', filename='js/watch_party_layout.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/watch_party_layout.js') }}?v={{ range(1, 100000) | random }}"></script>
 </body>
 </html>

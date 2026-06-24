@@ -612,11 +612,42 @@ if (!window.safeSessionStorage) {
         }
     }
 
+    function initThemeToggle() {
+        const themeBtn = document.getElementById('btn-wp-theme-toggle');
+        const themeIcon = document.getElementById('wp-theme-toggle-icon');
+        const themeText = document.getElementById('wp-theme-toggle-text');
+        if (!themeBtn) return;
+
+        function updateToggleUI(theme) {
+            if (theme === 'light') {
+                if (themeIcon) themeIcon.className = 'fa-solid fa-sun';
+                if (themeText) themeText.textContent = 'Light';
+                themeBtn.style.setProperty('background', 'var(--accent-yellow)', 'important');
+            } else {
+                if (themeIcon) themeIcon.className = 'fa-solid fa-moon';
+                if (themeText) themeText.textContent = 'Dark';
+                themeBtn.style.setProperty('background', 'var(--accent-lime)', 'important');
+            }
+        }
+
+        let currentTheme = document.body.getAttribute('data-theme') || 'dark';
+        updateToggleUI(currentTheme);
+
+        themeBtn.onclick = (e) => {
+            e.preventDefault();
+            currentTheme = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            document.body.setAttribute('data-theme', currentTheme);
+            localStorage.setItem('chehro-theme', currentTheme);
+            updateToggleUI(currentTheme);
+            showToast(`Switched to ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)} Mode`, 'info');
+        };
+    }
+
     function initFolderDropdown() {
         const select = document.getElementById('wp-folder-dropdown-select');
         if (!select) return;
 
-        fetch('/api/profiles')
+        fetch('/api/profiles?party_id=' + encodeURIComponent(window.PARTY_ID))
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' && data.profiles) {
@@ -677,6 +708,7 @@ if (!window.safeSessionStorage) {
         initInviteButton();
         initCustomMedia();
         initFolderDropdown();
+        initThemeToggle();
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');

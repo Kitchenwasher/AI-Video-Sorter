@@ -858,24 +858,40 @@ def restrict_public_access():
                     pass
             return jsonify({'status': 'error', 'message': 'Access denied: Folder is not shared in any active watch party.'}), 403
 
-        # 6. Allow profiles listing ONLY if a valid active watch party admin token is provided
+        # 6. Allow profiles listing if a valid active watch party admin token OR a valid active watch party ID is provided
         if path == '/api/profiles':
             admin_token = request.args.get('admin_token') or request.headers.get('X-Admin-Token')
+            party_id = request.args.get('party_id') or request.headers.get('X-Party-Id')
+            
+            authorized = False
             if admin_token:
                 with watch_parties_lock:
-                    # Valid active admin token in memory
                     active_tokens = [p.get('admin_token') for p in watch_parties_state.values() if p.get('admin_token')]
                     if admin_token in active_tokens:
-                        return
-                    # Valid active admin token in DB
-                    try:
-                        from utils.models import WatchParty
-                        exists = WatchParty.query.filter_by(admin_token=admin_token).first()
-                        if exists:
-                            return
-                    except Exception:
-                        pass
-            return jsonify({'status': 'error', 'message': 'Access denied: Admin authentication required.'}), 403
+                        authorized = True
+                    else:
+                        try:
+                            from utils.models import WatchParty
+                            exists = WatchParty.query.filter_by(admin_token=admin_token).first()
+                            if exists:
+                                authorized = True
+                        except Exception:
+                            pass
+            elif party_id:
+                with watch_parties_lock:
+                    if party_id in watch_parties_state:
+                        authorized = True
+                    else:
+                        try:
+                            from utils.models import WatchParty
+                            exists = WatchParty.query.get(party_id)
+                            if exists and exists.expires_at > datetime.utcnow():
+                                authorized = True
+                        except Exception:
+                            pass
+                            
+            if not authorized:
+                return jsonify({'status': 'error', 'message': 'Access denied: Active watch party authorization required.'}), 403
 
         # 7. Allow Socket.IO connections for real-time sync and chat
         if path.startswith('/socket.io/'):
@@ -4019,6 +4035,15 @@ def start_tunnel_manager():
         except Exception as e:
             logger.error(f"Error in tunnel manager: {e}")
         time.sleep(5)
+
+
+@app.after_request
+def disable_caching(response):
+    """Disable caching for all requests to ensure frontend changes are always reflected immediately."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, public, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 if __name__ == '__main__':
