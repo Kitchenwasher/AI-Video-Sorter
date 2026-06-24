@@ -17,6 +17,37 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 WORKSPACE_DIR = os.path.abspath(os.path.dirname(__file__))
 
+def init_ffmpeg_paths():
+    """Locates ffmpeg/ffprobe at startup and ensures they are in PATH."""
+    startupinfo = None
+    if os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    
+    # Try running ffmpeg directly
+    try:
+        res = subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, timeout=2)
+        if res.returncode == 0:
+            logger.info("ffmpeg is already available in PATH")
+            return
+    except FileNotFoundError:
+        pass
+
+    # Look in WinGet folder or other common places
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
+    if local_app_data:
+        winget_dir = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
+        if os.path.exists(winget_dir):
+            for root, dirs, files in os.walk(winget_dir):
+                if 'ffmpeg.exe' in files or 'ffprobe.exe' in files:
+                    bin_path = os.path.abspath(root)
+                    os.environ['PATH'] = bin_path + os.pathsep + os.environ.get('PATH', '')
+                    logger.info(f"Added ffmpeg path to environment PATH: {bin_path}")
+                    return
+
+init_ffmpeg_paths()
+
+
 # Configure SQLAlchemy (Postgres in production, SQLite fallback for local development)
 database_url = os.environ.get('DATABASE_URL')
 if not database_url:
@@ -372,7 +403,8 @@ def handle_join_event(data):
             'turn_server': turn_server,
             'turn_username': turn_username,
             'turn_credential': turn_credential,
-            'queue': party_state.get('queue', [])
+            'queue': party_state.get('queue', []),
+            'public_tunnel_url': public_tunnel_url
         })
         
     logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
@@ -3011,10 +3043,30 @@ def watch_party_page(party_id):
         if not party or party.expires_at < datetime.utcnow():
             return "Watch party not found or expired", 404
             
-        return render_template('watch_party.html', party_id=party_id, folder_name=party.folder_name)
+        return render_template('watch_party.html', party_id=party_id, folder_name=party.folder_name, public_tunnel_url=public_tunnel_url)
     except Exception as e:
         logger.error(f"Error loading watch party template: {e}")
         return str(e), 500
+
+
+@app.route('/api/watch-party/<party_id>/invite-link')
+def get_invite_link(party_id):
+    """Returns the current invite link, prioritizing the public tunnel URL if available."""
+    try:
+        from utils.models import WatchParty
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+            
+        base_url = public_tunnel_url
+        if not base_url:
+            base_url = request.host_url.rstrip('/')
+            
+        invite_url = f"{base_url.rstrip('/')}/watch-party/{party_id}"
+        return jsonify({'status': 'success', 'invite_url': invite_url})
+    except Exception as e:
+        logger.error(f"Error generating invite link: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/watch-party/<party_id>/auth', methods=['POST'])

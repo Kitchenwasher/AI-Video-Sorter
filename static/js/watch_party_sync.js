@@ -111,6 +111,14 @@
             const overlay = document.getElementById('wp-buffering-overlay');
             const textEl = document.getElementById('wp-buffering-text');
             
+            const myId = window.getClientId ? window.getClientId() : 'local';
+            if (data.client_id === myId) return; // Skip if it's our own buffering state
+            
+            if (window.isImageActive) {
+                if (overlay) overlay.classList.remove('active');
+                return;
+            }
+            
             if (data.buffering) {
                 peersBuffering.add(data.client_name);
                 console.log(`[SyncModule] Peer ${data.client_name} started buffering.`);
@@ -161,6 +169,7 @@
         
         // 1. Detect local buffering start
         player.on('waiting', () => {
+            if (window.isImageActive) return; // Ignore if viewing an image
             if (!isLocalBuffering) {
                 isLocalBuffering = true;
                 emitBufferingState(true);
@@ -169,6 +178,7 @@
         
         // 2. Detect local buffering end
         player.on('playing', () => {
+            if (window.isImageActive) return; // Ignore if viewing an image
             if (isLocalBuffering) {
                 isLocalBuffering = false;
                 emitBufferingState(false);
@@ -260,8 +270,8 @@
         if (socket) {
             socket.emit('peer_buffering', {
                 party_id: window.PARTY_ID,
-                client_id: window.clientId || 'local',
-                client_name: window.clientName || 'Guest',
+                client_id: window.getClientId ? window.getClientId() : 'local',
+                client_name: window.getClientName ? window.getClientName() : 'Guest',
                 buffering: isBuffering
             });
         }

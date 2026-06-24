@@ -2977,6 +2977,62 @@ body[data-theme="light"] .landing-footer {
     color: #000000 !important;
 }
 
+/* Nav Menu items */
+.nav-item {
+    border: var(--bw) solid #000000 !important;
+    background: var(--bg-raised) !important;
+    color: var(--text-dim) !important;
+    font-weight: 700 !important;
+    box-shadow: var(--shadow-small) !important;
+    margin: 0.3rem 0.5rem !important;
+    border-radius: 4px !important;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease !important;
+}
+
+/* Alternating rotations */
+.nav-item:nth-child(odd) {
+    transform: rotate(-1deg) !important;
+}
+.nav-item:nth-child(even) {
+    transform: rotate(1deg) !important;
+}
+
+/* Hover state overrides */
+.nav-item:nth-child(odd):hover {
+    background: var(--accent-pink) !important;
+    color: #000000 !important;
+    transform: translate(-1px, -1px) rotate(1deg) !important;
+    box-shadow: 4px 4px 0px #000000 !important;
+}
+.nav-item:nth-child(even):hover {
+    background: var(--accent-pink) !important;
+    color: #000000 !important;
+    transform: translate(-1px, -1px) rotate(-1deg) !important;
+    box-shadow: 4px 4px 0px #000000 !important;
+}
+
+/* Active state overrides */
+.nav-item.active {
+    background: var(--accent) !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    box-shadow: var(--shadow-small) !important;
+}
+
+/* Active hover state overrides */
+.nav-item.active:nth-child(odd):hover {
+    background: var(--accent-pink) !important;
+    color: #000000 !important;
+    transform: translate(-1px, -1px) rotate(1deg) !important;
+    box-shadow: 4px 4px 0px #000000 !important;
+}
+.nav-item.active:nth-child(even):hover {
+    background: var(--accent-pink) !important;
+    color: #000000 !important;
+    transform: translate(-1px, -1px) rotate(-1deg) !important;
+    box-shadow: 4px 4px 0px #000000 !important;
+}
+
 /* Nav Menu special button */
 .nav-item-special {
     border: var(--bw) solid #000000 !important;
@@ -2984,8 +3040,9 @@ body[data-theme="light"] .landing-footer {
     color: #000000 !important;
     font-weight: 700 !important;
     box-shadow: var(--shadow-small) !important;
-    margin: 1rem 0.5rem 0 !important;
+    margin: auto 0.5rem 0 !important;
     transform: rotate(1deg) !important;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease !important;
 }
 .nav-item-special:hover {
     background: var(--accent-pink) !important;

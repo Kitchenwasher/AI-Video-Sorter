@@ -27,14 +27,19 @@
     const BROADCAST_INTERVAL = 50; // 20 FPS (50ms)
     let isLoopRunning = false;
     
-    // Initialize the module when page loads
-    window.addEventListener('load', () => {
+    // Initialize the module using bulletproof DOM ready-state check
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
         initLaserDrawingSystem();
-    });
+    } else {
+        document.addEventListener('DOMContentLoaded', initLaserDrawingSystem);
+    }
+
     function initLaserDrawingSystem() {
         canvas = document.getElementById('laser-canvas');
         if (!canvas) return;
         ctx = canvas.getContext('2d');
+        
+        window.resizeCanvas = resizeCanvas; // Expose globally
         
         // Wait for Plyr and socket to initialize
         setupSocketBindingLoop();
@@ -56,11 +61,11 @@
     }
     function setupSocketBindingLoop() {
         const checkInterval = setInterval(() => {
-            if (window.socket && window.socket.connected) {
+            if (window.socket) {
                 socket = window.socket;
                 clearInterval(checkInterval);
                 bindSocketListeners();
-                console.log("[LaserModule] Connected to socket.io successfully.");
+                console.log("[LaserModule] Bound to socket.io successfully.");
             }
         }, 200);
         
@@ -133,6 +138,7 @@
             btnLaser.classList.add('active');
             canvas.classList.add('interactive');
             currentTool = 'laser';
+            resizeCanvas(); // Recalculate size on activation
         };
         
         btnDraw.onclick = () => {
@@ -140,6 +146,7 @@
             btnDraw.classList.add('active');
             canvas.classList.add('interactive');
             currentTool = 'draw';
+            resizeCanvas(); // Recalculate size on activation
             // Hide local laser
             broadcastLaserMove(0, 0, false);
         };
@@ -260,19 +267,33 @@
     }
     function resizeCanvas() {
         const video = document.getElementById('lightbox-video');
-        if (!video || !canvas) return;
+        const image = document.getElementById('lightbox-image');
+        if (!canvas) return;
         
-        // Determine exact bounding box of the containing video content
-        const rect = video.getBoundingClientRect();
+        let targetEl = null;
+        if (window.isImageActive && image && image.style.display !== 'none') {
+            targetEl = image;
+        } else if (video && video.style.display !== 'none') {
+            targetEl = video;
+        }
+        
+        if (!targetEl) {
+            targetEl = document.querySelector('.video-wrapper');
+        }
+        
+        if (!targetEl) return;
+        
+        // Determine exact bounding box of the containing active media content
+        const rect = targetEl.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
         
-        // Overlay precisely on the video position inside the parent wrapper
+        // Overlay precisely on the media position inside the parent wrapper
         canvas.style.position = 'absolute';
-        canvas.style.top = `${video.offsetTop}px`;
-        canvas.style.left = `${video.offsetLeft}px`;
+        canvas.style.top = `${targetEl.offsetTop}px`;
+        canvas.style.left = `${targetEl.offsetLeft}px`;
     }
     /**
      * Main animation loop rendering lasers and fading drawings

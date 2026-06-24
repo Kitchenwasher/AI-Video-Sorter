@@ -511,7 +511,12 @@
 
             item.innerHTML = `
                 <div class="queue-drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
-                <img src="${thumbUrl}" style="width: 44px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; background: #0c0c0e;" onerror="this.src='https://placehold.co/80x45/101013/ffffff?text=Media'">
+                <div class="queue-item-thumb-wrapper" style="width: 44px; aspect-ratio: 16/9; position: relative; border-radius: 4px; overflow: hidden; background: var(--bg-overlay); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="queue-thumbnail-placeholder" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-overlay);">
+                        ${isVideo ? '<i class="fa-solid fa-film"></i>' : '<i class="fa-solid fa-image"></i>'}
+                    </div>
+                </div>
                 <div class="queue-item-title" style="flex: 1; font-size: 0.75rem; font-weight: 600; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${displayName}">${displayName}</div>
                 <button class="queue-remove-btn" title="Remove from Queue"><i class="fa-solid fa-xmark"></i></button>
             `;

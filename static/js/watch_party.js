@@ -222,6 +222,197 @@ if (!window.safeSessionStorage) {
         }
     };
 
+    // Dynamic CSS injection for Brutalist Confirm / Alert Modals
+    if (!document.getElementById('brutal-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'brutal-modal-styles';
+        style.textContent = `
+            .brutal-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.75);
+                backdrop-filter: blur(4px);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.15s ease-in-out;
+            }
+            .brutal-modal-overlay.active {
+                opacity: 1;
+            }
+            .brutal-modal-box {
+                background: #ffffff;
+                border: 4px solid #000000;
+                box-shadow: 8px 8px 0px #000000;
+                padding: 24px;
+                max-width: 450px;
+                width: 90%;
+                transform: scale(0.9);
+                transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                color: #000000;
+                font-family: inherit;
+            }
+            .brutal-modal-overlay.active .brutal-modal-box {
+                transform: scale(1);
+            }
+            .brutal-modal-title {
+                font-size: 1.2rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                margin-bottom: 16px;
+                background: var(--accent-yellow, #ffe600);
+                padding: 6px 12px;
+                border: 2px solid #000;
+                display: inline-block;
+                transform: rotate(-1deg);
+                color: #000;
+            }
+            .brutal-modal-message {
+                font-size: 1rem;
+                font-weight: 700;
+                margin-bottom: 24px;
+                line-height: 1.4;
+                color: #000;
+            }
+            .brutal-modal-buttons {
+                display: flex;
+                justify-content: flex-end;
+                gap: 12px;
+            }
+            .brutal-modal-btn {
+                font-weight: 800;
+                text-transform: uppercase;
+                padding: 8px 16px;
+                border: 3px solid #000;
+                cursor: pointer;
+                transition: all 0.1s ease;
+                font-family: inherit;
+            }
+            .brutal-modal-btn-confirm {
+                background: var(--accent-pink, #ff007f);
+                color: #fff;
+                box-shadow: 3px 3px 0px #000;
+            }
+            .brutal-modal-btn-confirm:hover {
+                transform: translate(-1px, -1px);
+                box-shadow: 4px 4px 0px #000;
+            }
+            .brutal-modal-btn-confirm:active {
+                transform: translate(1px, 1px);
+                box-shadow: 1px 1px 0px #000;
+            }
+            .brutal-modal-btn-cancel {
+                background: #eee;
+                color: #000;
+                box-shadow: 3px 3px 0px #000;
+            }
+            .brutal-modal-btn-cancel:hover {
+                transform: translate(-1px, -1px);
+                box-shadow: 4px 4px 0px #000;
+            }
+            .brutal-modal-btn-cancel:active {
+                transform: translate(1px, 1px);
+                box-shadow: 1px 1px 0px #000;
+            }
+            
+            /* Dark theme support */
+            [data-theme="dark"] .brutal-modal-box {
+                background: #1e1e1e;
+                color: #ffffff;
+                border-color: #ffffff;
+                box-shadow: 8px 8px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-title {
+                border-color: #ffffff;
+                color: #000;
+            }
+            [data-theme="dark"] .brutal-modal-message {
+                color: #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn {
+                border-color: #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm {
+                box-shadow: 3px 3px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm:hover {
+                box-shadow: 4px 4px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm:active {
+                box-shadow: 1px 1px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel {
+                background: #333;
+                color: #fff;
+                box-shadow: 3px 3px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel:hover {
+                box-shadow: 4px 4px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel:active {
+                box-shadow: 1px 1px 0px #ffffff;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    window.showBrutalConfirm = function (message, title = 'Confirm') {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'brutal-modal-overlay';
+            
+            const box = document.createElement('div');
+            box.className = 'brutal-modal-box';
+            
+            const titleEl = document.createElement('div');
+            titleEl.className = 'brutal-modal-title';
+            titleEl.innerText = title;
+            
+            const messageEl = document.createElement('div');
+            messageEl.className = 'brutal-modal-message';
+            messageEl.innerText = message;
+            
+            const buttons = document.createElement('div');
+            buttons.className = 'brutal-modal-buttons';
+            
+            const btnCancel = document.createElement('button');
+            btnCancel.className = 'brutal-modal-btn brutal-modal-btn-cancel';
+            btnCancel.innerText = 'Cancel';
+            
+            const btnConfirm = document.createElement('button');
+            btnConfirm.className = 'brutal-modal-btn brutal-modal-btn-confirm';
+            btnConfirm.innerText = 'Confirm';
+            
+            buttons.appendChild(btnCancel);
+            buttons.appendChild(btnConfirm);
+            box.appendChild(titleEl);
+            box.appendChild(messageEl);
+            box.appendChild(buttons);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            
+            overlay.offsetHeight; // trigger reflow
+            overlay.classList.add('active');
+            
+            const close = (result) => {
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve(result);
+                }, 150);
+            };
+            
+            btnCancel.onclick = () => close(false);
+            btnConfirm.onclick = () => close(true);
+            btnConfirm.focus();
+        });
+    };
+
     // Override default alert
     window.alert = function (message) {
         if (typeof message !== 'string') {
@@ -427,12 +618,12 @@ if (!window.safeSessionStorage) {
                     overlay.classList.remove('active');
                     showNicknameModal();
                 } else {
-                    alert('Incorrect password. Please try again.');
+                    showToast('Incorrect password. Please try again.', 'error');
                     passwordInput.value = '';
                     passwordInput.focus();
                 }
             } catch (err) {
-                alert('An error occurred during authentication.');
+                showToast('An error occurred during authentication.', 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerText = 'Unlock & Join';
@@ -553,13 +744,49 @@ if (!window.safeSessionStorage) {
         const inviteBtn = document.getElementById('btn-wp-invite');
         if (inviteBtn) {
             inviteBtn.onclick = () => {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
-                    showToast('Invite link copied to clipboard!', 'success');
-                }).catch(err => {
-                    console.error('Failed to copy invite link:', err);
-                    showToast('Failed to copy invite link.', 'error');
-                });
+                fetch(`/api/watch-party/${window.PARTY_ID}/invite-link`)
+                    .then(res => res.json())
+                    .then(data => {
+                        let urlStr;
+                        if (data && data.status === 'success' && data.invite_url) {
+                            urlStr = data.invite_url;
+                        } else {
+                            let inviteUrl;
+                            if (window.PUBLIC_TUNNEL_URL && window.PUBLIC_TUNNEL_URL.trim() !== '') {
+                                inviteUrl = new URL(`/watch-party/${window.PARTY_ID}`, window.PUBLIC_TUNNEL_URL);
+                            } else {
+                                inviteUrl = new URL(window.location.href);
+                                inviteUrl.pathname = `/watch-party/${window.PARTY_ID}`;
+                            }
+                            inviteUrl.searchParams.delete('admin_token');
+                            urlStr = inviteUrl.toString();
+                        }
+                        
+                        navigator.clipboard.writeText(urlStr).then(() => {
+                            showToast('Invite link copied to clipboard!', 'success');
+                        }).catch(err => {
+                            console.error('Failed to copy invite link:', err);
+                            showToast('Failed to copy invite link.', 'error');
+                        });
+                    })
+                    .catch(err => {
+                        console.warn('Failed to fetch invite link from server, using fallback:', err);
+                        let inviteUrl;
+                        if (window.PUBLIC_TUNNEL_URL && window.PUBLIC_TUNNEL_URL.trim() !== '') {
+                            inviteUrl = new URL(`/watch-party/${window.PARTY_ID}`, window.PUBLIC_TUNNEL_URL);
+                        } else {
+                            inviteUrl = new URL(window.location.href);
+                            inviteUrl.pathname = `/watch-party/${window.PARTY_ID}`;
+                        }
+                        inviteUrl.searchParams.delete('admin_token');
+                        
+                        navigator.clipboard.writeText(inviteUrl.toString()).then(() => {
+                            showToast('Invite link copied to clipboard!', 'success');
+                        }).catch(err2 => {
+                            console.error('Failed to copy invite link:', err2);
+                            showToast('Failed to copy invite link.', 'error');
+                        });
+                    });
             };
         }
     }
@@ -890,6 +1117,9 @@ if (!window.safeSessionStorage) {
         });
 
         socket.on('init_payload', (data) => {
+            if (data.public_tunnel_url) {
+                window.PUBLIC_TUNNEL_URL = data.public_tunnel_url;
+            }
             if (data.turn_server) {
                 const rawUrl = data.turn_server.trim();
                 const urls = [rawUrl];
@@ -956,7 +1186,7 @@ if (!window.safeSessionStorage) {
             handleSSEMessage({ type: 'sync', ...data });
         });
 
-        socket.on('chat_event', (data) => {
+        socket.on('chat_message', (data) => {
             handleSSEMessage({ type: 'chat', ...data });
         });
 
@@ -1228,19 +1458,34 @@ if (!window.safeSessionStorage) {
                 imagePlayer.style.height = '100%';
                 imagePlayer.style.objectFit = 'contain';
                 imagePlayer.style.display = 'none';
+                
+                // Add load event listener to resize drawing canvas on image loading
+                imagePlayer.addEventListener('load', () => {
+                    if (window.resizeCanvas) {
+                        window.resizeCanvas();
+                    }
+                });
+                
                 const wrapper = document.querySelector('.video-wrapper');
                 if (wrapper) wrapper.appendChild(imagePlayer);
             }
 
             if (isImage) {
+                window.isImageActive = true;
                 if (plyrContainer) plyrContainer.style.display = 'none';
                 imagePlayer.src = mediaUrl;
                 imagePlayer.style.display = 'block';
+                
+                // Hide buffering overlay immediately on image view
+                const overlay = document.getElementById('wp-buffering-overlay');
+                if (overlay) overlay.classList.remove('active');
+                
                 if (window.onImageLoaded) {
                     window.onImageLoaded(filename);
                 }
                 resolve();
             } else {
+                window.isImageActive = false;
                 imagePlayer.style.display = 'none';
                 if (plyrContainer) plyrContainer.style.display = 'block';
                 if (window.onVideoLoaded) {
@@ -1353,9 +1598,20 @@ if (!window.safeSessionStorage) {
                             }
                         ]
                     };
-                    player.once('ready', () => {
+                    const videoEl = document.getElementById('lightbox-video');
+                    if (videoEl) {
+                        const onMetadataLoaded = () => {
+                            videoEl.removeEventListener('loadedmetadata', onMetadataLoaded);
+                            resolve();
+                        };
+                        videoEl.addEventListener('loadedmetadata', onMetadataLoaded);
+                        setTimeout(() => {
+                            videoEl.removeEventListener('loadedmetadata', onMetadataLoaded);
+                            resolve();
+                        }, 500);
+                    } else {
                         resolve();
-                    });
+                    }
                 }
             }
         });
@@ -1635,6 +1891,35 @@ if (!window.safeSessionStorage) {
     /**
      * 4. WebRTC Mesh Audio Core
      */
+    function optimizeAudioSDP(sdp) {
+        let lines = sdp.split('\r\n');
+        let opusPayload = null;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes('opus/48000')) {
+                let match = lines[i].match(/a=rtpmap:(\d+)\s+opus/i);
+                if (match) {
+                    opusPayload = match[1];
+                    break;
+                }
+            }
+        }
+        
+        if (opusPayload) {
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith(`a=fmtp:${opusPayload}`)) {
+                    if (!lines[i].includes('maxaveragebitrate=')) {
+                        lines[i] = lines[i] + ';maxaveragebitrate=96000;useinbandfec=1';
+                    } else {
+                        lines[i] = lines[i].replace(/maxaveragebitrate=\d+/, 'maxaveragebitrate=96000');
+                    }
+                    console.log(`[AudioOptim] Optimized Opus SDP line: ${lines[i]}`);
+                    break;
+                }
+            }
+        }
+        return lines.join('\r\n');
+    }
+
     function createPeerConnection(peerId, isInitiator) {
         if (peerConnections[peerId]) {
             try { peerConnections[peerId].close(); } catch(e) {}
@@ -1684,6 +1969,7 @@ if (!window.safeSessionStorage) {
         if (isInitiator) {
             pc.createOffer({ offerToReceiveAudio: true })
                 .then(offer => {
+                    offer.sdp = optimizeAudioSDP(offer.sdp);
                     return pc.setLocalDescription(offer).then(() => offer);
                 })
                 .then(offer => {
@@ -1704,12 +1990,16 @@ if (!window.safeSessionStorage) {
             if (!pc) {
                 pc = createPeerConnection(senderId, false);
             }
+            if (signal.sdp) {
+                signal.sdp = optimizeAudioSDP(signal.sdp);
+            }
             pc.setRemoteDescription(new RTCSessionDescription(signal))
                 .then(() => {
                     processIceQueue(senderId);
                     return pc.createAnswer();
                 })
                 .then(answer => {
+                    answer.sdp = optimizeAudioSDP(answer.sdp);
                     return pc.setLocalDescription(answer).then(() => answer);
                 })
                 .then(answer => {
@@ -1719,6 +2009,9 @@ if (!window.safeSessionStorage) {
 
         } else if (signal.type === 'answer') {
             if (pc) {
+                if (signal.sdp) {
+                    signal.sdp = optimizeAudioSDP(signal.sdp);
+                }
                 pc.setRemoteDescription(new RTCSessionDescription(signal))
                     .then(() => {
                         processIceQueue(senderId);
@@ -1933,45 +2226,49 @@ if (!window.safeSessionStorage) {
 
     window.adminForceMute = (peerId, peerName) => {
         if (!adminToken) return;
-        if (!confirm(`Are you sure you want to force mute ${peerName}?`)) return;
-        
-        fetch(`/api/watch-party/${window.PARTY_ID}/force-mute`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                admin_token: adminToken,
-                client_id: peerId
+        window.showBrutalConfirm(`Are you sure you want to force mute ${peerName}?`, 'Mute User').then(confirmed => {
+            if (!confirmed) return;
+            
+            fetch(`/api/watch-party/${window.PARTY_ID}/force-mute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    client_id: peerId
+                })
             })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success') {
-                showToast(`Force mute request sent for ${peerName}.`, 'success');
-            } else {
-                showToast('Failed to force mute user.', 'error');
-            }
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(`Force mute request sent for ${peerName}.`, 'success');
+                } else {
+                    showToast('Failed to force mute user.', 'error');
+                }
+            });
         });
     };
 
     window.adminKickPeer = (peerId, peerName) => {
         if (!adminToken) return;
-        if (!confirm(`Are you sure you want to kick ${peerName}?`)) return;
-        
-        fetch(`/api/watch-party/${window.PARTY_ID}/kick`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                admin_token: adminToken,
-                client_id: peerId
+        window.showBrutalConfirm(`Are you sure you want to kick ${peerName}?`, 'Kick User').then(confirmed => {
+            if (!confirmed) return;
+            
+            fetch(`/api/watch-party/${window.PARTY_ID}/kick`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    client_id: peerId
+                })
             })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success') {
-                showToast(`${peerName} has been kicked.`, 'success');
-            } else {
-                showToast('Failed to kick user.', 'error');
-            }
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(`${peerName} has been kicked.`, 'success');
+                } else {
+                    showToast('Failed to kick user.', 'error');
+                }
+            });
         });
     };
 
@@ -2023,7 +2320,7 @@ if (!window.safeSessionStorage) {
             chatInput.value = '';
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-            if (window.socket && window.socket.connected) {
+            if (window.socket) {
                 window.socket.emit('chat', {
                     party_id: window.PARTY_ID,
                     client_id: clientId,
@@ -2233,20 +2530,23 @@ if (!window.safeSessionStorage) {
         const btnClearChat = document.getElementById('btn-admin-clear-chat');
         if (btnClearChat) {
             btnClearChat.onclick = () => {
-                if (!confirm('Clear chat history for all participants?')) return;
-                fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        admin_token: adminToken,
-                        clear_chat: true
+                window.showBrutalConfirm('Clear chat history for all participants?', 'Clear Chat').then(confirmed => {
+                    if (!confirmed) return;
+                    
+                    fetch(`/api/watch-party/${window.PARTY_ID}/settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            admin_token: adminToken,
+                            clear_chat: true
+                        })
                     })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showToast('Chat cleared.', 'success');
-                    }
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showToast('Chat cleared.', 'success');
+                        }
+                    });
                 });
             };
         }
@@ -2324,19 +2624,22 @@ if (!window.safeSessionStorage) {
         const btnEndParty = document.getElementById('btn-admin-end-party');
         if (btnEndParty) {
             btnEndParty.onclick = () => {
-                if (!confirm('Are you sure you want to end this watch party session now? All connected participants will be disconnected.')) return;
-                fetch(`/api/watch-party/${window.PARTY_ID}/end`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        admin_token: adminToken
+                window.showBrutalConfirm('Are you sure you want to end this watch party session now? All connected participants will be disconnected.', 'End Party').then(confirmed => {
+                    if (!confirmed) return;
+                    
+                    fetch(`/api/watch-party/${window.PARTY_ID}/end`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            admin_token: adminToken
+                        })
                     })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        document.getElementById('wp-admin-overlay').classList.remove('active');
-                    }
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            document.getElementById('wp-admin-overlay').classList.remove('active');
+                        }
+                    });
                 });
             };
         }
@@ -2401,14 +2704,14 @@ if (!window.safeSessionStorage) {
                 if (data.status === 'success') {
                     closeModal();
                 } else {
-                    alert('Error changing folder: ' + data.message);
+                    showToast('Error changing folder: ' + data.message, 'error');
                     confirmBtn.disabled = false;
                     confirmBtn.innerText = 'Switch Folder';
                 }
             })
             .catch(err => {
                 console.error('Error switching folder:', err);
-                alert('An error occurred while switching the folder.');
+                showToast('An error occurred while switching the folder.', 'error');
                 confirmBtn.disabled = false;
                 confirmBtn.innerText = 'Switch Folder';
             });

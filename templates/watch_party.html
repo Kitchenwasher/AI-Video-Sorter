@@ -1086,10 +1086,10 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 12;
+            z-index: 999 !important;
         }
         .laser-canvas.interactive {
-            pointer-events: auto;
+            pointer-events: auto !important;
             cursor: crosshair;
         }
         
@@ -1170,7 +1170,7 @@
             align-items: center;
             justify-content: center;
             gap: 1rem;
-            z-index: 18;
+            z-index: 1000 !important;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
@@ -1636,7 +1636,7 @@
 
         /* Header Rebrand Logo */
         .logo-sticker {
-            background: #ffffff !important;
+            background: var(--accent-yellow) !important;
             border: 2.5px solid #000000 !important;
             box-shadow: 3px 3px 0px #000000 !important;
             padding: 0.4rem 0.8rem !important;
@@ -1652,12 +1652,8 @@
             color: #000000 !important;
             letter-spacing: 0.5px;
         }
-        .logo-sticker .logo-text .logo-box {
-            background: #ff007f !important;
-            color: #ffffff !important;
-            padding: 0.1rem 0.35rem;
-            margin-left: 2px;
-            border-radius: 2px;
+        .logo-sticker .logo-text span {
+            color: var(--accent-pink) !important;
         }
 
         /* Sidebar profile card layout */
@@ -1943,11 +1939,23 @@
             scrollbar-width: thin;
         }
         .horizontal-playlist-row::-webkit-scrollbar {
-            height: 6px;
+            height: 8px !important;
+        }
+        .horizontal-playlist-row::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2) !important;
+            border: 1px solid #000000 !important;
+            border-radius: 4px !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-thumb {
-            background: var(--accent-yellow);
-            border-radius: 3px;
+            background: var(--accent-yellow) !important;
+            border-radius: 4px !important;
+            border: 1px solid #000000 !important;
+        }
+        .horizontal-playlist-row::-webkit-scrollbar-button {
+            display: none !important;
+        }
+        ::-webkit-scrollbar-button {
+            display: none !important;
         }
         .playlist-thumbnail-card {
             flex: 0 0 130px;
@@ -2026,7 +2034,7 @@
     <!-- Header bar -->
     <header class="header" style="height: auto; padding: 0.75rem 1.2rem;">
         <div class="logo-sticker">
-            <span class="logo-text">CHEH<span class="logo-box">RO</span></span>
+            <span class="logo-text">CHEH<span>RO</span></span>
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <!-- Invite and Custom Media -->
@@ -2048,8 +2056,10 @@
             <button id="btn-wp-invite" class="wp-brutal-btn" style="background: var(--accent-blue) !important;" title="Copy Invite Link"><i class="fa-solid fa-share-nodes"></i> Invite</button>
             <button id="btn-wp-admin-panel" class="wp-brutal-btn" style="display: none; background: var(--accent-yellow) !important;" title="Admin Controls"><i class="fa-solid fa-crown"></i> Admin Panel</button>
             
-            <!-- Hidden elements preserved for compatibility -->
-            <button id="btn-wp-theater" style="display: none;"></button>
+            <!-- Theater Mode Button -->
+            <button id="btn-wp-theater" class="wp-brutal-btn" style="background: #ffa502 !important;" title="Toggle Theater Mode">
+                <i class="fa-solid fa-display"></i> Theater Mode
+            </button>
             <button id="btn-wp-hotkeys" style="display: none;"></button>
             <span id="party-folder-badge" style="display: none;"><span id="wp-active-folder-name">{{ folder_name }}</span><button id="btn-wp-change-folder" style="display: none;"></button></span>
         </div>
@@ -2072,8 +2082,6 @@
                         <div class="buffering-text" id="wp-buffering-text">Waiting for peers to buffer...</div>
                     </div>
                 </div>
-                
-                <canvas class="laser-canvas" id="laser-canvas"></canvas>
                 
                 <!-- Laser & Drawing Floating Toolbar -->
                 <div class="laser-toolbar" id="laser-toolbar">
@@ -2098,6 +2106,7 @@
                 </div>
                 
                 <video id="lightbox-video" controls playsinline></video>
+                <canvas class="laser-canvas" id="laser-canvas"></canvas>
                 
                 <!-- Floating Glassmorphic Gallery & Slideshow Toolbar (Feature 5) -->
                 <div id="wp-gallery-toolbar" class="wp-gallery-toolbar" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 22, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 30px; padding: 0.5rem 1rem; align-items: center; gap: 0.75rem; z-index: 1000; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); transition: opacity 0.3s, transform 0.3s; pointer-events: auto; flex-wrap: wrap;">
@@ -2522,6 +2531,7 @@
     <script>
         window.PARTY_ID = "{{ party_id }}";
         window.FOLDER_NAME = "{{ folder_name }}";
+        window.PUBLIC_TUNNEL_URL = "{{ public_tunnel_url or '' }}";
     </script>
 
     <!-- Socket.IO & HLS.js client libraries -->

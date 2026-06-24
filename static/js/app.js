@@ -260,6 +260,197 @@ if (!window.safeSessionStorage) {
         }
     };
 
+    // Dynamic CSS injection for Brutalist Confirm / Alert Modals
+    if (!document.getElementById('brutal-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'brutal-modal-styles';
+        style.textContent = `
+            .brutal-modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.75);
+                backdrop-filter: blur(4px);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.15s ease-in-out;
+            }
+            .brutal-modal-overlay.active {
+                opacity: 1;
+            }
+            .brutal-modal-box {
+                background: #ffffff;
+                border: 4px solid #000000;
+                box-shadow: 8px 8px 0px #000000;
+                padding: 24px;
+                max-width: 450px;
+                width: 90%;
+                transform: scale(0.9);
+                transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                color: #000000;
+                font-family: inherit;
+            }
+            .brutal-modal-overlay.active .brutal-modal-box {
+                transform: scale(1);
+            }
+            .brutal-modal-title {
+                font-size: 1.2rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                margin-bottom: 16px;
+                background: var(--accent-yellow, #ffe600);
+                padding: 6px 12px;
+                border: 2px solid #000;
+                display: inline-block;
+                transform: rotate(-1deg);
+                color: #000;
+            }
+            .brutal-modal-message {
+                font-size: 1rem;
+                font-weight: 700;
+                margin-bottom: 24px;
+                line-height: 1.4;
+                color: #000;
+            }
+            .brutal-modal-buttons {
+                display: flex;
+                justify-content: flex-end;
+                gap: 12px;
+            }
+            .brutal-modal-btn {
+                font-weight: 800;
+                text-transform: uppercase;
+                padding: 8px 16px;
+                border: 3px solid #000;
+                cursor: pointer;
+                transition: all 0.1s ease;
+                font-family: inherit;
+            }
+            .brutal-modal-btn-confirm {
+                background: var(--accent-pink, #ff007f);
+                color: #fff;
+                box-shadow: 3px 3px 0px #000;
+            }
+            .brutal-modal-btn-confirm:hover {
+                transform: translate(-1px, -1px);
+                box-shadow: 4px 4px 0px #000;
+            }
+            .brutal-modal-btn-confirm:active {
+                transform: translate(1px, 1px);
+                box-shadow: 1px 1px 0px #000;
+            }
+            .brutal-modal-btn-cancel {
+                background: #eee;
+                color: #000;
+                box-shadow: 3px 3px 0px #000;
+            }
+            .brutal-modal-btn-cancel:hover {
+                transform: translate(-1px, -1px);
+                box-shadow: 4px 4px 0px #000;
+            }
+            .brutal-modal-btn-cancel:active {
+                transform: translate(1px, 1px);
+                box-shadow: 1px 1px 0px #000;
+            }
+            
+            /* Dark theme support */
+            [data-theme="dark"] .brutal-modal-box {
+                background: #1e1e1e;
+                color: #ffffff;
+                border-color: #ffffff;
+                box-shadow: 8px 8px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-title {
+                border-color: #ffffff;
+                color: #000;
+            }
+            [data-theme="dark"] .brutal-modal-message {
+                color: #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn {
+                border-color: #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm {
+                box-shadow: 3px 3px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm:hover {
+                box-shadow: 4px 4px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-confirm:active {
+                box-shadow: 1px 1px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel {
+                background: #333;
+                color: #fff;
+                box-shadow: 3px 3px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel:hover {
+                box-shadow: 4px 4px 0px #ffffff;
+            }
+            [data-theme="dark"] .brutal-modal-btn-cancel:active {
+                box-shadow: 1px 1px 0px #ffffff;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    window.showBrutalConfirm = function (message, title = 'Confirm') {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'brutal-modal-overlay';
+            
+            const box = document.createElement('div');
+            box.className = 'brutal-modal-box';
+            
+            const titleEl = document.createElement('div');
+            titleEl.className = 'brutal-modal-title';
+            titleEl.innerText = title;
+            
+            const messageEl = document.createElement('div');
+            messageEl.className = 'brutal-modal-message';
+            messageEl.innerText = message;
+            
+            const buttons = document.createElement('div');
+            buttons.className = 'brutal-modal-buttons';
+            
+            const btnCancel = document.createElement('button');
+            btnCancel.className = 'brutal-modal-btn brutal-modal-btn-cancel';
+            btnCancel.innerText = 'Cancel';
+            
+            const btnConfirm = document.createElement('button');
+            btnConfirm.className = 'brutal-modal-btn brutal-modal-btn-confirm';
+            btnConfirm.innerText = 'Confirm';
+            
+            buttons.appendChild(btnCancel);
+            buttons.appendChild(btnConfirm);
+            box.appendChild(titleEl);
+            box.appendChild(messageEl);
+            box.appendChild(buttons);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            
+            overlay.offsetHeight; // trigger reflow
+            overlay.classList.add('active');
+            
+            const close = (result) => {
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve(result);
+                }, 150);
+            };
+            
+            btnCancel.onclick = () => close(false);
+            btnConfirm.onclick = () => close(true);
+            btnConfirm.focus();
+        });
+    };
+
     // Override default alert
     window.alert = function (message) {
         if (typeof message !== 'string') {
@@ -726,7 +917,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Clear Cache Button
     clearCacheBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to clear the embedding database cache? Next run will analyze all files from scratch.')) {
+        const confirmed = await window.showBrutalConfirm('Are you sure you want to clear the embedding database cache? Next run will analyze all files from scratch.', 'Clear Cache');
+        if (!confirmed) {
             return;
         }
         try {
@@ -1032,7 +1224,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearRecent = document.getElementById('btn-clear-recent');
     if (btnClearRecent) {
         btnClearRecent.addEventListener('click', async () => {
-            if (confirm('Are you sure you want to clear your recently played history?')) {
+            const confirmed = await window.showBrutalConfirm('Are you sure you want to clear your recently played history?', 'Clear History');
+            if (confirmed) {
                 try {
                     const res = await fetch('/api/recently-watched/clear', { method: 'POST' });
                     const data = await res.json();
@@ -1166,7 +1359,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const folders = Array.from(mergeSelectedFolders);
         const targetName = mergeTargetName.value.trim() || null;
 
-        if (!confirm(`Merge ${folders.length} folders${targetName ? ' into "' + targetName + '"' : ''}? This will move all files and delete source folders.`)) {
+        const confirmed = await window.showBrutalConfirm(`Merge ${folders.length} folders${targetName ? ' into "' + targetName + '"' : ''}? This will move all files and delete source folders.`, 'Merge Folders');
+        if (!confirmed) {
             return;
         }
 
@@ -1253,7 +1447,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!confirm(`Merge ${payload.folders.length} folders${payload.target_name ? ' into "' + payload.target_name + '"' : ''}?`)) {
+        const confirmed = await window.showBrutalConfirm(`Merge ${payload.folders.length} folders${payload.target_name ? ' into "' + payload.target_name + '"' : ''}?`, 'Merge Folders');
+        if (!confirmed) {
             return;
         }
 
@@ -1949,7 +2144,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const count = selectedFilenames.size;
             if (count === 0) return;
             
-            if (confirm(`Are you sure you want to permanently delete all ${count} selected media files? This action cannot be undone.`)) {
+            const confirmed = await window.showBrutalConfirm(`Are you sure you want to permanently delete all ${count} selected media files? This action cannot be undone.`, 'Delete Media');
+            if (confirmed) {
                 btnDeleteSelection.disabled = true;
                 const icon = btnDeleteSelection.querySelector('i');
                 const origClass = icon ? icon.className : '';
@@ -2439,7 +2635,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (itemDeleteBtn) {
                     itemDeleteBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
-                        if (confirm(`Are you sure you want to permanently delete "${file.name}"? This action cannot be undone.`)) {
+                        const confirmed = await window.showBrutalConfirm(`Are you sure you want to permanently delete "${file.name}"? This action cannot be undone.`, 'Delete Media');
+                        if (confirmed) {
                             const icon = itemDeleteBtn.querySelector('i');
                             if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
                             try {
@@ -3043,7 +3240,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnClearHistory) {
         btnClearHistory.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm("Are you sure you want to clear your watch history?")) {
+            const confirmed = await window.showBrutalConfirm("Are you sure you want to clear your watch history?", "Clear History");
+            if (confirmed) {
                 try {
                     const res = await fetch('/api/recently-watched/clear', { method: 'POST' });
                     const data = await res.json();
@@ -3544,7 +3742,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Are you sure you want to permanently delete the profile "${p.display_name}" and all its ${p.media_count} media files? This action cannot be undone.`)) {
+                    const confirmed = await window.showBrutalConfirm(`Are you sure you want to permanently delete the profile "${p.display_name}" and all its ${p.media_count} media files? This action cannot be undone.`, 'Delete Profile');
+                    if (confirmed) {
                         const icon = deleteBtn.querySelector('i');
                         if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
                         try {
@@ -3699,7 +3898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const sourceName = sourceProfile ? sourceProfile.display_name : sourceFolder;
                         const targetName = p.display_name;
                         
-                        const confirmMerge = confirm(`Are you sure you want to merge "${sourceName}" into "${targetName}"?\n\nThis will physically move all files from "${sourceName}" into "${targetName}", combine their face embeddings, and delete "${sourceName}". This cannot be undone.`);
+                        const confirmMerge = await window.showBrutalConfirm(`Are you sure you want to merge "${sourceName}" into "${targetName}"?\n\nThis will physically move all files from "${sourceName}" into "${targetName}", combine their face embeddings, and delete "${sourceName}". This cannot be undone.`, 'Merge Profiles');
                         
                         if (confirmMerge) {
                             appendLog('info', `Merging profile "${sourceName}" into "${targetName}"...`);
@@ -3742,7 +3941,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Index Library faces in background
     if (btnIndexLibrary) {
         btnIndexLibrary.addEventListener('click', async () => {
-            const confirmIndex = confirm("Do you want to index all faces in the output folders?\n\nThis will scan all folders recursively, extract face embeddings for any new files, and cache them in the database. This allows complete cross-profile search and auto-avatar extraction. It will run in the background.");
+            const confirmIndex = await window.showBrutalConfirm("Do you want to index all faces in the output folders?\n\nThis will scan all folders recursively, extract face embeddings for any new files, and cache them in the database. This allows complete cross-profile search and auto-avatar extraction. It will run in the background.", "Index Library");
             if (!confirmIndex) return;
             
             try {
@@ -3999,7 +4198,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                if (confirm(`Are you sure you want to permanently delete these ${filesToDelete.length} duplicate file(s)?`)) {
+                const confirmed = await window.showBrutalConfirm(`Are you sure you want to permanently delete these ${filesToDelete.length} duplicate file(s)?`, 'Delete Duplicates');
+                if (confirmed) {
                     btn.disabled = true;
                     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving...';
                     await resolveSelectedFiles(filesToDelete);
@@ -4073,7 +4273,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (confirm(`Are you sure you want to permanently delete ALL selected duplicates (${filesToDelete.length} files)?`)) {
+            const confirmed = await window.showBrutalConfirm(`Are you sure you want to permanently delete ALL selected duplicates (${filesToDelete.length} files)?`, 'Resolve Duplicates');
+            if (confirmed) {
                 btnResolveAllDuplicates.disabled = true;
                 btnResolveAllDuplicates.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
                 await resolveSelectedFiles(filesToDelete);
