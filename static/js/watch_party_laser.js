@@ -292,17 +292,22 @@
         
         if (!targetEl) return;
         
-        // Determine exact bounding box of the containing active media content
-        const rect = targetEl.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `${rect.height}px`;
+        const wrapper = document.querySelector('.video-wrapper');
+        if (!wrapper) return;
+        
+        // Determine exact bounding box of the containing active media content relative to the parent video-wrapper
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+        
+        canvas.width = targetRect.width;
+        canvas.height = targetRect.height;
+        canvas.style.width = `${targetRect.width}px`;
+        canvas.style.height = `${targetRect.height}px`;
         
         // Overlay precisely on the media position inside the parent wrapper
         canvas.style.position = 'absolute';
-        canvas.style.top = `${targetEl.offsetTop}px`;
-        canvas.style.left = `${targetEl.offsetLeft}px`;
+        canvas.style.top = `${targetRect.top - wrapperRect.top}px`;
+        canvas.style.left = `${targetRect.left - wrapperRect.left}px`;
     }
     /**
      * Main animation loop rendering lasers and fading drawings
