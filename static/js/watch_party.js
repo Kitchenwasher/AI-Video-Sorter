@@ -1411,8 +1411,8 @@ if (!window.safeSessionStorage) {
 
             item.innerHTML = `
                 <div class="playlist-thumb-wrapper">
-                    <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="playlist-placeholder" style="display: none;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
+                    <img src="${thumbUrl}" alt="${displayName}" style="display: none;" onload="this.style.display='block'; this.nextElementSibling.style.display='none';" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="playlist-placeholder" style="display: flex;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
                     <div class="playlist-media-pill"><i class="fa-solid ${mediaIcon}"></i>${mediaLabel}</div>
                     <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
                 </div>
