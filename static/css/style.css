@@ -3194,8 +3194,25 @@ input[type="text"], input[type="number"], select, textarea {
     transition: border-color 0.15s, box-shadow 0.15s !important;
 }
 input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
-    border-color: var(--accent-blue) !important;
-    box-shadow: 4px 4px 0px var(--accent-blue) !important;
+    border-color: var(--accent-yellow) !important;
+    box-shadow: 4px 4px 0px var(--accent-yellow) !important;
+}
+select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 1.1rem center !important;
+    background-size: 1rem !important;
+    padding-right: 2.8rem !important;
+    cursor: pointer !important;
+}
+select option {
+    background-color: var(--bg-raised) !important;
+    color: var(--text) !important;
+    padding: 0.8rem !important;
+    font-weight: 600 !important;
 }
 
 /* Chunky custom range input */
