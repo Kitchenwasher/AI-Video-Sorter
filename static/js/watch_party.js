@@ -482,6 +482,8 @@ if (!window.safeSessionStorage) {
     let localStream = null;
     let sseSource = null;
     let currentFilename = null;
+    let mediaLoadSequence = 0;
+    let mediaStateReleaseTimer = null;
     let mediaFilesList = [];
     let ignorePlayerEvents = false;
     Object.defineProperty(window, 'ignorePlayerEvents', {
@@ -489,6 +491,7 @@ if (!window.safeSessionStorage) {
         set: (val) => { ignorePlayerEvents = val; },
         configurable: true
     });
+    window.__watchPartyMainHandlesSync = true;
     let adminToken = null;
     let selectedFolder = null;
     let isPlaybackLocked = false;
@@ -1045,13 +1048,213 @@ if (!window.safeSessionStorage) {
         } else {
             btnMic.classList.remove('active');
             btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
+            } else {
+                if (themeIcon) themeIcon.className = 'fa-solid fa-moon';
+                if (themeText) themeText.textContent = 'Dark';
+                themeBtn.style.setProperty('background', 'var(--accent-lime)', 'important');
+            }
+        }
+
+        let currentTheme = document.body.getAttribute('data-theme') || 'dark';
+        updateToggleUI(currentTheme);
+
+        themeBtn.onclick = (e) => {
+            e.preventDefault();
+            currentTheme = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            document.body.setAttribute('data-theme', currentTheme);
+            localStorage.setItem('chehro-theme', currentTheme);
+            updateToggleUI(currentTheme);
+            showToast(`Switched to ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)} Mode`, 'info');
+        };
+    }
+
+    function initFolderDropdown() {
+        const select = document.getElementById('wp-folder-dropdown-select');
+        if (!select) return;
+
+        fetch('/api/profiles?party_id=' + encodeURIComponent(window.PARTY_ID))
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success' && data.profiles) {
+                    select.innerHTML = '<option value="" disabled>LOCAL FOLDER (ACTIVE)</option>';
+                    data.profiles.forEach(profile => {
+                        const opt = document.createElement('option');
+                        opt.value = profile.folder_name;
+                        opt.innerText = profile.display_name;
+                        if (profile.folder_name === window.FOLDER_NAME) {
+                            opt.selected = true;
+                        }
+                        select.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => console.error('Error fetching profiles for dropdown:', err));
+
+        select.onchange = () => {
+            if (!adminToken) {
+                showToast('Only the host can switch the folder.', 'warning');
+                select.value = window.FOLDER_NAME;
+                return;
+            }
+
+            const targetFolder = select.value;
+            if (!targetFolder) return;
+
+            select.disabled = true;
+
+            fetch(`/api/watch-party/${window.PARTY_ID}/change-folder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_token: adminToken,
+                    folder_name: targetFolder
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                select.disabled = false;
+                if (data.status !== 'success') {
+                    showToast('Error changing folder: ' + data.message, 'error');
+                    select.value = window.FOLDER_NAME;
+                }
+            })
+            .catch(err => {
+                console.error('Error switching folder:', err);
+                showToast('An error occurred while switching the folder.', 'error');
+                select.disabled = false;
+                select.value = window.FOLDER_NAME;
+            });
+        };
+    }
+
+    async function setupVoiceAndStart() {
+        updateLocalProfileUI();
+        initProfileModal();
+        initInviteButton();
+        initCustomMedia();
+        initFolderDropdown();
+        initThemeToggle();
+        // Request microphone permission for P2P voice chat
+        try {
+            addLogEntry('System', 'Requesting microphone access...');
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 48000
+                }
+            });
+            localStream = stream;
+            
+            // Mute microphone by default to prevent sudden feedback/noise
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = false;
+            });
+            
+            updateMicUI(false);
+            const btnMic = document.getElementById('btn-mic-toggle');
+            btnMic.disabled = false;
+            document.getElementById('local-voice-status').innerText = 'Muted';
+        } catch (err) {
+            console.warn('Microphone access denied or not available:', err);
+            addLogEntry('System', 'Voice chat in receive-only mode (mic not allowed).');
+            updateMicUI(false);
+            const btnMic = document.getElementById('btn-mic-toggle');
+            btnMic.disabled = true;
+            document.getElementById('local-voice-status').innerText = 'Listen only';
+        }
+
+        // Bind mic toggle action
+        const btnMic = document.getElementById('btn-mic-toggle');
+        btnMic.onclick = () => {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                updateMicUI(audioTrack.enabled);
+                document.getElementById('local-voice-status').innerText = audioTrack.enabled ? 'Voice active' : 'Muted';
+            }
+        };
+
+        // Start watch party connection and load playlist
+        startWatchParty();
+        initChat();
+    }
+
+    function showNicknameModal() {
+        // Only bypass nickname modal if we have a session name, or if we are the admin/creator of this specific party
+        const isAdmin = !!localStorage.getItem('wp_admin_token_' + window.PARTY_ID);
+        const storedName = sessionStorage.getItem('wp_client_name') || (isAdmin ? localStorage.getItem('wp_nickname') : null);
+        
+        if (storedName && storedName.trim() !== '' && storedName !== 'Viewer') {
+            clientName = storedName.trim();
+            sessionStorage.setItem('wp_client_name', clientName);
+            
+            // Setup local nickname display
+            const nameDisplay = document.getElementById('local-display-name');
+            if (nameDisplay) {
+                nameDisplay.innerText = `${clientName} (You)`;
+            }
+            
+            setupVoiceAndStart();
+            return;
+        }
+
+        const overlay = document.getElementById('wp-nickname-overlay');
+        overlay.classList.add('active');
+
+        const submitBtn = document.getElementById('btn-wp-nickname-submit');
+        const nicknameInput = document.getElementById('wp-join-nickname');
+
+        // Restore nickname if any
+        if (sessionStorage.getItem('wp_client_name')) {
+            nicknameInput.value = sessionStorage.getItem('wp_client_name');
+        }
+
+        const handleNicknameSubmit = async () => {
+            const name = nicknameInput.value.trim() || 'Viewer';
+            clientName = name;
+            sessionStorage.setItem('wp_client_name', name);
+            overlay.classList.remove('active');
+
+            // Setup local nickname display
+            const nameDisplay = document.getElementById('local-display-name');
+            if (nameDisplay) {
+                nameDisplay.innerText = `${clientName} (You)`;
+            }
+
+            setupVoiceAndStart();
+        };
+
+        submitBtn.onclick = handleNicknameSubmit;
+        nicknameInput.onkeydown = (e) => {
+            if (e.key === 'Enter') handleNicknameSubmit();
+        };
+        nicknameInput.focus();
+    }
+
+    function updateMicUI(isActive) {
+        const btnMic = document.getElementById('btn-mic-toggle');
+        if (isActive) {
+            btnMic.classList.add('active');
+            btnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        } else {
+            btnMic.classList.remove('active');
+            btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
         }
     }
 
     /**
      * 2. Playlist & Media Loading
-     */
-    async function startWatchParty() {
+     */    async function startWatchParty() {
+        if (window.__watchPartyStarted) {
+            console.log("[WatchParty] Already started, skipping re-init.");
+            return;
+        }
+        window.__watchPartyStarted = true;
+
         addLogEntry('System', 'Connecting to watch party stream...');
 
         // Verify admin privileges
@@ -1087,6 +1290,7 @@ if (!window.safeSessionStorage) {
         
         // Expose state & hooks to window for modular Feature 4 (watch_party_queue.js)
         window.loadMediaFile = loadMediaFile;
+        window.loadMediaAndApplyState = loadMediaAndApplyState;
         window.selectAndBroadcastMedia = selectAndBroadcastMedia;
         window.broadcastSync = broadcastSync;
         window.getCurrentFilename = () => currentFilename;
@@ -1357,7 +1561,12 @@ if (!window.safeSessionStorage) {
         });
 
         if (mediaFiles.length === 0) {
-            playlistGrid.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 1rem;">No playable media files in this folder.</div>';
+            playlistGrid.innerHTML = `
+                <div class="playlist-empty-state">
+                    <i class="fa-solid fa-clapperboard"></i>
+                    <span>No playable media is queued for this room yet.</span>
+                </div>
+            `;
             
             // Notify queue module to refresh subtitle list even if no media files are present
             if (window.refreshSubtitlesList) {
@@ -1390,12 +1599,15 @@ if (!window.safeSessionStorage) {
             if (file.folder_name && file.folder_name.startsWith('single_') && file.filename.length > 9) {
                 displayName = file.filename.substring(9);
             }
+            const mediaIcon = file.is_video ? 'fa-film' : 'fa-image';
+            const mediaLabel = file.is_video ? 'Video' : 'Image';
 
             item.innerHTML = `
                 <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="playlist-placeholder" style="display: none;">${displayName.substring(0, 2).toUpperCase()}</div>
+                <div class="playlist-placeholder" style="display: none;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
+                <div class="playlist-media-pill"><i class="fa-solid ${mediaIcon}"></i>${mediaLabel}</div>
                 <div class="card-filename-overlay">${displayName}</div>
-                <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" style="position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; background: rgba(16, 16, 19, 0.85); border: 1px solid rgba(255,255,255,0.15); color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; cursor: pointer; z-index: 10; transition: all 0.2s;"><i class="fa-solid fa-plus"></i></button>
+                <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
             `;
 
             item.onclick = (e) => {
@@ -1423,10 +1635,170 @@ if (!window.safeSessionStorage) {
     }
 
     function selectAndBroadcastMedia(filename) {
-        loadMediaFile(filename).then(() => {
+        loadMediaAndApplyState(filename, { position: 0.0, playing: false }).then((loaded) => {
+            if (!loaded) return;
             // New selection starts paused at 0.0
             broadcastSync('pause', 0.0);
         });
+    }
+
+    function waitForPlayerReady() {
+        if (player && player.ready) {
+            return Promise.resolve();
+        }
+        return new Promise(resolve => {
+            player.once('ready', () => {
+                resolve();
+            });
+            // 2 second fallback
+            setTimeout(resolve, 2000);
+        });
+    }
+
+    function loadRawMp4Source(src, resolve) {
+        const videoEl = getVideoElement();
+        
+        // Update Plyr source configuration
+        player.source = {
+            type: 'video',
+            sources: [
+                {
+                    src: src,
+                    type: 'video/mp4'
+                }
+            ]
+        };
+        
+        // Set direct source on video element for instantaneous, bulletproof loading
+        if (videoEl) {
+            videoEl.src = src;
+            try {
+                videoEl.load();
+            } catch (err) {
+                console.warn('Direct video load() call failed:', err);
+            }
+        }
+        
+        // Wait for metadata or playability with a 5-second safety timeout
+        waitForVideoReady(5000).then(resolve);
+    }
+
+    function showAutoplayOverlay() {
+        if (document.getElementById('wp-autoplay-overlay')) return;
+        
+        const wrapper = document.querySelector('.video-wrapper');
+        if (!wrapper) return;
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'wp-autoplay-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.background = 'rgba(10, 10, 12, 0.88)';
+        overlay.style.backdropFilter = 'blur(8px)';
+        overlay.style.webkitBackdropFilter = 'blur(8px)';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = '10';
+        overlay.style.cursor = 'pointer';
+        overlay.style.color = '#F3F3F3';
+        overlay.style.fontFamily = "'Outfit', sans-serif";
+        overlay.style.textAlign = 'center';
+        overlay.style.padding = '20px';
+        overlay.style.boxSizing = 'border-box';
+        
+        overlay.innerHTML = `
+            <div style="background: #1e1e24; border: 3px solid #000; box-shadow: 6px 6px 0 #000; border-radius: 20px; padding: 24px 32px; max-width: 380px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                <div style="font-size: 2.5rem; animation: pulse 1.5s infinite;"><i class="fa-solid fa-circle-play" style="color: #ffa502;"></i></div>
+                <div style="font-weight: 800; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 0.5px;">Join the Watch Party</div>
+                <div style="font-size: 0.9rem; color: #888890; line-height: 1.4;">Autoplay was blocked by your browser. Click anywhere to unmute and join the synchronized playback.</div>
+                <button class="wp-brutal-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 8px 18px; width: 100%;">Sync & Play</button>
+            </div>
+        `;
+        
+        overlay.onclick = async () => {
+            setPlayerEventsIgnored(true);
+            try {
+                await player.play();
+                hideAutoplayOverlay();
+            } catch (err) {
+                console.warn('Failed to play after click:', err);
+            } finally {
+                releasePlayerEventsAfter(1000);
+            }
+        };
+        
+        wrapper.appendChild(overlay);
+        showToast('Playback paused. Click on the video player to join the party!', 'warning');
+    }
+    
+    function hideAutoplayOverlay() {
+        const overlay = document.getElementById('wp-autoplay-overlay');
+        if (overlay) {
+            overlay.remove();
+        }
+    }
+
+    async function loadMediaAndApplyState(filename, state = {}) {
+        if (!filename) return false;
+
+        // Ensure player is fully ready
+        await waitForPlayerReady();
+
+        const loadId = ++mediaLoadSequence;
+        const position = Number.isFinite(Number(state.position)) ? Math.max(0, Number(state.position)) : 0;
+        const shouldPlay = !!state.playing;
+        const requestedSpeed = Number.parseFloat(state.speed);
+
+        clearMediaTransitionState();
+        setPlayerEventsIgnored(true);
+
+        try {
+            await loadMediaFile(filename);
+            if (loadId !== mediaLoadSequence) return false;
+
+            if (window.isImageActive) {
+                try { player.pause(); } catch (e) {}
+                return true;
+            }
+
+            await waitForVideoReady(5000);
+            if (loadId !== mediaLoadSequence) return false;
+
+            if (Number.isFinite(requestedSpeed) && requestedSpeed > 0) {
+                player.speed = requestedSpeed;
+                syncSpeedControl(requestedSpeed);
+            }
+
+            const targetTime = clampPlaybackPosition(position);
+            if (Math.abs(player.currentTime - targetTime) > 0.15) {
+                player.currentTime = targetTime;
+            }
+
+            if (shouldPlay) {
+                try {
+                    await player.play();
+                } catch (err) {
+                    console.warn('Autoplay blocked while applying Watch Party state:', err);
+                    showAutoplayOverlay();
+                }
+            } else {
+                player.pause();
+                hideAutoplayOverlay();
+            }
+            return true;
+        } catch (err) {
+            console.error('Failed to load Watch Party media state:', err);
+            showToast('Could not load the selected media.', 'error');
+            return false;
+        } finally {
+            // Keep ignorePlayerEvents active for 1000ms to allow all browser events to settle
+            releasePlayerEventsAfter(1000);
+        }
     }
 
     function loadMediaFile(filename) {
@@ -1488,6 +1860,15 @@ if (!window.safeSessionStorage) {
                 window.isImageActive = false;
                 imagePlayer.style.display = 'none';
                 if (plyrContainer) plyrContainer.style.display = 'block';
+                
+                hideAutoplayOverlay();
+                
+                const baseVideoEl = getVideoElement();
+                if (baseVideoEl) {
+                    try { baseVideoEl.pause(); } catch (e) {}
+                    baseVideoEl.removeAttribute('src');
+                    forceVideoLoad();
+                }
                 if (window.onVideoLoaded) {
                     window.onVideoLoaded();
                 }
@@ -1510,26 +1891,18 @@ if (!window.safeSessionStorage) {
                         hls.attachMedia(videoEl);
                         window.hlsInstance = hls;
                         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                            resolve();
+                            waitForVideoReady(5000).then(resolve);
                         });
                         hls.on(Hls.Events.ERROR, (event, data) => {
                             if (data.fatal) {
                                 console.warn('Custom HLS fatal error, trying raw play:', data);
                                 hls.destroy();
                                 window.hlsInstance = null;
-                                player.source = {
-                                    type: 'video',
-                                    sources: [{ src: filename }]
-                                };
-                                resolve();
+                                loadRawMp4Source(filename, resolve);
                             }
                         });
                     } else {
-                        player.source = {
-                            type: 'video',
-                            sources: [{ src: filename }]
-                        };
-                        resolve();
+                        loadRawMp4Source(filename, resolve);
                     }
                     return;
                 }
@@ -1544,12 +1917,12 @@ if (!window.safeSessionStorage) {
                         body: JSON.stringify({ folder_name: window.FOLDER_NAME, filename: filename })
                     });
                     const trData = await trRes.json();
-                    if (trData.status === 'ready' || trData.status === 'converting') {
+                    if (trData.status === 'ready') {
                         activeUrl = trData.hls_url;
                         isHlsPlaying = true;
-                        if (trData.status === 'converting') {
-                            showToast('Optimizing video stream (HLS)...', 'info');
-                        }
+                    } else if (trData.status === 'converting') {
+                        // Background transcoding in progress, play raw MP4 for immediate start
+                        console.log('HLS transcoding in progress, playing raw MP4 instead.');
                     }
                 } catch (err) {
                     console.warn('HLS request failed, playing raw file instead.', err);
@@ -1573,7 +1946,7 @@ if (!window.safeSessionStorage) {
                     window.hlsInstance = hls;
 
                     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                        resolve();
+                        waitForVideoReady(5000).then(resolve);
                     });
 
                     hls.on(Hls.Events.ERROR, (event, data) => {
@@ -1581,39 +1954,103 @@ if (!window.safeSessionStorage) {
                             console.warn('HLS stream fatal error, falling back to raw MP4:', data);
                             hls.destroy();
                             window.hlsInstance = null;
-                            player.source = {
-                                type: 'video',
-                                sources: [{ src: mediaUrl, type: 'video/mp4' }]
-                            };
-                            resolve();
+                            loadRawMp4Source(mediaUrl, resolve);
                         }
                     });
                 } else {
-                    player.source = {
-                        type: 'video',
-                        sources: [
-                            {
-                                src: mediaUrl,
-                                type: 'video/mp4'
-                            }
-                        ]
-                    };
-                    const videoEl = document.getElementById('lightbox-video');
-                    if (videoEl) {
-                        const onMetadataLoaded = () => {
-                            videoEl.removeEventListener('loadedmetadata', onMetadataLoaded);
-                            resolve();
-                        };
-                        videoEl.addEventListener('loadedmetadata', onMetadataLoaded);
-                        setTimeout(() => {
-                            videoEl.removeEventListener('loadedmetadata', onMetadataLoaded);
-                            resolve();
-                        }, 500);
-                    } else {
-                        resolve();
-                    }
+                    loadRawMp4Source(mediaUrl, resolve);
                 }
             }
+        });
+    }
+
+    function setPlayerEventsIgnored(value) {
+        if (mediaStateReleaseTimer) {
+            clearTimeout(mediaStateReleaseTimer);
+            mediaStateReleaseTimer = null;
+        }
+        ignorePlayerEvents = value;
+    }
+
+    function releasePlayerEventsAfter(delayMs) {
+        if (mediaStateReleaseTimer) clearTimeout(mediaStateReleaseTimer);
+        mediaStateReleaseTimer = setTimeout(() => {
+            ignorePlayerEvents = false;
+            mediaStateReleaseTimer = null;
+        }, delayMs);
+    }
+
+    function clearMediaTransitionState() {
+        if (window.clearWatchPartyBufferingState) {
+            window.clearWatchPartyBufferingState();
+        } else {
+            const overlay = document.getElementById('wp-buffering-overlay');
+            if (overlay) overlay.classList.remove('active');
+        }
+
+        if (window.clearWatchPartyDrawingOverlays) {
+            window.clearWatchPartyDrawingOverlays();
+        }
+    }
+
+    function getVideoElement() {
+        return document.getElementById('lightbox-video');
+    }
+
+    function forceVideoLoad() {
+        const videoEl = getVideoElement();
+        if (!videoEl) return;
+        try {
+            videoEl.load();
+        } catch (err) {
+            console.warn('Video load() failed after source update:', err);
+        }
+    }
+
+    function waitForVideoReady(timeoutMs = 6000) {
+        const videoEl = getVideoElement();
+        if (!videoEl || window.isImageActive || videoEl.readyState >= 1) {
+            return Promise.resolve();
+        }
+
+        return new Promise(resolve => {
+            let settled = false;
+            const done = () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                videoEl.removeEventListener('loadedmetadata', done);
+                videoEl.removeEventListener('loadeddata', done);
+                videoEl.removeEventListener('canplay', done);
+                resolve();
+            };
+            const timer = setTimeout(done, timeoutMs);
+            videoEl.addEventListener('loadedmetadata', done, { once: true });
+            videoEl.addEventListener('loadeddata', done, { once: true });
+            videoEl.addEventListener('canplay', done, { once: true });
+        });
+    }
+
+    function clampPlaybackPosition(position) {
+        const duration = Number(player.duration);
+        if (Number.isFinite(duration) && duration > 0) {
+            return Math.min(position, Math.max(0, duration - 0.1));
+        }
+        return position;
+    }
+
+    function syncSpeedControl(speed) {
+        const speedSelect = document.getElementById('wp-speed-select');
+        if (speedSelect) {
+            speedSelect.value = speed.toString();
+        }
+        window.watchPartyRoomSpeed = speed;
+    }
+
+    function getDefaultPlayableFile() {
+        return mediaFilesList.find(file => {
+            const ext = (file.filename || '').split('.').pop().toLowerCase();
+            return ext && ext !== 'srt' && ext !== 'vtt';
         });
     }
 
@@ -1626,6 +2063,8 @@ if (!window.safeSessionStorage) {
                 // Initial playback state
                 isPlaybackLocked = data.playback_locked || false;
                 isSlowMode = data.slow_mode || false;
+                window.latestWatchPartyInitPayload = data;
+                window.dispatchEvent(new CustomEvent('watchPartyInitPayload', { detail: data }));
                 
                 const lockOverlay = document.getElementById('wp-player-lock-overlay');
                 if (lockOverlay) {
@@ -1642,21 +2081,13 @@ if (!window.safeSessionStorage) {
 
                 if (data.playback_state && data.playback_state.filename) {
                     const ps = data.playback_state;
-                    loadMediaFile(ps.filename).then(() => {
-                        ignorePlayerEvents = true;
-                        player.currentTime = ps.position;
-                        if (ps.playing) {
-                            player.play().then(() => {
-                                setTimeout(() => { ignorePlayerEvents = false; }, 500);
-                            });
-                        } else {
-                            player.pause();
-                            setTimeout(() => { ignorePlayerEvents = false; }, 500);
-                        }
-                    });
-                } else if (mediaFilesList.length > 0) {
+                    loadMediaAndApplyState(ps.filename, ps);
+                } else {
                     // Default to first file
-                    loadMediaFile(mediaFilesList[0].filename);
+                    const defaultFile = getDefaultPlayableFile();
+                    if (defaultFile) {
+                        loadMediaAndApplyState(defaultFile.filename, { position: 0.0, playing: false });
+                    }
                 }
 
                 // Register existing peers
@@ -1712,7 +2143,7 @@ if (!window.safeSessionStorage) {
                     addLogEntry(senderName, `Seeked to ${formatTime(data.position)}`);
                 }
                 
-                handleIncomingSync(data.action, data.position, data.filename);
+                handleIncomingSync(data.action, data.position, data.filename, data.playing, data);
                 break;
 
             case 'folder_changed':
@@ -1726,14 +2157,9 @@ if (!window.safeSessionStorage) {
                 }
                 mediaFilesList = data.files || [];
                 renderPlaylist(mediaFilesList);
-                if (mediaFilesList.length > 0) {
-                    loadMediaFile(mediaFilesList[0].filename).then(() => {
-                        // Reset player to paused at 0.0
-                        ignorePlayerEvents = true;
-                        player.currentTime = 0;
-                        player.pause();
-                        setTimeout(() => { ignorePlayerEvents = false; }, 500);
-                    });
+                const defaultFile = getDefaultPlayableFile();
+                if (defaultFile) {
+                    loadMediaAndApplyState(defaultFile.filename, { position: 0.0, playing: false });
                 } else {
                     currentFilename = null;
                     const plyrContainer = document.querySelector('.plyr');
@@ -1834,45 +2260,49 @@ if (!window.safeSessionStorage) {
         }
     }
 
-    function handleIncomingSync(action, position, filename) {
-        ignorePlayerEvents = true;
+    function handleIncomingSync(action, position, filename, roomPlaying, syncState = {}) {
+        const wasPlaying = !player.paused;
+        const shouldPlay = action === 'play'
+            ? true
+            : action === 'pause'
+                ? false
+                : (typeof roomPlaying === 'boolean' ? roomPlaying : wasPlaying);
+        const state = { position, playing: shouldPlay, speed: syncState.speed };
 
         if (filename && currentFilename !== filename) {
-            loadMediaFile(filename).then(() => {
-                player.currentTime = position;
-                if (action === 'play') {
-                    player.play().then(() => {
-                        setTimeout(() => { ignorePlayerEvents = false; }, 500);
-                    });
-                } else {
-                    player.pause();
-                    setTimeout(() => { ignorePlayerEvents = false; }, 500);
-                }
-            });
+            loadMediaAndApplyState(filename, state);
             return;
         }
 
-        const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(currentFilename);
+        const isImage = currentFilename && /\.(jpg|jpeg|png|webp|gif)$/i.test(currentFilename);
         if (isImage) {
-            ignorePlayerEvents = false;
             return;
         }
 
-        if (Math.abs(player.currentTime - position) > 2.0) {
-            player.currentTime = position;
-        }
+        setPlayerEventsIgnored(true);
+        waitForVideoReady(5000).then(() => {
+            const targetTime = clampPlaybackPosition(Number(position) || 0);
+            if (Math.abs(player.currentTime - targetTime) > 0.35 || action === 'seek') {
+                player.currentTime = targetTime;
+            }
 
-        if (action === 'play') {
-            player.play().then(() => {
-                setTimeout(() => { ignorePlayerEvents = false; }, 500);
-            }).catch(e => {
-                console.warn('Playback blocked by browser:', e);
-                setTimeout(() => { ignorePlayerEvents = false; }, 500);
-            });
-        } else {
-            player.pause();
-            setTimeout(() => { ignorePlayerEvents = false; }, 500);
-        }
+            if (shouldPlay) {
+                try {
+                    player.play().catch(e => {
+                        console.warn('Playback blocked by browser:', e);
+                        showAutoplayOverlay();
+                    });
+                } catch (err) {
+                    console.warn('Programmatic play() call error:', err);
+                    showAutoplayOverlay();
+                }
+            } else {
+                player.pause();
+                hideAutoplayOverlay();
+            }
+        }).finally(() => {
+            releasePlayerEventsAfter(1000); // 1000ms safety window
+        });
     }
 
     function broadcastSync(action, position) {

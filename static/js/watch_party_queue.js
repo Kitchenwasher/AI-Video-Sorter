@@ -62,6 +62,13 @@
                 bindSocketListeners();
                 bindUIEventListeners();
                 startPeriodicChecks();
+
+                if (window.latestWatchPartyInitPayload) {
+                    applyInitPayload(window.latestWatchPartyInitPayload);
+                }
+                window.addEventListener('watchPartyInitPayload', (event) => {
+                    applyInitPayload(event.detail);
+                });
                 
                 // Request initial queue state immediately if connected, or on connect event
                 if (socket.connected) {
@@ -130,16 +137,11 @@
 
         // Listen for initial payload and extract queue state
         socket.on('init_payload', (data) => {
-            if (data.queue) {
-                currentQueue = data.queue;
-                renderQueueList();
-            }
-            if (data.playback_state && data.playback_state.speed !== undefined) {
-                const speed = data.playback_state.speed;
-                const speedSelect = document.getElementById('wp-speed-select');
-                if (speedSelect) speedSelect.value = speed.toString();
-                if (player) player.speed = speed;
-            }
+            applyInitPayload(data);
+        });
+
+        socket.on('sync_event', (data) => {
+            applyPlaybackControls(data || {});
         });
 
         // Listen for queue updates
@@ -152,6 +154,7 @@
         // Listen for playback speed changes
         socket.on('speed_changed_broadcast', (data) => {
             console.log(`[QueueModule] Speed changed by peer to ${data.speed}x`);
+            window.watchPartyRoomSpeed = Number(data.speed) || 1.0;
             const speedSelect = document.getElementById('wp-speed-select');
             if (speedSelect) {
                 speedSelect.value = data.speed.toString();
@@ -195,6 +198,44 @@
         });
     }
 
+    function applyInitPayload(data) {
+        if (!data) return;
+
+        if (data.queue) {
+            currentQueue = data.queue;
+            renderQueueList();
+        }
+
+        applyPlaybackControls(data.playback_state || {});
+    }
+
+    function applyPlaybackControls(playbackState) {
+        if (!playbackState) return;
+
+        if (playbackState.speed !== undefined) {
+            const speed = playbackState.speed;
+            window.watchPartyRoomSpeed = Number(speed) || 1.0;
+            const speedSelect = document.getElementById('wp-speed-select');
+            if (speedSelect) speedSelect.value = speed.toString();
+            if (player) player.speed = speed;
+        }
+
+        if (playbackState.subtitle !== undefined) {
+            const subSelect = document.getElementById('wp-subtitle-select');
+            const subtitle = playbackState.subtitle || 'none';
+            if (subSelect) subSelect.value = subtitle;
+            applySubtitleTrack(subtitle);
+        }
+
+        if (playbackState.audio_track !== undefined) {
+            const audioSelect = document.getElementById('wp-audio-select');
+            if (audioSelect) audioSelect.value = playbackState.audio_track === null ? 'default' : playbackState.audio_track.toString();
+            if (window.hlsInstance && playbackState.audio_track !== null) {
+                window.hlsInstance.audioTrack = playbackState.audio_track;
+            }
+        }
+    }
+
     function bindUIEventListeners() {
         // 1. Speed Select
         const speedSelect = document.getElementById('wp-speed-select');
@@ -213,6 +254,7 @@
                 }
 
                 const speed = parseFloat(this.value);
+                window.watchPartyRoomSpeed = speed;
                 if (player) player.speed = speed;
                 
                 if (socket) {

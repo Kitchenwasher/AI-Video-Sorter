@@ -40,6 +40,7 @@
         ctx = canvas.getContext('2d');
         
         window.resizeCanvas = resizeCanvas; // Expose globally
+        window.clearWatchPartyDrawingOverlays = clearLocalDrawingOverlays;
         
         // Wait for Plyr and socket to initialize
         setupSocketBindingLoop();
@@ -50,6 +51,14 @@
         // We start the render loop on-demand when drawing or lasers are active
         // to ensure 0% idle CPU and GPU overhead.
         isLoopRunning = false;
+    }
+
+    function clearLocalDrawingOverlays() {
+        drawingSegments = [];
+        Object.keys(remoteLasers).forEach(id => {
+            remoteLasers[id].active = false;
+        });
+        startRenderLoop();
     }
     /**
      * Periodically check for window.socket and bind event listeners
