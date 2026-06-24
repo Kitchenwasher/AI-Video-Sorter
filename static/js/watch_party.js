@@ -1410,11 +1410,17 @@ if (!window.safeSessionStorage) {
             const mediaLabel = file.is_video ? 'Video' : 'Image';
 
             item.innerHTML = `
-                <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="playlist-placeholder" style="display: none;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
-                <div class="playlist-media-pill"><i class="fa-solid ${mediaIcon}"></i>${mediaLabel}</div>
-                <div class="card-filename-overlay">${displayName}</div>
-                <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
+                <div class="playlist-thumb-wrapper">
+                    <img src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="playlist-placeholder" style="display: none;"><i class="fa-solid ${mediaIcon}"></i><span>${mediaLabel}</span></div>
+                    <div class="playlist-media-pill"><i class="fa-solid ${mediaIcon}"></i>${mediaLabel}</div>
+                </div>
+                <div class="playlist-item-details">
+                    <div class="playlist-item-title" title="${displayName}">${displayName}</div>
+                </div>
+                <div class="playlist-item-actions">
+                    <button class="btn-add-to-queue" data-filename="${file.filename}" title="Add to Queue" aria-label="Add ${displayName} to queue"><i class="fa-solid fa-plus"></i></button>
+                </div>
             `;
 
             item.onclick = (e) => {
