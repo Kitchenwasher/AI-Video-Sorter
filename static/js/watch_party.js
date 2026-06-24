@@ -566,16 +566,48 @@ if (!window.safeSessionStorage) {
 
     function initCustomMedia() {
         const customBtn = document.getElementById('btn-wp-custom-media');
+        const overlay = document.getElementById('wp-custom-media-overlay');
+        const cancelBtn = document.getElementById('btn-wp-custom-media-cancel');
+        const submitBtn = document.getElementById('btn-wp-custom-media-submit');
+        const urlInput = document.getElementById('wp-custom-media-url');
+
+        if (!overlay) return;
+
         if (customBtn) {
             customBtn.onclick = () => {
                 if (!adminToken) {
                     showToast('Only the host can load custom media URLs.', 'warning');
                     return;
                 }
-                const url = prompt('Enter custom video or HLS (.m3u8) streaming URL:');
-                if (url && url.trim() !== '') {
-                    selectAndBroadcastMedia(url.trim());
-                }
+                urlInput.value = '';
+                overlay.classList.add('active');
+                urlInput.focus();
+            };
+        }
+
+        const closeModal = () => {
+            overlay.classList.remove('active');
+        };
+
+        if (cancelBtn) cancelBtn.onclick = closeModal;
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeModal();
+        };
+
+        const handleLoad = () => {
+            const url = urlInput.value.trim();
+            if (url) {
+                selectAndBroadcastMedia(url);
+                closeModal();
+            } else {
+                showToast('Please enter a valid URL.', 'warning');
+            }
+        };
+
+        if (submitBtn) submitBtn.onclick = handleLoad;
+        if (urlInput) {
+            urlInput.onkeydown = (e) => {
+                if (e.key === 'Enter') handleLoad();
             };
         }
     }
@@ -591,9 +623,9 @@ if (!window.safeSessionStorage) {
                     select.innerHTML = '<option value="" disabled>LOCAL FOLDER (ACTIVE)</option>';
                     data.profiles.forEach(profile => {
                         const opt = document.createElement('option');
-                        opt.value = profile.name;
-                        opt.innerText = profile.name;
-                        if (profile.name === window.FOLDER_NAME) {
+                        opt.value = profile.folder_name;
+                        opt.innerText = profile.display_name;
+                        if (profile.folder_name === window.FOLDER_NAME) {
                             opt.selected = true;
                         }
                         select.appendChild(opt);
@@ -943,10 +975,13 @@ if (!window.safeSessionStorage) {
         // Bind emoji buttons click
         const emojiBar = document.getElementById('emoji-action-bar');
         if (emojiBar) {
-            emojiBar.querySelectorAll('.emoji-btn, .emoji-btn-new').forEach(btn => {
-                btn.addEventListener('click', () => {
+            emojiBar.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     const emoji = btn.getAttribute('data-emoji');
-                    sendEmojiReaction(emoji);
+                    if (emoji) {
+                        sendEmojiReaction(emoji);
+                    }
                 });
             });
         }

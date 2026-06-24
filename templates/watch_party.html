@@ -975,13 +975,13 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            overflow: hidden;
+            overflow: visible;
             z-index: 15;
         }
         
         .floating-emoji-wrapper {
             position: absolute;
-            bottom: -50px;
+            bottom: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -1458,28 +1458,34 @@
            NEO-BRUTALIST OVERRIDES FOR WATCH PARTY
            ============================================ */
         :root {
-            --bg: #0C0C0E !important;
-            --bg-raised: #1A1A22 !important;
-            --bg-overlay: #131318 !important;
-            --text: #FFFFFF !important;
-            --text-dim: #A0A0AB !important;
-            --text-muted: #6E6E7A !important;
+            --bg: #0C0C0E;
+            --bg-raised: #1A1A22;
+            --bg-overlay: #131318;
+            --text: #FFFFFF;
+            --text-dim: #A0A0AB;
+            --text-muted: #6E6E7A;
             
-            --accent: #FF6B35 !important;
-            --accent-orange: #FF6B35 !important;
-            --accent-blue: #00D8FF !important;
-            --accent-pink: #FF007F !important;
-            --accent-lime: #39FF14 !important;
-            --accent-yellow: #FFD000 !important;
-            --accent-red: #FF3131 !important;
+            --accent: #FF6B35;
+            --accent-orange: #FF6B35;
+            --accent-blue: #00D8FF;
+            --accent-pink: #FF007F;
+            --accent-lime: #39FF14;
+            --accent-yellow: #FFD000;
+            --accent-red: #FF3131;
             
-            --border: #000000 !important;
-            --bw: 3px !important;
+            --border: #000000;
+            --bw: 3px;
             
-            --shadow-main: 5px 5px 0px #000000 !important;
-            --shadow-accent: 5px 5px 0px var(--accent) !important;
-            --shadow-button: 3px 3px 0px #000000 !important;
-            --shadow-small: 3px 3px 0px #000000 !important;
+            --shadow-main: 5px 5px 0px #000000;
+            --shadow-accent: 5px 5px 0px var(--accent);
+            --shadow-button: 3px 3px 0px #000000;
+            --shadow-small: 3px 3px 0px #000000;
+        }
+
+        #wp-folder-dropdown-select option {
+            background: var(--bg-raised) !important;
+            color: var(--text) !important;
+            font-family: inherit;
         }
 
         /* Header, wrappers and cards */
@@ -2376,6 +2382,21 @@
                         <button class="btn" id="btn-wp-profile-cancel" style="background: rgba(255,255,255,0.05); color: var(--text-main);">CANCEL</button>
                         <button class="btn" id="btn-wp-profile-save" style="background: var(--accent-pink) !important; color: #FFFFFF !important; font-weight: 800; border: var(--bw) solid #000000; box-shadow: 2px 2px 0px #000000;">SAVE</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Media URL Modal -->
+    <div class="modal-overlay" id="wp-custom-media-overlay">
+        <div class="modal-box" style="max-width: 450px;">
+            <h3 style="margin-top: 0; color: var(--accent-pink); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-compact-disc"></i> Load Custom Media</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Enter a direct HTTP video link or HLS (.m3u8) stream URL below to play it in the watch party.</p>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="text" class="input-field" id="wp-custom-media-url" placeholder="Enter stream URL (http://... or https://...)" style="width: 100%;">
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
+                    <button class="btn" id="btn-wp-custom-media-cancel" style="background: rgba(255,255,255,0.05); color: var(--text-main);">Cancel</button>
+                    <button class="btn btn-primary" id="btn-wp-custom-media-submit" style="background: var(--accent-pink) !important; color: #FFFFFF !important; font-weight: 800; border: var(--bw) solid #000000; box-shadow: 2px 2px 0px #000000;">Load URL</button>
                 </div>
             </div>
         </div>
