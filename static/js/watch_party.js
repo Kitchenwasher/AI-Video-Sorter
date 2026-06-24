@@ -1048,24 +1048,7 @@ if (!window.safeSessionStorage) {
         } else {
             btnMic.classList.remove('active');
             btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
-            } else {
-                if (themeIcon) themeIcon.className = 'fa-solid fa-moon';
-                if (themeText) themeText.textContent = 'Dark';
-                themeBtn.style.setProperty('background', 'var(--accent-lime)', 'important');
-            }
         }
-
-        let currentTheme = document.body.getAttribute('data-theme') || 'dark';
-        updateToggleUI(currentTheme);
-
-        themeBtn.onclick = (e) => {
-            e.preventDefault();
-            currentTheme = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            document.body.setAttribute('data-theme', currentTheme);
-            localStorage.setItem('chehro-theme', currentTheme);
-            updateToggleUI(currentTheme);
-            showToast(`Switched to ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)} Mode`, 'info');
-        };
     }
 
     function initFolderDropdown() {

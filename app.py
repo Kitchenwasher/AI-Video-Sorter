@@ -334,6 +334,7 @@ def handle_join_event(data):
         if party_id not in watch_parties_state:
             watch_parties_state[party_id] = {
                 'admin_token': party.admin_token,
+                'folder_name': party.folder_name,
                 'clients': {},
                 'playback_state': {
                     'filename': get_default_watch_party_filename(party.folder_name),
@@ -950,7 +951,7 @@ def restrict_public_access():
             folder_name = path.split('/')[3]
             with watch_parties_lock:
                 # Active in memory
-                active_folders = [p['folder_name'] for p in watch_parties_state.values()]
+                active_folders = [p.get('folder_name') for p in watch_parties_state.values() if p.get('folder_name')]
                 if folder_name in active_folders:
                     return
                 # Active in DB
@@ -3205,6 +3206,7 @@ def create_watch_party():
         with watch_parties_lock:
             watch_parties_state[party_id] = {
                 'admin_token': admin_token,
+                'folder_name': folder_name,
                 'clients': {},
                 'playback_state': {
                     'filename': initial_filename,
@@ -3340,6 +3342,7 @@ def stream_watch_party(party_id):
             if party_id not in watch_parties_state:
                 watch_parties_state[party_id] = {
                     'admin_token': party.admin_token,
+                    'folder_name': party.folder_name,
                     'clients': {},
                     'playback_state': {
                         'filename': get_default_watch_party_filename(party.folder_name),
@@ -3567,6 +3570,7 @@ def check_watch_party_admin(party_id):
                 
                 watch_parties_state[party_id] = {
                     'admin_token': party.admin_token,
+                    'folder_name': party.folder_name,
                     'clients': {},
                     'playback_state': {
                         'filename': get_default_watch_party_filename(party.folder_name),
@@ -3630,6 +3634,7 @@ def change_watch_party_folder(party_id):
             if party_id not in watch_parties_state:
                 watch_parties_state[party_id] = {
                     'admin_token': party.admin_token,
+                    'folder_name': party.folder_name,
                     'clients': {},
                     'playback_state': {
                         'filename': get_default_watch_party_filename(party.folder_name),
@@ -3649,6 +3654,7 @@ def change_watch_party_folder(party_id):
                 }
             
             party_state = watch_parties_state[party_id]
+            party_state['folder_name'] = new_folder_name
             previous_speed = party_state.get('playback_state', {}).get('speed', 1.0)
             default_filename = next(
                 (

@@ -53,37 +53,6 @@
                 
                 bindSocketListeners();
                 bindPlayerEvents();
-    
-    // Throttling for drag scrubbing
-    let lastScrubSync = 0;
-    const SCRUB_THROTTLE_INTERVAL = 100; // 10 FPS (100ms)
-    
-    // Micro-drift check timer
-    let driftCheckInterval = null;
-    let rttCheckInterval = null;
-    
-    // Initialize the module when page loads
-    window.addEventListener('load', () => {
-        initSyncInfrastructure();
-    });
-    function initSyncInfrastructure() {
-        // Wait for Plyr and socket to initialize
-        setupSocketAndPlayerBindingLoop();
-    }
-    /**
-     * Periodically check for window.socket and window.player, then bind handlers
-     */
-    function setupSocketAndPlayerBindingLoop() {
-        const checkInterval = setInterval(() => {
-            // In watch_party.js, window.socket is set and plyr player is global/accessible
-            const rawPlayer = document.getElementById('lightbox-video')?.__plyr;
-            if (window.socket && rawPlayer) {
-                socket = window.socket;
-                player = rawPlayer;
-                clearInterval(checkInterval);
-                
-                bindSocketListeners();
-                bindPlayerEvents();
                 startSyncLoops();
                 
                 console.log("[SyncModule] Playback sync infrastructure bound successfully.");
