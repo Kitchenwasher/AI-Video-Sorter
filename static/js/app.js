@@ -914,16 +914,78 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start Sorting Process
     startBtn.addEventListener('click', async () => {
         try {
-            // First save config just in case
-            appendLog('info', 'Triggering pipeline launch...');
-            const res = await fetch('/api/start', { method: 'POST' });
-            const data = await res.json();
+            appendLog('info', 'Auto-saving folder paths and configuration settings...');
             
-            if (data.status === 'success') {
-                appendLog('info', 'Pipeline process launched in background.');
-                connectSSE();
+            // Extract current values from the DOM
+            const payload = {
+                input_dir: document.getElementById('input_dir').value,
+                output_dir: document.getElementById('output_dir').value,
+                mode: document.getElementById('mode') ? document.getElementById('mode').value : 'move',
+                model_pack: document.getElementById('model_pack') ? document.getElementById('model_pack').value : 'buffalo_l',
+                keyframe_interval: document.getElementById('keyframe_interval') ? parseInt(document.getElementById('keyframe_interval').value) : 0,
+                max_keyframes: document.getElementById('max_keyframes') ? parseInt(document.getElementById('max_keyframes').value) : 100,
+                use_cache: document.getElementById('use_cache') ? document.getElementById('use_cache').checked : true,
+                keep_keyframes: document.getElementById('keep_keyframes') ? document.getElementById('keep_keyframes').checked : false,
+                prefer_popular_identities: document.getElementById('prefer_popular_identities') ? document.getElementById('prefer_popular_identities').checked : false,
+                multi_profile_policy: document.getElementById('multi_profile_policy') ? document.getElementById('multi_profile_policy').value : 'prefer_popular',
+                profile_target: document.getElementById('profile_target') ? document.getElementById('profile_target').value : 'female',
+                scan_depth: document.getElementById('scan_depth') ? document.getElementById('scan_depth').value : 'full',
+                multi_profile_min_keyframes: document.getElementById('multi_profile_min_keyframes') ? parseInt(document.getElementById('multi_profile_min_keyframes').value) : 2,
+                face_det_threshold: document.getElementById('face_det_threshold') ? parseFloat(document.getElementById('face_det_threshold').value) : 0.5,
+                gender_threshold: document.getElementById('gender_threshold') ? parseFloat(document.getElementById('gender_threshold').value) : 0.65,
+                min_eye_dist_ratio: document.getElementById('min_eye_dist_ratio') ? parseFloat(document.getElementById('min_eye_dist_ratio').value) : 0.05,
+                cluster_epsilon: document.getElementById('cluster_epsilon') ? parseFloat(document.getElementById('cluster_epsilon').value) : 0.85,
+                min_cluster_size: document.getElementById('min_cluster_size') ? parseInt(document.getElementById('min_cluster_size').value) : 3,
+                min_face_size: document.getElementById('min_face_size') ? parseInt(document.getElementById('min_face_size').value) : 50,
+                extraction_percent: document.getElementById('extraction_percent') ? parseInt(document.getElementById('extraction_percent').value) : 100,
+                auto_name_folders: document.getElementById('auto_name_folders') ? document.getElementById('auto_name_folders').checked : false,
+                only_name_unnamed: document.getElementById('only_name_unnamed') ? document.getElementById('only_name_unnamed').checked : true,
+                merge_on_name_conflict: document.getElementById('merge_on_name_conflict') ? document.getElementById('merge_on_name_conflict').checked : false,
+                name_confidence_threshold: document.getElementById('name_confidence_threshold') ? parseFloat(document.getElementById('name_confidence_threshold').value) : 0.5,
+                name_search_delay: document.getElementById('name_search_delay') ? parseFloat(document.getElementById('name_search_delay').value) : 4.0,
+                default_video_player: document.getElementById('default_video_player') ? document.getElementById('default_video_player').value : 'browser',
+                
+                // Watch Party configs
+                wp_use_cloudflare: document.getElementById('wp_use_cloudflare') ? document.getElementById('wp_use_cloudflare').checked : false,
+                wp_cloudflare_token: document.getElementById('wp_cloudflare_token') ? document.getElementById('wp_cloudflare_token').value : '',
+                wp_custom_domain: document.getElementById('wp_custom_domain') ? document.getElementById('wp_custom_domain').value : '',
+                wp_turn_server: document.getElementById('wp_turn_server') ? document.getElementById('wp_turn_server').value : '',
+                wp_turn_username: document.getElementById('wp_turn_username') ? document.getElementById('wp_turn_username').value : '',
+                wp_turn_credential: document.getElementById('wp_turn_credential') ? document.getElementById('wp_turn_credential').value : '',
+                wp_run_local_turn: document.getElementById('wp_run_local_turn') ? document.getElementById('wp_run_local_turn').checked : false,
+                wp_local_turn_port: document.getElementById('wp_local_turn_port') ? parseInt(document.getElementById('wp_local_turn_port').value) : 3478,
+                wp_turn_secret: document.getElementById('wp_turn_secret') ? document.getElementById('wp_turn_secret').value : '',
+                wp_enable_upnp: document.getElementById('wp_enable_upnp') ? document.getElementById('wp_enable_upnp').checked : false,
+                wp_use_hls: document.getElementById('wp_use_hls') ? document.getElementById('wp_use_hls').checked : false,
+                wp_hls_bitrate: document.getElementById('wp_hls_bitrate') ? document.getElementById('wp_hls_bitrate').value : '2500k',
+                wp_hls_resolution: document.getElementById('wp_hls_resolution') ? document.getElementById('wp_hls_resolution').value : '1280x720'
+            };
+            
+            // Save configuration first
+            const saveRes = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const saveResult = await saveRes.json();
+            
+            if (saveResult.status === 'success') {
+                appendLog('info', 'Configuration successfully saved.');
+                
+                // Now start the pipeline process
+                appendLog('info', 'Launching local AI face sorter pipeline...');
+                const startRes = await fetch('/api/start', { method: 'POST' });
+                const startResult = await startRes.json();
+                
+                if (startResult.status === 'success') {
+                    appendLog('info', 'AI sorting process launched successfully in background.');
+                    connectSSE();
+                } else {
+                    appendLog('error', `Failed to start pipeline: ${startResult.message}`);
+                }
             } else {
-                appendLog('error', `Failed to start pipeline: ${data.message}`);
+                appendLog('error', `Configuration auto-save failed: ${saveResult.message}`);
+                alert(`Failed to save paths: ${saveResult.message}`);
             }
         } catch (err) {
             appendLog('error', `Launch HTTP Error: ${err.message}`);
@@ -4824,114 +4886,4 @@ document.addEventListener('DOMContentLoaded', () => {
     monitorSortingStatus();
 });
 
-// Auto-save Configuration on Start Click Helper
-(function() {
-    const originalStartBtnListener = () => {
-        const startBtn = document.getElementById('btn-start');
-        if (!startBtn) return;
-        
-        // We find the original startBtn listener and wrap it
-        // To do this cleanly, we intercept the click before the original listener runs or replace it!
-        // But since we can't easily remove anonymous listeners in JS without refactoring,
-        // we can simply replace the btn-start element with a clone of itself, removing all listeners,
-        // and then bind our new, comprehensive auto-save + start flow!
-        const clone = startBtn.cloneNode(true);
-        startBtn.parentNode.replaceChild(clone, startBtn);
-        
-        clone.addEventListener('click', async () => {
-            const consoleOutput = document.getElementById('console-logs');
-            const appendLogLocal = (level, message) => {
-                if (!consoleOutput) return;
-                const timestamp = new Date().toLocaleTimeString();
-                const line = document.createElement('div');
-                line.className = `log-line ${level}`;
-                line.innerHTML = `<span style="color: var(--text-muted); margin-right: 0.5rem;">[${timestamp}]</span> ${message}`;
-                consoleOutput.appendChild(line);
-                consoleOutput.scrollTop = consoleOutput.scrollHeight;
-            };
-            
-            try {
-                appendLogLocal('info', 'Auto-saving folder paths and configuration settings...');
-                
-                // Extract current values from the DOM
-                const payload = {
-                    input_dir: document.getElementById('input_dir').value,
-                    output_dir: document.getElementById('output_dir').value,
-                    mode: document.getElementById('mode') ? document.getElementById('mode').value : 'move',
-                    model_pack: document.getElementById('model_pack') ? document.getElementById('model_pack').value : 'buffalo_l',
-                    keyframe_interval: document.getElementById('keyframe_interval') ? parseInt(document.getElementById('keyframe_interval').value) : 0,
-                    max_keyframes: document.getElementById('max_keyframes') ? parseInt(document.getElementById('max_keyframes').value) : 100,
-                    use_cache: document.getElementById('use_cache') ? document.getElementById('use_cache').checked : true,
-                    keep_keyframes: document.getElementById('keep_keyframes') ? document.getElementById('keep_keyframes').checked : false,
-                    prefer_popular_identities: document.getElementById('prefer_popular_identities') ? document.getElementById('prefer_popular_identities').checked : false,
-                    multi_profile_policy: document.getElementById('multi_profile_policy') ? document.getElementById('multi_profile_policy').value : 'prefer_popular',
-                    profile_target: document.getElementById('profile_target') ? document.getElementById('profile_target').value : 'female',
-                    scan_depth: document.getElementById('scan_depth') ? document.getElementById('scan_depth').value : 'full',
-                    multi_profile_min_keyframes: document.getElementById('multi_profile_min_keyframes') ? parseInt(document.getElementById('multi_profile_min_keyframes').value) : 2,
-                    face_det_threshold: document.getElementById('face_det_threshold') ? parseFloat(document.getElementById('face_det_threshold').value) : 0.5,
-                    gender_threshold: document.getElementById('gender_threshold') ? parseFloat(document.getElementById('gender_threshold').value) : 0.65,
-                    min_eye_dist_ratio: document.getElementById('min_eye_dist_ratio') ? parseFloat(document.getElementById('min_eye_dist_ratio').value) : 0.05,
-                    cluster_epsilon: document.getElementById('cluster_epsilon') ? parseFloat(document.getElementById('cluster_epsilon').value) : 0.85,
-                    min_cluster_size: document.getElementById('min_cluster_size') ? parseInt(document.getElementById('min_cluster_size').value) : 3,
-                    min_face_size: document.getElementById('min_face_size') ? parseInt(document.getElementById('min_face_size').value) : 50,
-                    extraction_percent: document.getElementById('extraction_percent') ? parseInt(document.getElementById('extraction_percent').value) : 100,
-                    auto_name_folders: document.getElementById('auto_name_folders') ? document.getElementById('auto_name_folders').checked : false,
-                    only_name_unnamed: document.getElementById('only_name_unnamed') ? document.getElementById('only_name_unnamed').checked : true,
-                    merge_on_name_conflict: document.getElementById('merge_on_name_conflict') ? document.getElementById('merge_on_name_conflict').checked : false,
-                    name_confidence_threshold: document.getElementById('name_confidence_threshold') ? parseFloat(document.getElementById('name_confidence_threshold').value) : 0.5,
-                    name_search_delay: document.getElementById('name_search_delay') ? parseFloat(document.getElementById('name_search_delay').value) : 4.0,
-                    default_video_player: document.getElementById('default_video_player') ? document.getElementById('default_video_player').value : 'browser',
-                    
-                    // Watch Party configs
-                    wp_use_cloudflare: document.getElementById('wp_use_cloudflare') ? document.getElementById('wp_use_cloudflare').checked : false,
-                    wp_cloudflare_token: document.getElementById('wp_cloudflare_token') ? document.getElementById('wp_cloudflare_token').value : '',
-                    wp_custom_domain: document.getElementById('wp_custom_domain') ? document.getElementById('wp_custom_domain').value : '',
-                    wp_turn_server: document.getElementById('wp_turn_server') ? document.getElementById('wp_turn_server').value : '',
-                    wp_turn_username: document.getElementById('wp_turn_username') ? document.getElementById('wp_turn_username').value : '',
-                    wp_turn_credential: document.getElementById('wp_turn_credential') ? document.getElementById('wp_turn_credential').value : '',
-                    wp_run_local_turn: document.getElementById('wp_run_local_turn') ? document.getElementById('wp_run_local_turn').checked : false,
-                    wp_local_turn_port: document.getElementById('wp_local_turn_port') ? parseInt(document.getElementById('wp_local_turn_port').value) : 3478,
-                    wp_turn_secret: document.getElementById('wp_turn_secret') ? document.getElementById('wp_turn_secret').value : '',
-                    wp_enable_upnp: document.getElementById('wp_enable_upnp') ? document.getElementById('wp_enable_upnp').checked : false,
-                    wp_use_hls: document.getElementById('wp_use_hls') ? document.getElementById('wp_use_hls').checked : false,
-                    wp_hls_bitrate: document.getElementById('wp_hls_bitrate') ? document.getElementById('wp_hls_bitrate').value : '2500k',
-                    wp_hls_resolution: document.getElementById('wp_hls_resolution') ? document.getElementById('wp_hls_resolution').value : '1280x720'
-                };
-                
-                // Save configuration first
-                const saveRes = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const saveResult = await saveRes.json();
-                
-                if (saveResult.status === 'success') {
-                    appendLogLocal('info', 'Configuration successfully saved.');
-                    
-                    // Now start the pipeline process
-                    appendLogLocal('info', 'Launching local AI face sorter pipeline...');
-                    const startRes = await fetch('/api/start', { method: 'POST' });
-                    const startResult = await startRes.json();
-                    
-                    if (startResult.status === 'success') {
-                        appendLogLocal('info', 'AI sorting process launched successfully in background.');
-                        if (typeof connectSSE === 'function') {
-                            connectSSE();
-                        }
-                    } else {
-                        appendLogLocal('error', `Failed to start pipeline: ${startResult.message}`);
-                    }
-                } else {
-                    appendLogLocal('error', `Configuration auto-save failed: ${saveResult.message}`);
-                    alert(`Failed to save paths: ${saveResult.message}`);
-                }
-            } catch (err) {
-                appendLogLocal('error', `Launch HTTP Error: ${err.message}`);
-            }
-        });
-    };
-    
-    // Run after a short delay to make sure the original button exists and is set up
-    setTimeout(originalStartBtnListener, 800);
-})();
+
