@@ -153,62 +153,101 @@ body {
 }
 
 .system-status-card {
-    background: var(--bg-raised);
-    border: var(--bw) solid var(--border);
-    padding: 1rem;
+    background: var(--bg-overlay) !important;
+    border: 2px solid #000000 !important;
+    box-shadow: 3px 3px 0px #000000 !important;
+    padding: 0.9rem;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.75rem;
+    border-radius: 6px;
+    margin-top: auto;
 }
 
 .status-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    font-weight: 700;
+    gap: 0.6rem;
 }
 
 .status-indicator-dot {
-    width: 8px;
-    height: 8px;
-    background: #5C5C64;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid #000000;
+    background: var(--text-muted);
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
 }
 
 .status-indicator-dot.active {
-    background: var(--accent);
+    background: var(--accent-lime) !important;
+    box-shadow: 0 0 8px var(--accent-lime) !important;
 }
 
 .status-indicator-dot.error {
-    background: #FF2E93;
+    background: var(--accent-red) !important;
+    box-shadow: 0 0 8px var(--accent-red) !important;
+}
+
+.status-label {
+    font-size: 0.78rem;
+    font-weight: 900;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .gpu-badge {
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    background: rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    padding: 0.5rem 0.7rem !important;
+    border-radius: 4px;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 0.6rem !important;
+    font-family: var(--font-sans) !important;
+    font-weight: 600 !important;
+    font-size: 0.76rem !important;
+    color: var(--text-dim) !important;
+    line-height: 1.35 !important;
+}
+
+.gpu-badge i {
+    color: var(--accent-yellow);
+    font-size: 0.85rem;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
 }
 
 .dml-pill {
-    background: var(--accent);
-    color: var(--bg);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    background: var(--accent-lime) !important;
+    color: #000000 !important;
+    font-size: 0.68rem !important;
+    padding: 4px 8px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.5px !important;
+    text-transform: uppercase !important;
+    display: inline-block !important;
+    text-align: center !important;
+    border: 2px solid #000000 !important;
+    box-shadow: 2px 2px 0px #000000 !important;
+    border-radius: 4px !important;
 }
 
 .cpu-pill {
-    background: #6b7280;
-    color: #ffffff;
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    background: var(--text-muted) !important;
+    color: #ffffff !important;
+    font-size: 0.68rem !important;
+    padding: 4px 8px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.5px !important;
+    text-transform: uppercase !important;
+    display: inline-block !important;
+    text-align: center !important;
+    border: 2px solid #000000 !important;
+    box-shadow: 2px 2px 0px #000000 !important;
+    border-radius: 4px !important;
 }
 
 /* ============================================
@@ -3103,11 +3142,11 @@ body[data-theme="light"] .landing-footer {
 }
 
 /* Sticker badges */
-.dml-pill, .cpu-pill, .stage-badge, .badge, .status-label, .gpu-badge {
+.dml-pill, .cpu-pill, .stage-badge, .badge {
     border: 2px solid #000000 !important;
     box-shadow: 2px 2px 0px #000000 !important;
     border-radius: 4px !important;
-    font-weight: 700 !important;
+    font-weight: 800 !important;
 }
 .dml-pill { background: var(--accent-lime) !important; color: #000000 !important; }
 .cpu-pill { background: var(--text-dim) !important; color: #000000 !important; }
