@@ -13,11 +13,15 @@ from modules.screen_time import ScreenTimeCalculator
 from modules.sorter import VideoSorter
 from modules.name_resolver import NameResolver
 
+class PipelineStoppedException(Exception):
+    pass
+
 class SortingPipeline:
     def __init__(self, config: Config, workspace_dir: str, progress_cb=None, face_analysis_app=None, flask_app=None):
         self.config = config
         self.workspace_dir = workspace_dir
         self.progress_cb = progress_cb or (lambda stage, pct, msg, detail=None: None)
+        self.stopped = False
         
         self.scanner = FileScanner(config.input_dir)
         self.extractor = KeyframeExtractor(workspace_dir, config)
@@ -31,9 +35,11 @@ class SortingPipeline:
         self.screen_time = ScreenTimeCalculator(config)
         self.sorter = VideoSorter(config)
         
-        # Cache initialization (unconditional for profile registry)
         cache_dir = os.path.join(workspace_dir, ".cache")
         self.cache = EmbeddingCache(cache_dir)
+
+    def stop(self):
+        self.stopped = True
 
     def _update_progress(self, stage: str, percent: float, message: str, detail=None):
         logger.info(f"Progress [{stage} - {percent:.1f}%]: {message}")
@@ -193,8 +199,10 @@ class SortingPipeline:
     def run(self):
         try:
             # 1. SCAN FILES
+            if self.stopped: raise PipelineStoppedException()
             self._update_progress("scanning", 5.0, "Scanning folder recursively...")
             files = self.scanner.scan()
+            if self.stopped: raise PipelineStoppedException()
             videos = files.get('videos', [])
             images = files.get('images', [])
             total_files = len(videos) + len(images)
@@ -221,6 +229,7 @@ class SortingPipeline:
             
             # Process Images (easy, single frame)
             for idx, img_path in enumerate(images):
+                if self.stopped: raise PipelineStoppedException()
                 pct = 15.0 + (idx / total_files) * 60.0
                 filename = os.path.basename(img_path)
                 self._update_progress("analysis", pct, f"Analyzing image: {filename}", filename)
@@ -288,6 +297,8 @@ class SortingPipeline:
                     return _process_video_impl(video_path)
 
             def _process_video_impl(video_path):
+                if self.stopped:
+                    return
                 filename = os.path.basename(video_path)
                 cached = None
                 if self.cache and self.config.use_cache:
@@ -307,6 +318,8 @@ class SortingPipeline:
                         # Thread-safe GPU Inference via Lock
                         with gpu_lock:
                             for kf in keyframes:
+                                if self.stopped:
+                                    break
                                 try:
                                     faces_in_kf = self.analyzer.analyze_image(kf['path'], frame_index=kf['frame_index'])
                                     for face in faces_in_kf:
@@ -349,6 +362,10 @@ class SortingPipeline:
                 futures = {executor.submit(process_video, path): path for path in videos}
                 video_completed = 0
                 for future in as_completed(futures):
+                    if self.stopped:
+                        for f in futures:
+                            f.cancel()
+                        raise PipelineStoppedException()
                     path = futures[future]
                     video_completed += 1
                     pct = 15.0 + ((len(images) + video_completed) / total_files) * 60.0
@@ -581,6 +598,14 @@ class SortingPipeline:
             self._update_progress("completed", 100.0, "Sorting process completed successfully!", report)
             return report
             
+        except PipelineStoppedException:
+            logger.info("Pipeline stop requested by user. Cleaning up...")
+            self._update_progress("stopped", 0.0, "Sorting process stopped by user.")
+            try:
+                self.extractor.clean_temp_dir()
+            except Exception:
+                pass
+            return None
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
             import traceback
@@ -597,14 +622,23 @@ class SortingPipeline:
         """
         Executes folder identification and renaming without running full sorting.
         """
+        if self.stopped:
+            return {}
         self._update_progress("auto_naming", 92.0, "Identifying folder names by parsing filenames and reverse image search...")
         resolver = NameResolver(self.config)
         
         def naming_progress(current, total, msg):
+            if self.stopped:
+                raise PipelineStoppedException()
             pct = 92.0 + (current / total) * 7.0
             self._update_progress("auto_naming", pct, msg)
             
-        results = resolver.resolve_all_folders(self.config.output_dir, naming_progress, only_unnamed=self.config.only_name_unnamed)
-        logger.info(f"Auto-naming completed. Results: {results}")
-        self._update_progress("auto_naming", 99.0, f"Auto-naming finished. Processed {len(results)} folders.")
-        return results
+        try:
+            results = resolver.resolve_all_folders(self.config.output_dir, naming_progress, only_unnamed=self.config.only_name_unnamed)
+            logger.info(f"Auto-naming completed. Results: {results}")
+            self._update_progress("auto_naming", 99.0, f"Auto-naming finished. Processed {len(results)} folders.")
+            return results
+        except PipelineStoppedException:
+            logger.info("Auto-naming stop requested by user. Cleaning up...")
+            self._update_progress("stopped", 0.0, "Auto-naming stopped by user.")
+            return {}

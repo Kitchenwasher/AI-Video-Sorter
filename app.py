@@ -108,6 +108,7 @@ pipeline_state = {
 
 state_lock = threading.Lock()
 pipeline_thread = None
+active_pipeline = None
 
 # Default directories
 DEFAULT_INPUT = os.path.join(WORKSPACE_DIR, "input")
@@ -769,7 +770,7 @@ def handle_disconnect():
 
 
 def run_pipeline_thread(config_obj):
-    global pipeline_state
+    global pipeline_state, active_pipeline
     
     def progress_callback(stage, percent, message, detail=None):
         with state_lock:
@@ -781,26 +782,30 @@ def run_pipeline_thread(config_obj):
     with app.app_context():
         try:
             pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback, flask_app=app)
+            with state_lock:
+                active_pipeline = pipeline
             report = pipeline.run()
             
             with state_lock:
                 pipeline_state['report'] = report
-                if pipeline_state['stage'] != 'error':
+                if pipeline_state['stage'] not in ('error', 'stopped'):
                     pipeline_state['stage'] = 'completed'
                     pipeline_state['percent'] = 100.0
                     pipeline_state['message'] = 'Sorting completed successfully!'
         except Exception as e:
             logger.error(f"Error running pipeline: {e}")
             with state_lock:
-                pipeline_state['stage'] = 'error'
-                pipeline_state['percent'] = 100.0
-                pipeline_state['message'] = f"Fatal pipeline error: {str(e)}"
+                if pipeline_state['stage'] not in ('error', 'stopped'):
+                    pipeline_state['stage'] = 'error'
+                    pipeline_state['percent'] = 100.0
+                    pipeline_state['message'] = f"Fatal pipeline error: {str(e)}"
         finally:
             with state_lock:
                 pipeline_state['running'] = False
+                active_pipeline = None
 
 def run_auto_naming_thread(config_obj):
-    global pipeline_state
+    global pipeline_state, active_pipeline
     
     def progress_callback(stage, percent, message, detail=None):
         with state_lock:
@@ -812,23 +817,27 @@ def run_auto_naming_thread(config_obj):
     with app.app_context():
         try:
             pipeline = SortingPipeline(config_obj, WORKSPACE_DIR, progress_callback, flask_app=app)
+            with state_lock:
+                active_pipeline = pipeline
             results = pipeline.run_auto_naming()
             
             with state_lock:
                 pipeline_state['report'] = {'auto_naming': results}
-                if pipeline_state['stage'] != 'error':
+                if pipeline_state['stage'] not in ('error', 'stopped'):
                     pipeline_state['stage'] = 'completed'
                     pipeline_state['percent'] = 100.0
                     pipeline_state['message'] = 'Auto-naming completed successfully!'
         except Exception as e:
             logger.error(f"Error running auto-naming: {e}")
             with state_lock:
-                pipeline_state['stage'] = 'error'
-                pipeline_state['percent'] = 100.0
-                pipeline_state['message'] = f"Fatal auto-naming error: {str(e)}"
+                if pipeline_state['stage'] not in ('error', 'stopped'):
+                    pipeline_state['stage'] = 'error'
+                    pipeline_state['percent'] = 100.0
+                    pipeline_state['message'] = f"Fatal auto-naming error: {str(e)}"
         finally:
             with state_lock:
                 pipeline_state['running'] = False
+                active_pipeline = None
 
 @app.before_request
 def restrict_public_access():
@@ -1142,6 +1151,38 @@ def start_pipeline():
                 'status': 'success',
                 'message': 'Pipeline started in background thread.'
             })
+
+@app.route('/api/stop', methods=['POST'])
+def stop_pipeline():
+    global pipeline_state, active_pipeline
+    
+    with state_lock:
+        # 1. If Celery task is running, revoke it
+        if pipeline_state.get('running') and pipeline_state.get('task_id'):
+            task_id = pipeline_state['task_id']
+            try:
+                from tasks import celery_app
+                celery_app.control.revoke(task_id, terminate=True)
+                logger.info(f"Revoked Celery task: {task_id}")
+            except Exception as e:
+                logger.error(f"Failed to revoke Celery task {task_id}: {e}")
+                
+        # 2. If active local pipeline is running, set stopped = True
+        if active_pipeline:
+            active_pipeline.stop()
+            logger.info("Signaled active local pipeline to stop.")
+            
+        # Update pipeline state
+        pipeline_state['running'] = False
+        pipeline_state['stage'] = 'stopped'
+        pipeline_state['percent'] = 0.0
+        pipeline_state['message'] = 'Sorting process stopped by user.'
+        pipeline_state['detail'] = None
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Pipeline stop requested successfully.'
+        })
 
 @app.route('/api/auto-name', methods=['POST'])
 def start_auto_name():

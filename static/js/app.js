@@ -807,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Pipeline runner controls
     const startBtn = document.getElementById('btn-start');
+    const stopBtn = document.getElementById('btn-stop');
     const clearCacheBtn = document.getElementById('btn-clear-cache-db');
     const progressBar = document.getElementById('progress-bar');
     const progressPercent = document.getElementById('progress-percent');
@@ -863,12 +864,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const manualAutoNameBtn = document.getElementById('btn-manual-auto-name');
             if (data.running) {
                 startBtn.disabled = true;
+                startBtn.style.display = 'none';
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                    stopBtn.style.display = 'inline-flex';
+                }
                 clearCacheBtn.disabled = true;
                 if (manualAutoNameBtn) manualAutoNameBtn.disabled = true;
                 systemDot.className = 'status-indicator-dot active';
                 systemStatusText.textContent = 'Processing Media';
             } else {
                 startBtn.disabled = false;
+                startBtn.style.display = 'inline-flex';
+                if (stopBtn) {
+                    stopBtn.disabled = true;
+                    stopBtn.style.display = 'none';
+                }
                 clearCacheBtn.disabled = false;
                 if (manualAutoNameBtn) manualAutoNameBtn.disabled = false;
                 
@@ -882,6 +893,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (data.stage === 'error') {
                     systemDot.className = 'status-indicator-dot error';
                     systemStatusText.textContent = 'Pipeline Error';
+                    eventSource.close();
+                } else if (data.stage === 'stopped') {
+                    systemDot.className = 'status-indicator-dot error';
+                    systemStatusText.textContent = 'Pipeline Stopped';
                     eventSource.close();
                 } else {
                     systemDot.className = 'status-indicator-dot';
@@ -914,6 +929,31 @@ document.addEventListener('DOMContentLoaded', () => {
             appendLog('error', `Launch HTTP Error: ${err.message}`);
         }
     });
+
+    // Stop Sorting Process
+    if (stopBtn) {
+        stopBtn.addEventListener('click', async () => {
+            const confirmed = await window.showBrutalConfirm('Are you sure you want to stop the sorting process?', 'Stop Sorter');
+            if (!confirmed) {
+                return;
+            }
+            try {
+                appendLog('info', 'Sending cancel/stop request...');
+                stopBtn.disabled = true;
+                const res = await fetch('/api/stop', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    appendLog('info', 'Sorting process stop requested successfully.');
+                } else {
+                    appendLog('error', `Failed to stop pipeline: ${data.message}`);
+                    stopBtn.disabled = false;
+                }
+            } catch (err) {
+                appendLog('error', `Stop HTTP Error: ${err.message}`);
+                stopBtn.disabled = false;
+            }
+        });
+    }
 
     // Clear Cache Button
     clearCacheBtn.addEventListener('click', async () => {
