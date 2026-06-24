@@ -16,6 +16,10 @@
     // Drag and drop state
     let dragSrcEl = null;
 
+    // Tracks pending queue additions to prevent spam clicks
+    const pendingAdditions = new Set();
+    let lastWarningTime = 0;
+
     // Initialize module when page loads
     window.addEventListener('load', () => {
         initQueueModule();
@@ -360,6 +364,26 @@
      */
     function addToQueue(filename) {
         if (!socket) return;
+        
+        // 1. Prevent duplicate additions if already in queue
+        if (currentQueue.includes(filename)) {
+            const now = Date.now();
+            if (window.showToast && now - lastWarningTime > 2000) {
+                window.showToast('Item is already in the queue.', 'warning');
+                lastWarningTime = now;
+            }
+            return;
+        }
+        
+        // 2. Prevent spamming rapid clicks on the same item while pending
+        if (pendingAdditions.has(filename)) {
+            return;
+        }
+        
+        pendingAdditions.add(filename);
+        setTimeout(() => {
+            pendingAdditions.delete(filename);
+        }, 1000); // 1s cooldown per item
         
         socket.emit('queue_add', {
             party_id: window.PARTY_ID,

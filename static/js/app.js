@@ -1,4 +1,4 @@
-// AURA SORT — FRONTEND JAVASCRIPT
+// CHEHRO — FRONTEND JAVASCRIPT
 
 // SAFE STORAGE WRAPPERS FOR BROWSER STORAGE RESTRICTIONS / TRACKING PREVENTION
 if (!window.safeLocalStorage) {
@@ -176,6 +176,57 @@ if (!window.safeSessionStorage) {
             document.body.appendChild(container);
         }
 
+        // Limit concurrently active toasts to prevent screen flooding on spam
+        const activeToasts = Array.from(container.getElementsByClassName('custom-toast')).filter(t => !t.classList.contains('hide'));
+        
+        // Deduplicate: If an identical toast or a theme-switch toast is already active, update it in place
+        const isThemeToast = message.includes('Switched to');
+        const existingToast = activeToasts.find(t => {
+            const contentEl = t.querySelector('.custom-toast-content');
+            if (!contentEl) return false;
+            const content = contentEl.textContent;
+            return content === message || (isThemeToast && content.includes('Switched to'));
+        });
+
+        if (existingToast) {
+            const contentEl = existingToast.querySelector('.custom-toast-content');
+            if (contentEl) contentEl.textContent = message;
+            
+            existingToast.className = `custom-toast custom-toast-${type} show`;
+            
+            let iconClass = 'fa-circle-info';
+            if (type === 'success') iconClass = 'fa-circle-check';
+            else if (type === 'error') iconClass = 'fa-circle-xmark';
+            else if (type === 'warning') iconClass = 'fa-triangle-exclamation';
+            
+            const iconEl = existingToast.querySelector('.custom-toast-icon i');
+            if (iconEl) {
+                iconEl.className = `fa-solid ${iconClass}`;
+            }
+
+            if (existingToast.dismissTimeout) {
+                clearTimeout(existingToast.dismissTimeout);
+            }
+            
+            const dismiss = () => {
+                existingToast.classList.remove('show');
+                existingToast.classList.add('hide');
+                setTimeout(() => existingToast.remove(), 400);
+            };
+            
+            if (duration > 0) {
+                existingToast.dismissTimeout = setTimeout(dismiss, duration);
+            }
+            return;
+        }
+
+        if (activeToasts.length >= 3) {
+            const oldest = activeToasts[0];
+            oldest.classList.remove('show');
+            oldest.classList.add('hide');
+            setTimeout(() => oldest.remove(), 400);
+        }
+
         const toast = document.createElement('div');
         toast.className = `custom-toast custom-toast-${type}`;
 
@@ -199,12 +250,13 @@ if (!window.safeSessionStorage) {
         const dismiss = () => {
             toast.classList.remove('show');
             toast.classList.add('hide');
+            if (toast.dismissTimeout) clearTimeout(toast.dismissTimeout);
             setTimeout(() => toast.remove(), 400);
         };
         closeBtn.addEventListener('click', dismiss);
 
         if (duration > 0) {
-            setTimeout(dismiss, duration);
+            toast.dismissTimeout = setTimeout(dismiss, duration);
         }
     };
 
@@ -272,11 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageSubheading = document.getElementById('page-subheading');
 
     const headings = {
-        'sec-results': { title: 'Library', sub: 'View identified profiles and sorted media folders' },
-        'sec-profiles': { title: 'Face Profiles', sub: 'Manage detected identities, assign images, and merge duplicates' },
-        'sec-dashboard': { title: 'Pipeline', sub: 'Orchestrate face recognition, gender classification, and clustering pipeline' },
-        'sec-duplicates': { title: 'Duplicate Finder', sub: 'Scan library folders using perceptual hashing to group duplicate photos and videos' },
-        'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and performance metrics' },
+        'sec-dashboard': { title: 'Sort Your Media', sub: 'Sort photos and videos locally in 3 steps' },
+        'sec-results': { title: 'People Library', sub: 'Browse sorted folders and identified people' },
+        'sec-profiles': { title: 'Identities', sub: 'Manage identified people' },
+        'sec-duplicates': { title: 'Duplicate Finder', sub: 'Scan library folders to group duplicate photos and videos' },
+        'sec-configuration': { title: 'Settings', sub: 'Configure folders, intervals, thresholds, and watch parties' },
         'sec-gallery': { title: 'Profile Gallery', sub: 'Browse media files and correct sorting' }
     };
 
@@ -319,11 +371,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
+            const href = item.getAttribute('href');
+            if (!href || href === '#' || href === '') return;
             e.preventDefault();
-            const targetId = item.getAttribute('href').replace('#', 'sec-');
+            const targetId = href.replace('#', 'sec-');
             window.switchSection(targetId);
         });
     });
+
+    // Set initial page headings dynamically based on the active section in DOM
+    const initialActiveSec = document.querySelector('.content-section.active');
+    if (initialActiveSec && headings[initialActiveSec.id]) {
+        if (pageHeading) pageHeading.textContent = headings[initialActiveSec.id].title;
+        if (pageSubheading) pageSubheading.textContent = headings[initialActiveSec.id].sub;
+    }
 
     // Form inputs and sliders range indicators
     const rangeSliders = [
@@ -362,10 +423,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('use_cache').checked = data.use_cache !== false;
             document.getElementById('keep_keyframes').checked = data.keep_keyframes === true;
             document.getElementById('prefer_popular_identities').checked = data.prefer_popular_identities === true;
-            document.getElementById('multi_profile_policy').value = data.multi_profile_policy || 'primary_only';
-            document.getElementById('profile_target').value = data.profile_target || 'female';
-            document.getElementById('scan_depth').value = data.scan_depth || 'fast';
-            document.getElementById('multi_profile_min_keyframes').value = data.multi_profile_min_keyframes || 2;
+            const elPolicy = document.getElementById('multi_profile_policy');
+            if (elPolicy) elPolicy.value = data.multi_profile_policy || 'primary_only';
+            const elTarget = document.getElementById('profile_target');
+            if (elTarget) elTarget.value = data.profile_target || 'female';
+            const elDepth = document.getElementById('scan_depth');
+            if (elDepth) elDepth.value = data.scan_depth || 'fast';
+            const elMinKeyframes = document.getElementById('multi_profile_min_keyframes');
+            if (elMinKeyframes) elMinKeyframes.value = data.multi_profile_min_keyframes || 2;
             
             // Slider values
             document.getElementById('face_det_threshold').value = data.face_det_threshold || 0.5;
@@ -460,10 +525,10 @@ document.addEventListener('DOMContentLoaded', () => {
             use_cache: document.getElementById('use_cache').checked,
             keep_keyframes: document.getElementById('keep_keyframes').checked,
             prefer_popular_identities: document.getElementById('prefer_popular_identities').checked,
-            multi_profile_policy: document.getElementById('multi_profile_policy').value,
-            profile_target: document.getElementById('profile_target').value,
-            scan_depth: document.getElementById('scan_depth').value,
-            multi_profile_min_keyframes: parseInt(document.getElementById('multi_profile_min_keyframes').value),
+            multi_profile_policy: document.getElementById('multi_profile_policy') ? document.getElementById('multi_profile_policy').value : 'primary_only',
+            profile_target: document.getElementById('profile_target') ? document.getElementById('profile_target').value : 'female',
+            scan_depth: document.getElementById('scan_depth') ? document.getElementById('scan_depth').value : 'fast',
+            multi_profile_min_keyframes: document.getElementById('multi_profile_min_keyframes') ? parseInt(document.getElementById('multi_profile_min_keyframes').value) : 2,
             face_det_threshold: parseFloat(document.getElementById('face_det_threshold').value),
             gender_threshold: parseFloat(document.getElementById('gender_threshold').value),
             min_eye_dist_ratio: parseFloat(document.getElementById('min_eye_dist_ratio').value),
@@ -789,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Thumbnail markup
             const thumbHtml = folder.has_thumbnail
                 ? `<img class="identity-thumb" src="${imgUrl}" loading="lazy" onerror="if (!this.dataset.retried) { this.dataset.retried = true; const self = this; setTimeout(() => { self.src = '${imgUrl}&retry=' + Date.now(); }, 1000); } else { this.style.display='none'; this.nextElementSibling.style.display='flex'; }"><div class="no-image-placeholder" style="display:none;"><i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span></div>`
-                : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--color-accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
+                : `<div class="no-image-placeholder">${isUnsorted ? '<i class="fa-solid fa-circle-question" style="color: var(--accent);"></i><span>Unknown Profile</span>' : '<i class="fa-solid fa-user-astronaut"></i><span>Thumbnail unavailable</span>'}</div>`;
             
             // Watch progress bar logic
             let progressHtml = '';
@@ -854,9 +919,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 libraryCountTitle.textContent = 'No library processed yet';
-                statFemales.textContent = '-';
-                statVideos.textContent = '-';
-                statUnsorted.textContent = '-';
+                if (statFemales) statFemales.textContent = '-';
+                if (statVideos) statVideos.textContent = '-';
+                if (statUnsorted) statUnsorted.textContent = '-';
                 const statsLabel = document.getElementById('library-stats-label');
                 if (statsLabel) statsLabel.textContent = '0 profiles';
                 return;
@@ -882,9 +947,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Update stats labels
-            statFemales.textContent = numClusters;
-            statVideos.textContent = totalFiles;
-            statUnsorted.textContent = unsortedCount;
+            if (statFemales) statFemales.textContent = numClusters;
+            if (statVideos) statVideos.textContent = totalFiles;
+            if (statUnsorted) statUnsorted.textContent = unsortedCount;
             libraryCountTitle.textContent = `${numClusters} Distinct Identities Grouped`;
             
             const statsLabel = document.getElementById('library-stats-label');
@@ -902,7 +967,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to load library:', err);
             appendLog('error', `Failed to load library: ${err.message}`);
         }
-    };
+    }
+    window.loadLibrary = loadLibrary;
 
     // Register Toolbar Event Listeners
     const sortSelect = document.getElementById('sort-select');
@@ -1317,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (playlistLoopMode === 'one') {
             playlistLoopBtn.classList.add('active');
             playlistLoopBtn.title = "Loop: Video";
-            playlistLoopBtn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="loop-badge" style="position: absolute; font-size: 0.55rem; bottom: 2px; right: 4px; font-weight: 800; background: var(--color-primary, #ec4899); color: white; border-radius: 50%; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; line-height: 1;">1</span>';
+            playlistLoopBtn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="loop-badge" style="position: absolute; font-size: 0.55rem; bottom: 2px; right: 4px; font-weight: 800; background: var(--accent, #FF6B35); color: white; border-radius: 50%; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; line-height: 1;">1</span>';
         } else if (playlistLoopMode === 'all') {
             playlistLoopBtn.classList.add('active');
             playlistLoopBtn.title = "Loop: Folder";
@@ -1694,7 +1760,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 panel.classList.add('active');
                 if (container) container.classList.add('panel-open');
                 if (modal) modal.classList.add('panel-open');
-                if (toggleBtn) toggleBtn.style.color = 'var(--color-primary, #ec4899)';
+                if (toggleBtn) toggleBtn.style.color = 'var(--accent, #FF6B35)';
             } else {
                 panel.classList.remove('active');
                 if (container) container.classList.remove('panel-open');
@@ -1971,7 +2037,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 const placeholderHtml = `
-                    <div class="sidebar-folder-avatar-placeholder" style="width:38px; height:38px; border-radius:50%; display:${folder.has_thumbnail ? 'none' : 'flex'}; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--text-muted); flex-shrink:0;">
+                    <div class="sidebar-folder-avatar-placeholder" style="width:38px; height:38px; border-radius:4px; display:${folder.has_thumbnail ? 'none' : 'flex'}; align-items:center; justify-content:center; background:var(--bg); border:2px solid #000000; box-shadow: 2px 2px 0px #000000; color:var(--text-dim); flex-shrink:0;">
                         <i class="fa-solid ${fallbackIcon}" style="font-size:0.9rem;"></i>
                     </div>
                 `;
@@ -2252,7 +2318,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         badgeHtml = `<span class="watch-badge watching" title="Resume play"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>`;
                         progressHtml = `
                             <div class="gallery-item-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;">
-                                <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                                <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--accent, #FF6B35);"></div>
                             </div>
                         `;
                     } else {
@@ -2638,7 +2704,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             progContainer = document.createElement('div');
                             progContainer.className = 'gallery-item-progress-container';
                             progContainer.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;';
-                            progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>`;
+                            progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--accent, #FF6B35);"></div>`;
                             card.appendChild(progContainer);
                         } else {
                             const bar = progContainer.querySelector('.gallery-item-progress-bar');
@@ -2685,7 +2751,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 progContainer = document.createElement('div');
                                 progContainer.className = 'gallery-item-progress-container';
                                 progContainer.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;';
-                                progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>`;
+                                progContainer.innerHTML = `<div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--accent, #FF6B35);"></div>`;
                                 thumbContainer.appendChild(progContainer);
                             } else {
                                 const bar = progContainer.querySelector('.gallery-item-progress-bar');
@@ -2913,12 +2979,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     card.style.flex = '0 0 200px';
                     card.style.position = 'relative';
-                    card.style.borderRadius = '12px';
-                    card.style.overflow = 'hidden';
-                    card.style.background = 'rgba(255,255,255,0.03)';
-                    card.style.border = '1px solid rgba(255,255,255,0.08)';
-                    card.style.cursor = 'pointer';
-                    card.style.transition = 'all 0.2s';
                     
                     const videoThumbUrl = `/api/video-thumbnail/${encodeURIComponent(item.folder_name)}/${encodeURIComponent(item.filename)}`;
                     
@@ -2937,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <i class="fa-solid fa-play" style="color: white; font-size: 1.5rem;"></i>
                             </div>
                             <div class="progress-bar-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.2);">
-                                <div class="progress-bar-fill" style="width: ${item.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                                <div class="progress-bar-fill" style="width: ${item.progress_percent}%; height: 100%; background: var(--accent, #FF6B35);"></div>
                             </div>
                         </div>
                         <div style="padding: 0.5rem; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;">
@@ -2949,7 +3009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const playOverlay = card.querySelector('.play-overlay');
                     card.addEventListener('mouseenter', () => {
                         card.style.transform = 'translateY(-2px)';
-                        card.style.borderColor = 'var(--color-primary, #ec4899)';
+                        card.style.borderColor = 'var(--accent, #FF6B35)';
                         if (playOverlay) playOverlay.style.opacity = '1';
                     });
                     card.addEventListener('mouseleave', () => {
@@ -3328,7 +3388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     progressHtml = `
                         <span class="watch-badge watching" style="position: absolute; top: 8px; left: 8px; z-index: 5;" title="In Progress"><i class="fa-solid fa-spinner"></i> ${progress.progress_percent}%</span>
                         <div class="gallery-item-progress-container" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(0,0,0,0.4); z-index: 5;">
-                            <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--color-primary, #ec4899);"></div>
+                            <div class="gallery-item-progress-bar" style="width: ${progress.progress_percent}%; height: 100%; background: var(--accent, #FF6B35);"></div>
                         </div>
                     `;
                 }
@@ -3458,7 +3518,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="avatar-refresh-btn" title="Auto-extract best avatar" style="position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); padding: 0.35rem; border-radius: 50%; cursor: pointer; transition: background 0.2s, color 0.2s; display: flex; align-items: center; justify-content: center; z-index: 5;">
                     <i class="fa-solid fa-arrows-rotate" style="font-size: 0.75rem;"></i>
                 </button>
-                <div class="avatar-container" style="position: relative; margin-bottom: 0.75rem; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, var(--color-primary) 0%, #a855f7 100%); width: 86px; height: 86px;">
+                <div class="avatar-container" style="position: relative; margin-bottom: 0.75rem; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%); width: 86px; height: 86px;">
                     <img class="profile-avatar-img" src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; display: block; background: rgba(0,0,0,0.3);" onerror="this.onerror=null; this.src=DEFAULT_USER_SVG;">
                 </div>
                 <div style="font-weight: 600; text-align: center; margin-bottom: 0.25rem; font-size: 0.9rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main);">
@@ -4300,3 +4360,337 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// THEME TOGGLE CONTROLLER (DARK/LIGHT NEO-BRUTALISM)
+document.addEventListener('DOMContentLoaded', () => {
+    const themeToggleBtn = document.getElementById('btn-theme-toggle');
+    const themeToggleIcon = document.getElementById('theme-toggle-icon');
+    const themeToggleText = document.getElementById('theme-toggle-text');
+    
+    function updateToggleButton(theme) {
+        if (!themeToggleIcon || !themeToggleText) return;
+        if (theme === 'light') {
+            themeToggleIcon.className = 'fa-solid fa-sun';
+            themeToggleText.textContent = 'Light';
+        } else {
+            themeToggleIcon.className = 'fa-solid fa-moon';
+            themeToggleText.textContent = 'Dark';
+        }
+    }
+    
+    // Read the active theme from the body (which was set by the inline head script)
+    let currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    updateToggleButton(currentTheme);
+    
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            currentTheme = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            document.body.setAttribute('data-theme', currentTheme);
+            
+            try {
+                localStorage.setItem('chehro-theme', currentTheme);
+            } catch (e) {
+                console.warn('[ThemeSwitcher] Failed to write theme to localStorage:', e);
+            }
+            
+            updateToggleButton(currentTheme);
+            
+            if (window.showToast) {
+                window.showToast(`Switched to ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)} Mode`, 'info', 2000);
+            }
+        });
+    }
+});
+
+// NAVIGATION HISTORY & VIEW CONTROLLER (LANDING VS DASHBOARD)
+document.addEventListener('DOMContentLoaded', () => {
+    const btnEnterHost = document.getElementById('btn-enter-host');
+    const logo = document.querySelector('.logo');
+    
+    // View switching engine
+    window.setView = (view, updateHistory = true) => {
+        if (view === 'dashboard') {
+            document.body.setAttribute('data-view', 'dashboard');
+            if (updateHistory) {
+                history.pushState({ view: 'dashboard' }, '', '#dashboard');
+            }
+            // Proactively load the library when entering the dashboard
+            if (typeof window.loadLibrary === 'function') {
+                window.loadLibrary();
+            }
+        } else {
+            document.body.setAttribute('data-view', 'home');
+            if (updateHistory) {
+                history.pushState({ view: 'home' }, '', '#home');
+            }
+        }
+    };
+    
+    // Bind "Enter as Host" button click
+    if (btnEnterHost) {
+        btnEnterHost.addEventListener('click', () => {
+            window.setView('dashboard');
+            if (window.showToast) {
+                window.showToast('Welcome to Chehro Dashboard', 'success', 2500);
+            }
+        });
+    }
+    
+    // Bind Sidebar Logo click to return home
+    if (logo) {
+        // Change cursor to indicate clickability
+        logo.style.cursor = 'pointer';
+        logo.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.setView('home');
+        });
+    }
+    
+    // Listen for browser Back/Forward navigation
+    window.addEventListener('popstate', (event) => {
+        const state = event.state;
+        const hash = window.location.hash;
+        
+        if (hash === '#dashboard' || (state && state.view === 'dashboard')) {
+            window.setView('dashboard', false);
+        } else {
+            window.setView('home', false);
+        }
+    });
+    
+    // Listen for manual hash changes (fallback/bookmarks)
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash;
+        if (hash === '#dashboard') {
+            window.setView('dashboard', false);
+        } else if (hash === '#home' || hash === '') {
+            window.setView('home', false);
+        }
+    });
+    
+    // Check initial view state on startup
+    const initialHash = window.location.hash;
+    if (initialHash === '#dashboard') {
+        window.setView('dashboard', false);
+    } else {
+        window.setView('home', false);
+        // Force the URL to represent the home state cleanly
+        if (initialHash === '') {
+            history.replaceState({ view: 'home' }, '', '#home');
+        }
+    }
+});
+
+// UX REVAMP CONTROLLERS & STAGE MAPPING
+document.addEventListener('DOMContentLoaded', () => {
+    const inputDir = document.getElementById('input_dir');
+    const outputDir = document.getElementById('output_dir');
+    const statusFoldersText = document.getElementById('status-folders-text');
+    const statusFolderIcon = document.getElementById('status-folder-icon');
+    const statusSortingText = document.getElementById('status-sorting-text');
+    const statusSortingIcon = document.getElementById('status-sorting-icon');
+    const btnViewLibraryShortcut = document.getElementById('btn-view-library-shortcut');
+    const btnEmptyStartSorting = document.getElementById('btn-empty-start-sorting');
+    
+    // Dynamic Folder Status Card Update
+    const updateFolderStatusCard = () => {
+        if (!statusFoldersText || !statusFolderIcon) return;
+        
+        const inPath = inputDir ? inputDir.value.trim() : '';
+        const outPath = outputDir ? outputDir.value.trim() : '';
+        
+        if (inPath && outPath) {
+            statusFoldersText.textContent = 'Folders Configured';
+            statusFoldersText.style.color = 'var(--accent-lime)';
+            statusFolderIcon.style.color = 'var(--accent-lime)';
+            statusFolderIcon.className = 'fa-solid fa-circle-check status-card-icon';
+        } else if (inPath || outPath) {
+            statusFoldersText.textContent = 'Setup Incomplete';
+            statusFoldersText.style.color = 'var(--accent-yellow)';
+            statusFolderIcon.style.color = 'var(--accent-yellow)';
+            statusFolderIcon.className = 'fa-solid fa-triangle-exclamation status-card-icon';
+        } else {
+            statusFoldersText.textContent = 'Not Configured';
+            statusFoldersText.style.color = 'var(--text-muted)';
+            statusFolderIcon.style.color = 'var(--text-muted)';
+            statusFolderIcon.className = 'fa-solid fa-folder-open status-card-icon';
+        }
+    };
+    
+    // Listen to input changes
+    if (inputDir) inputDir.addEventListener('input', updateFolderStatusCard);
+    if (outputDir) outputDir.addEventListener('input', updateFolderStatusCard);
+    
+    // Trigger initial check after config loads (we hook into a short delay to let loadConfig finish)
+    setTimeout(updateFolderStatusCard, 600);
+    
+    // Direct button bindings
+    if (btnViewLibraryShortcut) {
+        btnViewLibraryShortcut.style.cursor = 'pointer';
+        btnViewLibraryShortcut.addEventListener('click', () => {
+            if (typeof window.switchSection === 'function') {
+                window.switchSection('sec-results');
+            }
+        });
+    }
+    
+    if (btnEmptyStartSorting) {
+        btnEmptyStartSorting.style.cursor = 'pointer';
+        btnEmptyStartSorting.addEventListener('click', () => {
+            if (typeof window.switchSection === 'function') {
+                window.switchSection('sec-dashboard');
+            }
+        });
+    }
+    
+    // Stage mapping to friendly terms
+    const stageMap = {
+        'idle': { text: 'System Idle', icon: 'fa-solid fa-circle-notch', color: 'var(--text-muted)' },
+        'scanning': { text: 'Scanning files...', icon: 'fa-solid fa-magnifying-glass fa-spin', color: 'var(--accent-blue)' },
+        'facenet': { text: 'Finding faces...', icon: 'fa-solid fa-face-smile fa-spin', color: 'var(--accent-pink)' },
+        'clustering': { text: 'Grouping people...', icon: 'fa-solid fa-people-group fa-spin', color: 'var(--accent-yellow)' },
+        'moving': { text: 'Moving files...', icon: 'fa-solid fa-arrows-turn-to-dots fa-spin', color: 'var(--accent-orange)' },
+        'completed': { text: 'Sorting Completed!', icon: 'fa-solid fa-circle-check', color: 'var(--accent-lime)' },
+        'error': { text: 'Sorting Error!', icon: 'fa-solid fa-circle-exclamation', color: 'var(--accent-red)' }
+    };
+    
+    // Monitor current stage dynamically and update the Sort Status card
+    const monitorSortingStatus = () => {
+        const stageEl = document.getElementById('current-stage');
+        if (!stageEl || !statusSortingText || !statusSortingIcon) return;
+        
+        const observer = new MutationObserver(() => {
+            const currentStage = stageEl.textContent.trim().toLowerCase();
+            if (stageMap[currentStage]) {
+                const map = stageMap[currentStage];
+                statusSortingText.textContent = map.text;
+                statusSortingText.style.color = map.color;
+                statusSortingIcon.className = map.icon + ' status-card-icon';
+                statusSortingIcon.style.color = map.color;
+                
+                // Show view library button on complete
+                if (currentStage === 'completed') {
+                    if (btnViewLibraryShortcut) btnViewLibraryShortcut.style.display = 'inline-flex';
+                } else {
+                    if (btnViewLibraryShortcut) btnViewLibraryShortcut.style.display = 'none';
+                }
+            }
+        });
+        
+        observer.observe(stageEl, { childList: true });
+    };
+    
+    monitorSortingStatus();
+});
+
+// Auto-save Configuration on Start Click Helper
+(function() {
+    const originalStartBtnListener = () => {
+        const startBtn = document.getElementById('btn-start');
+        if (!startBtn) return;
+        
+        // We find the original startBtn listener and wrap it
+        // To do this cleanly, we intercept the click before the original listener runs or replace it!
+        // But since we can't easily remove anonymous listeners in JS without refactoring,
+        // we can simply replace the btn-start element with a clone of itself, removing all listeners,
+        // and then bind our new, comprehensive auto-save + start flow!
+        const clone = startBtn.cloneNode(true);
+        startBtn.parentNode.replaceChild(clone, startBtn);
+        
+        clone.addEventListener('click', async () => {
+            const consoleOutput = document.getElementById('console-logs');
+            const appendLogLocal = (level, message) => {
+                if (!consoleOutput) return;
+                const timestamp = new Date().toLocaleTimeString();
+                const line = document.createElement('div');
+                line.className = `log-line ${level}`;
+                line.innerHTML = `<span style="color: var(--text-muted); margin-right: 0.5rem;">[${timestamp}]</span> ${message}`;
+                consoleOutput.appendChild(line);
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            };
+            
+            try {
+                appendLogLocal('info', 'Auto-saving folder paths and configuration settings...');
+                
+                // Extract current values from the DOM
+                const payload = {
+                    input_dir: document.getElementById('input_dir').value,
+                    output_dir: document.getElementById('output_dir').value,
+                    mode: document.getElementById('mode') ? document.getElementById('mode').value : 'move',
+                    model_pack: document.getElementById('model_pack') ? document.getElementById('model_pack').value : 'buffalo_l',
+                    keyframe_interval: document.getElementById('keyframe_interval') ? parseInt(document.getElementById('keyframe_interval').value) : 0,
+                    max_keyframes: document.getElementById('max_keyframes') ? parseInt(document.getElementById('max_keyframes').value) : 100,
+                    use_cache: document.getElementById('use_cache') ? document.getElementById('use_cache').checked : true,
+                    keep_keyframes: document.getElementById('keep_keyframes') ? document.getElementById('keep_keyframes').checked : false,
+                    prefer_popular_identities: document.getElementById('prefer_popular_identities') ? document.getElementById('prefer_popular_identities').checked : false,
+                    multi_profile_policy: document.getElementById('multi_profile_policy') ? document.getElementById('multi_profile_policy').value : 'prefer_popular',
+                    profile_target: document.getElementById('profile_target') ? document.getElementById('profile_target').value : 'female',
+                    scan_depth: document.getElementById('scan_depth') ? document.getElementById('scan_depth').value : 'full',
+                    multi_profile_min_keyframes: document.getElementById('multi_profile_min_keyframes') ? parseInt(document.getElementById('multi_profile_min_keyframes').value) : 2,
+                    face_det_threshold: document.getElementById('face_det_threshold') ? parseFloat(document.getElementById('face_det_threshold').value) : 0.5,
+                    gender_threshold: document.getElementById('gender_threshold') ? parseFloat(document.getElementById('gender_threshold').value) : 0.65,
+                    min_eye_dist_ratio: document.getElementById('min_eye_dist_ratio') ? parseFloat(document.getElementById('min_eye_dist_ratio').value) : 0.05,
+                    cluster_epsilon: document.getElementById('cluster_epsilon') ? parseFloat(document.getElementById('cluster_epsilon').value) : 0.85,
+                    min_cluster_size: document.getElementById('min_cluster_size') ? parseInt(document.getElementById('min_cluster_size').value) : 3,
+                    min_face_size: document.getElementById('min_face_size') ? parseInt(document.getElementById('min_face_size').value) : 50,
+                    extraction_percent: document.getElementById('extraction_percent') ? parseInt(document.getElementById('extraction_percent').value) : 100,
+                    auto_name_folders: document.getElementById('auto_name_folders') ? document.getElementById('auto_name_folders').checked : false,
+                    only_name_unnamed: document.getElementById('only_name_unnamed') ? document.getElementById('only_name_unnamed').checked : true,
+                    merge_on_name_conflict: document.getElementById('merge_on_name_conflict') ? document.getElementById('merge_on_name_conflict').checked : false,
+                    name_confidence_threshold: document.getElementById('name_confidence_threshold') ? parseFloat(document.getElementById('name_confidence_threshold').value) : 0.5,
+                    name_search_delay: document.getElementById('name_search_delay') ? parseFloat(document.getElementById('name_search_delay').value) : 4.0,
+                    default_video_player: document.getElementById('default_video_player') ? document.getElementById('default_video_player').value : 'browser',
+                    
+                    // Watch Party configs
+                    wp_use_cloudflare: document.getElementById('wp_use_cloudflare') ? document.getElementById('wp_use_cloudflare').checked : false,
+                    wp_cloudflare_token: document.getElementById('wp_cloudflare_token') ? document.getElementById('wp_cloudflare_token').value : '',
+                    wp_custom_domain: document.getElementById('wp_custom_domain') ? document.getElementById('wp_custom_domain').value : '',
+                    wp_turn_server: document.getElementById('wp_turn_server') ? document.getElementById('wp_turn_server').value : '',
+                    wp_turn_username: document.getElementById('wp_turn_username') ? document.getElementById('wp_turn_username').value : '',
+                    wp_turn_credential: document.getElementById('wp_turn_credential') ? document.getElementById('wp_turn_credential').value : '',
+                    wp_run_local_turn: document.getElementById('wp_run_local_turn') ? document.getElementById('wp_run_local_turn').checked : false,
+                    wp_local_turn_port: document.getElementById('wp_local_turn_port') ? parseInt(document.getElementById('wp_local_turn_port').value) : 3478,
+                    wp_turn_secret: document.getElementById('wp_turn_secret') ? document.getElementById('wp_turn_secret').value : '',
+                    wp_enable_upnp: document.getElementById('wp_enable_upnp') ? document.getElementById('wp_enable_upnp').checked : false,
+                    wp_use_hls: document.getElementById('wp_use_hls') ? document.getElementById('wp_use_hls').checked : false,
+                    wp_hls_bitrate: document.getElementById('wp_hls_bitrate') ? document.getElementById('wp_hls_bitrate').value : '2500k',
+                    wp_hls_resolution: document.getElementById('wp_hls_resolution') ? document.getElementById('wp_hls_resolution').value : '1280x720'
+                };
+                
+                // Save configuration first
+                const saveRes = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const saveResult = await saveRes.json();
+                
+                if (saveResult.status === 'success') {
+                    appendLogLocal('info', 'Configuration successfully saved.');
+                    
+                    // Now start the pipeline process
+                    appendLogLocal('info', 'Launching local AI face sorter pipeline...');
+                    const startRes = await fetch('/api/start', { method: 'POST' });
+                    const startResult = await startRes.json();
+                    
+                    if (startResult.status === 'success') {
+                        appendLogLocal('info', 'AI sorting process launched successfully in background.');
+                        if (typeof connectSSE === 'function') {
+                            connectSSE();
+                        }
+                    } else {
+                        appendLogLocal('error', `Failed to start pipeline: ${startResult.message}`);
+                    }
+                } else {
+                    appendLogLocal('error', `Configuration auto-save failed: ${saveResult.message}`);
+                    alert(`Failed to save paths: ${saveResult.message}`);
+                }
+            } catch (err) {
+                appendLogLocal('error', `Launch HTTP Error: ${err.message}`);
+            }
+        });
+    };
+    
+    // Run after a short delay to make sure the original button exists and is set up
+    setTimeout(originalStartBtnListener, 800);
+})();

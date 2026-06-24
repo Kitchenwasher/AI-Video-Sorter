@@ -1,5 +1,5 @@
 /**
- * AuraSort — Watch Party Client Controller
+ * Chehro — Watch Party Client Controller
  * Handles synchronization, WebRTC P2P voice mesh, and playlist controls.
  */
 
@@ -179,6 +179,17 @@ if (!window.safeSessionStorage) {
             document.body.appendChild(container);
         }
 
+        // Limit active toasts to prevent spam lag
+        const activeToasts = container.getElementsByClassName('custom-toast');
+        if (activeToasts.length >= 3) {
+            const oldest = Array.from(activeToasts).find(t => !t.classList.contains('hide'));
+            if (oldest) {
+                oldest.classList.remove('show');
+                oldest.classList.add('hide');
+                setTimeout(() => oldest.remove(), 400);
+            }
+        }
+
         const toast = document.createElement('div');
         toast.className = `custom-toast custom-toast-${type}`;
 
@@ -248,6 +259,11 @@ if (!window.safeSessionStorage) {
     let currentFilename = null;
     let mediaFilesList = [];
     let ignorePlayerEvents = false;
+    Object.defineProperty(window, 'ignorePlayerEvents', {
+        get: () => ignorePlayerEvents,
+        set: (val) => { ignorePlayerEvents = val; },
+        configurable: true
+    });
     let adminToken = null;
     let selectedFolder = null;
     let isPlaybackLocked = false;
@@ -307,6 +323,11 @@ if (!window.safeSessionStorage) {
         keyboard: { focused: true, global: true },
         clickToPlay: true
     });
+    // Expose player instance to other modules
+    const videoEl = document.getElementById('lightbox-video');
+    if (videoEl) {
+        videoEl.__plyr = player;
+    }
 
     // Synced Autoplay hook for Feature 4
     player.on('ended', () => {

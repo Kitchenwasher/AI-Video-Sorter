@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AuraSort — Watch Party</title>
+    <title>Chehro — Watch Party</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
     <!-- Fonts and Icons -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.all.min.css') }}">
@@ -1218,14 +1218,451 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+    
+        /* ============================================
+           NEO-BRUTALIST OVERRIDES FOR WATCH PARTY
+           ============================================ */
+        :root {
+            --bg: #0C0C0E !important;
+            --bg-raised: #1A1A22 !important;
+            --bg-overlay: #131318 !important;
+            --text: #FFFFFF !important;
+            --text-dim: #A0A0AB !important;
+            --text-muted: #6E6E7A !important;
+            
+            --accent: #FF6B35 !important;
+            --accent-orange: #FF6B35 !important;
+            --accent-blue: #00D8FF !important;
+            --accent-pink: #FF007F !important;
+            --accent-lime: #39FF14 !important;
+            --accent-yellow: #FFD000 !important;
+            --accent-red: #FF3131 !important;
+            
+            --border: #000000 !important;
+            --bw: 3px !important;
+            
+            --shadow-main: 5px 5px 0px #000000 !important;
+            --shadow-accent: 5px 5px 0px var(--accent) !important;
+            --shadow-button: 3px 3px 0px #000000 !important;
+            --shadow-small: 3px 3px 0px #000000 !important;
+        }
+
+        /* Header, wrappers and cards */
+        .header {
+            border-bottom: var(--bw) solid #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .video-wrapper {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-main) !important;
+        }
+        .playlist-card {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-main) !important;
+            background: var(--bg-raised) !important;
+        }
+        .sidebar-pane {
+            border-left: var(--bw) solid #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .local-user-card {
+            border: var(--bw) solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: var(--shadow-small) !important;
+        }
+
+        /* Buttons in Watch Party */
+        .wp-brutal-btn {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-button) !important;
+            border-radius: 4px !important;
+            font-weight: 800 !important;
+        }
+        .wp-brutal-btn:hover {
+            transform: translate(-1px, -1px) !important;
+            box-shadow: 4px 4px 0px #000000 !important;
+        }
+        .wp-brutal-btn:active {
+            transform: translate(2px, 2px) !important;
+            box-shadow: 1px 1px 0px #000000 !important;
+        }
+
+        /* Text Chat elements */
+        .chat-entry.incoming {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: 3px 3px 0px #000000 !important;
+            border-radius: 4px !important;
+            color: var(--text) !important;
+        }
+        .chat-entry.outgoing {
+            border: 2px solid #000000 !important;
+            background: var(--accent-blue) !important;
+            color: #000000 !important;
+            box-shadow: 3px 3px 0px #000000 !important;
+            border-radius: 4px !important;
+        }
+        .chat-entry.outgoing .chat-sender {
+            color: #000000 !important;
+            font-weight: 800 !important;
+        }
+        .chat-entry.outgoing .chat-time {
+            color: rgba(0,0,0,0.6) !important;
+        }
+        .chat-entry.system {
+            border: 2px solid #000000 !important;
+            background: var(--accent-yellow) !important;
+            color: #000000 !important;
+            box-shadow: 2px 2px 0px #000000 !important;
+            border-radius: 4px !important;
+            font-weight: 700 !important;
+        }
+        .chat-input-container {
+            border-top: var(--bw) solid #000000 !important;
+        }
+        .chat-input {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: var(--shadow-small) !important;
+            border-radius: 4px !important;
+        }
+        .chat-input:focus {
+            border-color: var(--accent-blue) !important;
+            box-shadow: 4px 4px 0px var(--accent-blue) !important;
+        }
+        .btn-send {
+            border: 2px solid #000000 !important;
+            background: var(--accent-yellow) !important;
+            color: #000000 !important;
+            box-shadow: var(--shadow-button) !important;
+            border-radius: 4px !important;
+        }
+        .btn-send:hover {
+            background: var(--accent-orange) !important;
+        }
+
+        /* Peer cards / queue items */
+        .peer-item, .queue-item, .playlist-item {
+            border: 2px solid #000000 !important;
+            box-shadow: var(--shadow-small) !important;
+            background: var(--bg) !important;
+            border-radius: 4px !important;
+        }
+        .queue-item:hover, .playlist-item:hover {
+            border-color: #000000 !important;
+            transform: translate(-1px, -1px) !important;
+            box-shadow: 4px 4px 0px #000000 !important;
+        }
+
+        /* Audio slider styling */
+        .peer-volume-slider::-webkit-slider-runnable-track {
+            background: #000000 !important;
+            height: 6px !important;
+            border: 1px solid #000000 !important;
+        }
+        .peer-volume-slider::-webkit-slider-thumb {
+            background: var(--accent-yellow) !important;
+            border: 1px solid #000000 !important;
+            width: 12px !important;
+            height: 12px !important;
+        }
+
+        /* Custom volume master slider */
+        #wp-master-voice-volume::-webkit-slider-thumb {
+            background: var(--accent-yellow) !important;
+        }
+
+        /* Hotkeys Modal */
+        .wp-hotkeys-card {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: 8px 8px 0px #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .wp-hotkeys-header {
+            border-bottom: var(--bw) solid #000000 !important;
+            background: var(--accent-blue) !important;
+            color: #000000 !important;
+        }
+        .wp-key-cap {
+            border: 2px solid #000000 !important;
+            box-shadow: 2px 2px 0px #000000 !important;
+            background: var(--bg) !important;
+        }
+
+        /* Scrollbars for watch party */
+        ::-webkit-scrollbar {
+            width: 10px !important;
+            height: 10px !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg) !important;
+            border-left: var(--bw) solid #000000 !important;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-yellow) !important;
+            border: var(--bw) solid #000000 !important;
+        }
+
+    
+        /* Modal Box & Input overrides */
+        .modal-box {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: 8px 8px 0px #000000 !important;
+            border-radius: 4px !important;
+            background: var(--bg-raised) !important;
+        }
+        .input-field {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            color: var(--text) !important;
+            box-shadow: var(--shadow-small) !important;
+            border-radius: 4px !important;
+        }
+        .input-field:focus {
+            border-color: var(--accent-blue) !important;
+            box-shadow: 3px 3px 0px var(--accent-blue) !important;
+        }
+
+        /* Modal Box & Input overrides */
+        .modal-box {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: 8px 8px 0px #000000 !important;
+            border-radius: 4px !important;
+            background: var(--bg-raised) !important;
+        }
+        .input-field {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            color: var(--text) !important;
+            box-shadow: var(--shadow-small) !important;
+            border-radius: 4px !important;
+        }
+        .input-field:focus {
+            border-color: var(--accent-blue) !important;
+            box-shadow: 3px 3px 0px var(--accent-blue) !important;
+        }
+
+        /* Light Mode Theme Overrides */
+        body[data-theme="light"] {
+            --bg: #F5F4F0 !important;
+            --bg-raised: #FFFFFF !important;
+            --bg-overlay: #EAE9E4 !important;
+            --text: #000000 !important;
+            --text-dim: #3E3E44 !important;
+            --text-muted: #6C6C76 !important;
+            --accent: #FF6B35 !important;
+        }
+    
+    
+        /* ============================================
+           NEO-BRUTALIST OVERRIDES FOR WATCH PARTY
+           ============================================ */
+        :root {
+            --bg: #0C0C0E !important;
+            --bg-raised: #1A1A22 !important;
+            --bg-overlay: #131318 !important;
+            --text: #FFFFFF !important;
+            --text-dim: #A0A0AB !important;
+            --text-muted: #6E6E7A !important;
+            
+            --accent: #FF6B35 !important;
+            --accent-orange: #FF6B35 !important;
+            --accent-blue: #00D8FF !important;
+            --accent-pink: #FF007F !important;
+            --accent-lime: #39FF14 !important;
+            --accent-yellow: #FFD000 !important;
+            --accent-red: #FF3131 !important;
+            
+            --border: #000000 !important;
+            --bw: 3px !important;
+            
+            --shadow-main: 5px 5px 0px #000000 !important;
+            --shadow-accent: 5px 5px 0px var(--accent) !important;
+            --shadow-button: 3px 3px 0px #000000 !important;
+            --shadow-small: 3px 3px 0px #000000 !important;
+        }
+
+        /* Header, wrappers and cards */
+        .header {
+            border-bottom: var(--bw) solid #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .video-wrapper {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-main) !important;
+        }
+        .playlist-card {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-main) !important;
+            background: var(--bg-raised) !important;
+        }
+        .sidebar-pane {
+            border-left: var(--bw) solid #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .local-user-card {
+            border: var(--bw) solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: var(--shadow-small) !important;
+        }
+
+        /* Buttons in Watch Party */
+        .wp-brutal-btn {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: var(--shadow-button) !important;
+            border-radius: 4px !important;
+            font-weight: 800 !important;
+        }
+        .wp-brutal-btn:hover {
+            transform: translate(-1px, -1px) !important;
+            box-shadow: 4px 4px 0px #000000 !important;
+        }
+        .wp-brutal-btn:active {
+            transform: translate(2px, 2px) !important;
+            box-shadow: 1px 1px 0px #000000 !important;
+        }
+
+        /* Text Chat elements */
+        .chat-entry.incoming {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: 3px 3px 0px #000000 !important;
+            border-radius: 4px !important;
+            color: var(--text) !important;
+        }
+        .chat-entry.outgoing {
+            border: 2px solid #000000 !important;
+            background: var(--accent-blue) !important;
+            color: #000000 !important;
+            box-shadow: 3px 3px 0px #000000 !important;
+            border-radius: 4px !important;
+        }
+        .chat-entry.outgoing .chat-sender {
+            color: #000000 !important;
+            font-weight: 800 !important;
+        }
+        .chat-entry.outgoing .chat-time {
+            color: rgba(0,0,0,0.6) !important;
+        }
+        .chat-entry.system {
+            border: 2px solid #000000 !important;
+            background: var(--accent-yellow) !important;
+            color: #000000 !important;
+            box-shadow: 2px 2px 0px #000000 !important;
+            border-radius: 4px !important;
+            font-weight: 700 !important;
+        }
+        .chat-input-container {
+            border-top: var(--bw) solid #000000 !important;
+        }
+        .chat-input {
+            border: 2px solid #000000 !important;
+            background: var(--bg) !important;
+            box-shadow: var(--shadow-small) !important;
+            border-radius: 4px !important;
+        }
+        .chat-input:focus {
+            border-color: var(--accent-blue) !important;
+            box-shadow: 4px 4px 0px var(--accent-blue) !important;
+        }
+        .btn-send {
+            border: 2px solid #000000 !important;
+            background: var(--accent-yellow) !important;
+            color: #000000 !important;
+            box-shadow: var(--shadow-button) !important;
+            border-radius: 4px !important;
+        }
+        .btn-send:hover {
+            background: var(--accent-orange) !important;
+        }
+
+        /* Peer cards / queue items */
+        .peer-item, .queue-item, .playlist-item {
+            border: 2px solid #000000 !important;
+            box-shadow: var(--shadow-small) !important;
+            background: var(--bg) !important;
+            border-radius: 4px !important;
+        }
+        .queue-item:hover, .playlist-item:hover {
+            border-color: #000000 !important;
+            transform: translate(-1px, -1px) !important;
+            box-shadow: 4px 4px 0px #000000 !important;
+        }
+
+        /* Audio slider styling */
+        .peer-volume-slider::-webkit-slider-runnable-track {
+            background: #000000 !important;
+            height: 6px !important;
+            border: 1px solid #000000 !important;
+        }
+        .peer-volume-slider::-webkit-slider-thumb {
+            background: var(--accent-yellow) !important;
+            border: 1px solid #000000 !important;
+            width: 12px !important;
+            height: 12px !important;
+        }
+
+        /* Custom volume master slider */
+        #wp-master-voice-volume::-webkit-slider-thumb {
+            background: var(--accent-yellow) !important;
+        }
+
+        /* Hotkeys Modal */
+        .wp-hotkeys-card {
+            border: var(--bw) solid #000000 !important;
+            box-shadow: 8px 8px 0px #000000 !important;
+            background: var(--bg-raised) !important;
+        }
+        .wp-hotkeys-header {
+            border-bottom: var(--bw) solid #000000 !important;
+            background: var(--accent-blue) !important;
+            color: #000000 !important;
+        }
+        .wp-key-cap {
+            border: 2px solid #000000 !important;
+            box-shadow: 2px 2px 0px #000000 !important;
+            background: var(--bg) !important;
+        }
+
+        /* Scrollbars for watch party */
+        ::-webkit-scrollbar {
+            width: 10px !important;
+            height: 10px !important;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg) !important;
+            border-left: var(--bw) solid #000000 !important;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-yellow) !important;
+            border: var(--bw) solid #000000 !important;
+        }
+
     </style>
 </head>
 <body>
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem("chehro-theme") || "dark";
+            document.body.setAttribute("data-theme", savedTheme);
+        })();
+    </script>
+    <script>
+        (function() {
+            let savedTheme = "dark";
+            try {
+                savedTheme = localStorage.getItem("chehro-theme") || "dark";
+            } catch (e) {
+                console.warn("localStorage access is restricted:", e);
+            }
+            document.body.setAttribute("data-theme", savedTheme);
+        })();
+    </script>
     <!-- Header bar -->
     <header class="header">
         <span class="logo" style="cursor: default; user-select: none;">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
-            AURA<span>SORT</span>
+            CHEH<span>RO</span>
         </span>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="btn-wp-admin-panel" class="btn" style="display: none; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; align-items: center; gap: 0.25rem; background: #eab308; color: #101013; border: none; cursor: pointer; transition: transform 0.1s;"><i class="fa-solid fa-crown"></i> Admin Panel</button>

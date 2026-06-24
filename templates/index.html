@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AuraSort — Premium AI Face Sorter</title>
+    <title>Chehro — Premium AI Face Sorter</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
     <!-- Fonts: Outfit (sans) + JetBrains Mono (mono) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,7 @@
     <!-- Plyr custom video player stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/plyr.css') }}">
     <!-- Custom stylesheet -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3.3">
     <style>
         .nav-item-special {
             display: flex;
@@ -112,26 +112,68 @@
 </head>
 
 <body>
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem("chehro-theme") || "dark";
+            document.body.setAttribute("data-theme", savedTheme);
+        })();
+    </script>
+    <script>
+        (function() {
+            let savedTheme = "dark";
+            try {
+                savedTheme = localStorage.getItem("chehro-theme") || "dark";
+            } catch (e) {
+                console.warn("localStorage access is restricted:", e);
+            }
+            document.body.setAttribute("data-theme", savedTheme);
+            
+            // Set initial view state synchronously to avoid visual flashing of both views
+            const initialHash = window.location.hash;
+            if (initialHash === '#dashboard') {
+                document.body.setAttribute('data-view', 'dashboard');
+            } else {
+                document.body.setAttribute('data-view', 'home');
+            }
+        })();
+    </script>
+        <!-- Chehro Landing Page -->
+    <div id="landing-page" class="landing-page-container">
+        <div class="landing-card">
+            <div class="landing-icon-container">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <h1>CHEH<span>RO</span></h1>
+            <p>Premium AI-driven face sorter, media organizer, and synchronized watch party host.</p>
+            <button type="button" class="btn btn-primary" id="btn-enter-host">
+                Enter as Host <i class="fa-solid fa-right-to-bracket"></i>
+            </button>
+            <div class="landing-footer">
+                Self-Hosted Media Organizer
+            </div>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="logo">
                 <i class="fa-solid fa-wand-magic-sparkles logo-icon"></i>
-                <span class="logo-text">AURA<span>SORT</span></span>
+                <span class="logo-text">CHEH<span>RO</span></span>
             </div>
             
             <nav class="nav-menu">
-                <a href="#results" class="nav-item active" id="btn-nav-results">
+                <a href="#dashboard" class="nav-item active" id="btn-nav-dashboard">
+                    <i class="fa-solid fa-circle-play"></i>
+                    <span>Sort</span>
+                </a>
+                <a href="#results" class="nav-item" id="btn-nav-results">
                     <i class="fa-solid fa-photo-film"></i>
                     <span>Library</span>
                 </a>
                 <a href="#profiles" class="nav-item" id="btn-nav-profiles">
                     <i class="fa-solid fa-user-group"></i>
                     <span>Profiles</span>
-                </a>
-                <a href="#dashboard" class="nav-item" id="btn-nav-dashboard">
-                    <i class="fa-solid fa-bolt"></i>
-                    <span>Pipeline</span>
                 </a>
                 <a href="#duplicates" class="nav-item" id="btn-nav-duplicates">
                     <i class="fa-solid fa-clone"></i>
@@ -141,6 +183,10 @@
                     <i class="fa-solid fa-sliders"></i>
                     <span>Settings</span>
                 </a>
+                <button type="button" class="nav-item" id="btn-theme-toggle" style="background: none; width: 100%; text-align: left; cursor: pointer;">
+                    <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
+                    <span id="theme-toggle-text">Dark</span>
+                </button>
                 <a href="#" class="nav-item-special btn-trigger-watch-party" id="btn-global-watch-party" title="Create Watch Party" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem;">
                     <i class="fa-solid fa-users"></i>
                     <span>Watch Party</span>
@@ -166,8 +212,8 @@
         <main class="main-content">
             <header class="top-bar">
                 <div class="page-title">
-                    <h1 id="page-heading">Library</h1>
-                    <p id="page-subheading">View identified profiles and sorted media folders</p>
+                    <h1 id="page-heading">Sort Your Media</h1>
+                    <p id="page-subheading">Sort photos and videos locally in 3 steps</p>
                 </div>
                 <div class="global-search-trigger-container">
                     <div id="header-search-trigger">
@@ -178,7 +224,7 @@
             </header>
 
             <!-- SECTION 1: LIBRARY (HOME) -->
-            <section id="sec-results" class="content-section active">
+            <section id="sec-results" class="content-section">
                 <div class="results-container">
                     <!-- Recently Played -->
                     <div class="dashboard-card glass" id="recently-watched-card" style="margin-bottom: 2rem; display: none;">
@@ -234,9 +280,13 @@
                     </div>
 
                     <div class="library-grid" id="library-grid">
-                        <div class="no-results-placeholder">
-                            <i class="fa-solid fa-folder-open placeholder-icon"></i>
-                            <p>No sorted directories found. Start sorting from the Pipeline tab.</p>
+                        <div class="no-results-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 1.5rem; text-align: center; gap: 1rem;">
+                            <i class="fa-solid fa-folder-open placeholder-icon" style="font-size: 3.5rem; color: var(--text-muted); margin-bottom: 0.5rem;"></i>
+                            <h3 style="margin: 0; font-weight: 800; font-size: 1.3rem;">No sorted folders yet</h3>
+                            <p style="color: var(--text-dim); max-width: 380px; margin: 0; font-size: 0.9rem; line-height: 1.5;">Choose a media folder and start sorting to see people organized here.</p>
+                            <button class="btn btn-primary" id="btn-empty-start-sorting" style="margin-top: 0.5rem; padding: 0.7rem 1.4rem; font-weight: 800; font-size: 0.85rem;">
+                                <i class="fa-solid fa-circle-play"></i> Start Sorting Now
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -373,71 +423,118 @@
                 </div>
             </section>
 
-            <!-- SECTION 3: PIPELINE (PREVIOUSLY DASHBOARD) -->
-            <section id="sec-dashboard" class="content-section">
-                <div class="dashboard-grid">
-                    <!-- Progress Card -->
-                    <div class="dashboard-card main-progress-card glass">
-                        <div class="card-header">
-                            <h3>Pipeline Progress</h3>
-                            <span class="stage-badge" id="current-stage">IDLE</span>
-                        </div>
-                        
-                        <div class="progress-details">
-                            <div class="progress-meta">
-                                <span class="current-file" id="progress-message">Ready to sort your folder.</span>
-                                <span class="percentage" id="progress-percent">0%</span>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar-fill" id="progress-bar"></div>
-                            </div>
-                        </div>
+            <!-- SECTION 3: SORT / PIPELINE -->
+            <section id="sec-dashboard" class="content-section active">
+                <div class="sort-welcome-banner">
+                    <i class="fa-solid fa-shield-halved banner-icon"></i>
+                    <span><strong>100% Local AI:</strong> Everything runs entirely on your own computer. Your photos and videos are never uploaded to the cloud or shared.</span>
+                </div>
 
-                        <div class="action-buttons">
-                            <button class="btn btn-primary" id="btn-start">
-                                <i class="fa-solid fa-play"></i> Start Sorting Process
-                            </button>
-                            <button class="btn btn-secondary" id="btn-clear-cache-db">
-                                <i class="fa-solid fa-trash-can"></i> Clear Cache
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Quick Stats -->
-                    <div class="stats-row">
-                        <div class="stat-card glass">
-                            <div class="stat-icon pink"><i class="fa-solid fa-venus"></i></div>
-                            <div class="stat-info">
-                                <span class="stat-val" id="stat-females">-</span>
-                                <span class="stat-lbl">Unique Females</span>
-                            </div>
-                        </div>
-                        <div class="stat-card glass">
-                            <div class="stat-icon blue"><i class="fa-solid fa-video"></i></div>
-                            <div class="stat-info">
-                                <span class="stat-val" id="stat-videos">-</span>
-                                <span class="stat-lbl">Sorted Files</span>
-                            </div>
-                        </div>
-                        <div class="stat-card glass">
-                            <div class="stat-icon yellow"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                            <div class="stat-info">
-                                <span class="stat-val" id="stat-unsorted">-</span>
-                                <span class="stat-lbl">Unsorted Files</span>
+                <div class="sort-flow-grid">
+                    <!-- Step 1: Input Folder Card -->
+                    <div class="dashboard-card glass step-card">
+                        <div class="step-badge-icon">1</div>
+                        <div class="step-content">
+                            <h3>Choose Media Folder</h3>
+                            <p class="step-desc">Select the folder containing the raw photos and videos you want to sort. Subfolders will be scanned recursively.</p>
+                            <div class="input-group" style="margin-top: 1.2rem; margin-bottom: 0;">
+                                <div class="input-with-icon">
+                                    <i class="fa-solid fa-folder-open"></i>
+                                    <input type="text" id="input_dir" placeholder="C:\path\to\raw\media" required style="font-weight: 600;">
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Realtime Console Log -->
-                    <div class="dashboard-card console-card glass">
-                        <div class="card-header">
-                            <h3>Real-time System Logs</h3>
-                            <button class="btn btn-icon-only" id="btn-clear-console" title="Clear console view">
-                                <i class="fa-solid fa-circle-xmark"></i>
-                            </button>
+                    <!-- Step 2: Output Folder Card -->
+                    <div class="dashboard-card glass step-card">
+                        <div class="step-badge-icon">2</div>
+                        <div class="step-content">
+                            <h3>Save Sorted Folders To</h3>
+                            <p class="step-desc">Choose where Chehro will create individual folders. Chehro will copy or move files into folders organized by person.</p>
+                            <div class="input-group" style="margin-top: 1.2rem; margin-bottom: 0;">
+                                <div class="input-with-icon">
+                                    <i class="fa-solid fa-folder-tree"></i>
+                                    <input type="text" id="output_dir" placeholder="C:\path\to\sorted\output" required style="font-weight: 600;">
+                                </div>
+                            </div>
                         </div>
-                        <div class="console-output" id="console-logs">
-                            <div class="log-line info">System initialized. Awaiting user commands...</div>
+                    </div>
+
+                    <!-- Step 3: Action & Progress Card -->
+                    <div class="dashboard-card glass step-card start-sorting-card" style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div style="display: flex; gap: 1.2rem; align-items: flex-start; width: 100%;">
+                            <div class="step-badge-icon">3</div>
+                            <div class="step-content" style="flex: 1;">
+                                <h3>Start Sorting Locally</h3>
+                                <p class="step-desc" style="margin-bottom: 1.2rem;">Launch Chehro's local AI facial recognition engine. We will analyze your files, group similar people together, and automatically organize them.</p>
+                                
+                                <div class="sort-action-row" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                    <button class="btn btn-primary" id="btn-start" style="padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-yellow) !important; color: #000000 !important; border-color: #000000 !important;">
+                                        <i class="fa-solid fa-circle-play"></i> Start AI Face Sorter
+                                    </button>
+                                    
+                                    <button type="button" class="btn" id="btn-view-library-shortcut" style="display: none; padding: 0.9rem 1.8rem; font-size: 1.05rem; font-weight: 800; gap: 0.6rem; background: var(--accent-lime) !important; color: #000000 !important; border-color: #000000 !important; box-shadow: var(--shadow-button);">
+                                        <i class="fa-solid fa-photo-film"></i> View Sorted Library
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Section -->
+                        <div class="progress-details" style="width: 100%; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.2rem; margin-top: 0.5rem;">
+                            <div class="progress-meta" style="display: flex; justify-content: space-between; margin-bottom: 0.6rem; font-size: 0.9rem;">
+                                <span class="current-file" id="progress-message" style="font-weight: 700; color: var(--text-dim);">Ready to sort your folder.</span>
+                                <span class="percentage" id="progress-percent" style="font-family: var(--font-mono); font-weight: 900; color: var(--accent-lime);">0.0%</span>
+                            </div>
+                            <div class="progress-bar-container" style="height: 12px; border: var(--bw) solid #000000; background: var(--bg); border-radius: 4px; overflow: hidden; position: relative;">
+                                <div class="progress-bar-fill" id="progress-bar" style="width: 0%; height: 100%; background: var(--accent-lime); transition: width 0.3s ease;"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem;">
+                                <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Current Stage: <strong id="current-stage" style="color: var(--accent-orange);">IDLE</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Developer Logs details -->
+                        <details class="logs-details" style="width: 100%; border: var(--bw) solid #000000; border-radius: 4px; background: var(--bg);">
+                            <summary style="padding: 0.8rem 1.2rem; font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                                <span>Show Technical Details (Developer Logs)</span>
+                                <i class="fa-solid fa-chevron-down details-chevron" style="font-size: 0.8rem;"></i>
+                            </summary>
+                            <div style="padding: 0 1.2rem 1.2rem 1.2rem; border-top: var(--bw) solid #000000;">
+                                <div class="card-header" style="margin-bottom: 0.8rem; padding-top: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">Real-time console output</span>
+                                    <button type="button" class="btn btn-icon-only" id="btn-clear-console" title="Clear console" style="color: var(--text-muted); padding: 0.2rem;"><i class="fa-solid fa-circle-xmark"></i></button>
+                                </div>
+                                <div class="console-output" id="console-logs" style="height: 160px; border: var(--bw) solid #000000; background: #000000; color: #FFFFFF; font-family: var(--font-mono); font-size: 0.78rem; padding: 0.8rem; overflow-y: auto;">
+                                    <div class="log-line info">System initialized. Awaiting user commands...</div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Simple Status Row -->
+                <div class="status-row-simple" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--gap-md);">
+                    <div class="dashboard-card glass status-simple-card">
+                        <i class="fa-solid fa-cpu status-card-icon" style="color: var(--accent-lime);"></i>
+                        <div class="status-card-info">
+                            <span class="status-card-label">Local AI Engine</span>
+                            <span class="status-card-value" id="status-engine-text">Local AI Ready</span>
+                        </div>
+                    </div>
+                    <div class="dashboard-card glass status-simple-card">
+                        <i class="fa-solid fa-folder-open status-card-icon" id="status-folder-icon" style="color: var(--text-muted);"></i>
+                        <div class="status-card-info">
+                            <span class="status-card-label">Folder Setup</span>
+                            <span class="status-card-value" id="status-folders-text">Not Configured</span>
+                        </div>
+                    </div>
+                    <div class="dashboard-card glass status-simple-card">
+                        <i class="fa-solid fa-circle-notch status-card-icon" id="status-sorting-icon" style="color: var(--text-muted);"></i>
+                        <div class="status-card-info">
+                            <span class="status-card-label">Sorting Status</span>
+                            <span class="status-card-value" id="status-sorting-text">System Idle</span>
                         </div>
                     </div>
                 </div>
@@ -505,224 +602,262 @@
 
                         <!-- PANEL 1: App Processing -->
                         <div id="tab-processing-settings" class="settings-tab-panel active">
-                            <!-- Path Configuration Card -->
-                            <div class="dashboard-card glass">
-                            <div class="card-header">
-                                <h3>Directory Paths</h3>
-                            </div>
-                            <div class="input-group">
-                                <label for="input_dir">Input Folder (Videos & Photos)</label>
-                                <div class="input-with-icon">
-                                    <i class="fa-solid fa-folder-open"></i>
-                                    <input type="text" id="input_dir" placeholder="C:\path\to\raw\media" required>
+                            <!-- Basic General Settings Card -->
+                            <div class="dashboard-card glass" style="margin-bottom: 1.5rem;">
+                                <div class="card-header">
+                                    <h3>General Settings</h3>
                                 </div>
-                                <p class="input-desc">Folder containing files to sort. Subdirectories will be scanned recursively.</p>
-                            </div>
-                            <div class="input-group">
-                                <label for="output_dir">Output Folder (Sorted Results)</label>
-                                <div class="input-with-icon">
-                                    <i class="fa-solid fa-folder-tree"></i>
-                                    <input type="text" id="output_dir" placeholder="C:\path\to\sorted\output" required>
+                                <div class="config-row">
+                                    <div class="input-group half">
+                                        <label for="mode">Sorting Mode</label>
+                                        <select id="mode">
+                                            <option value="move">Move Files (Saves Disk Space)</option>
+                                            <option value="copy">Copy Files (Keeps Originals)</option>
+                                        </select>
+                                        <p class="input-desc">Move files directly into folders or copy them to preserve the original files on disk.</p>
+                                    </div>
+                                    <div class="input-group half">
+                                        <label for="model_pack">AI Speed & Accuracy (Model Pack)</label>
+                                        <select id="model_pack">
+                                            <option value="buffalo_l">buffalo_l (Recommended — Balanced & Highly Accurate)</option>
+                                            <option value="buffalo_s">buffalo_s (Lightweight & Extremely Fast)</option>
+                                            <option value="antelopev2">antelopev2 (Maximum Accuracy but Slower)</option>
+                                        </select>
+                                        <p class="input-desc">Choose the AI model. buffalo_l is best for most devices, buffalo_s is for older PCs.</p>
+                                    </div>
                                 </div>
-                                <p class="input-desc">Where identity folders (female_001, etc.) will be created.</p>
+                                <div class="config-row">
+                                    <div class="input-group half">
+                                        <label for="default_video_player">Default Video Player</label>
+                                        <select id="default_video_player">
+                                            <option value="browser">In-App Player (Custom Plyr Player)</option>
+                                            <option value="vlc">Desktop Player (VLC / System Default)</option>
+                                        </select>
+                                        <p class="input-desc">Choose whether clicking playable videos opens them in-app or launches your local desktop player.</p>
+                                    </div>
+                                    <div class="input-group toggle-group half" style="margin-top: 1.5rem; align-self: flex-start;">
+                                        <label class="switch-label" for="auto_name_folders">
+                                            <span>Auto-Name Folders after Sorting</span>
+                                            <p class="input-desc">Enable local AI to automatically search and assign real names to sorted folders.</p>
+                                        </label>
+                                        <label class="switch">
+                                            <input type="checkbox" id="auto_name_folders">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
+
+                            <!-- Collapsible Advanced Settings Accordion -->
+                            <details class="advanced-settings-details" style="border: var(--bw) solid #000000; border-radius: 4px; background: var(--bg-raised); box-shadow: var(--shadow-main); margin-bottom: 1.5rem;">
+                                <summary style="padding: 1.2rem 1.5rem; font-size: 1.05rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; user-select: none; border-radius: 4px;">
+                                    <i class="fa-solid fa-sliders" style="margin-right: 0.6rem; color: var(--accent-pink);"></i>
+                                    <span>Advanced AI & Processing Settings</span>
+                                    <i class="fa-solid fa-chevron-down details-chevron" style="font-size: 0.9rem; margin-left: auto;"></i>
+                                </summary>
+                                <div style="padding: 0 1.5rem 1.5rem 1.5rem; border-top: var(--bw) solid #000000;">
+                                    <div class="advanced-warning-banner" style="display: flex; gap: 0.6rem; align-items: center; background: rgba(255, 140, 0, 0.06); border: 2px solid #000000; padding: 0.8rem 1rem; margin-top: 1.2rem; margin-bottom: 1.5rem; font-size: 0.8rem; font-weight: 700; color: var(--accent-orange); border-radius: 4px;">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span>Only change these if you know your device needs different settings. Default settings work best for most devices.</span>
+                                    </div>
+                                    
+                                    <!-- Card 1: Advanced Pipeline Settings -->
+                                    <div class="dashboard-card glass" style="border: none !important; box-shadow: none !important; padding: 0 !important; margin-bottom: 1.5rem; background: transparent !important;">
+                                        <div class="card-header" style="margin-bottom: 1rem; padding: 0;">
+                                            <h3 style="font-size: 1.1rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem;">Advanced AI & Detection Settings</h3>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="keyframe_interval">Keyframe Sampling Interval</label>
+                                                <select id="keyframe_interval">
+                                                    <option value="0">0 (Extract I-frames only — Fastest)</option>
+                                                    <option value="1">1 second (Extract 1 frame per second)</option>
+                                                    <option value="2">2 seconds (Extract 1 frame every 2s)</option>
+                                                    <option value="5">5 seconds (Extract 1 frame every 5s)</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="max_keyframes">Max Keyframes Per Video</label>
+                                                <input type="number" id="max_keyframes" min="10" max="1000" value="100">
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="scan_depth">Scan Depth</label>
+                                                <select id="scan_depth">
+                                                    <option value="fast">Fast (Scans keyframes quickly)</option>
+                                                    <option value="deep">Deep (Thoroughly analyzes frames)</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="profile_target">Gender Target</label>
+                                                <select id="profile_target">
+                                                    <option value="female">Female only (Standard)</option>
+                                                    <option value="male">Male only</option>
+                                                    <option value="all">All Faces</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="multi_profile_policy">Multi-Profile Policy</label>
+                                                <select id="multi_profile_policy">
+                                                    <option value="primary_only">Primary Profile Only (Single target per video)</option>
+                                                    <option value="copy_all">Copy All Profiles (Assigns video to all matching profiles)</option>
+                                                    <option value="virtual_all">Virtual All Profiles (Creates virtual profile mappings)</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="multi_profile_min_keyframes">Secondary Profile Min Keyframes</label>
+                                                <input type="number" id="multi_profile_min_keyframes" min="1" max="50" value="2">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Card 2: Cache & Performance Settings -->
+                                    <div class="dashboard-card glass" style="border: none !important; box-shadow: none !important; padding: 0 !important; margin-bottom: 1.5rem; background: transparent !important;">
+                                        <div class="card-header" style="margin-bottom: 1rem; padding: 0;">
+                                            <h3 style="font-size: 1.1rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem;">Cache & Performance Settings</h3>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group">
+                                                <label for="extraction_percent">Limit Analysis to % of Video Duration</label>
+                                                <input type="range" id="extraction_percent" min="5" max="100" step="5" value="100">
+                                                <span class="range-value" id="val-extraction_percent">100%</span>
+                                                <p class="input-desc">Only extract keyframes from the first X% of the video duration. Great for 30+ min videos.</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
+                                                <label class="switch-label" for="use_cache">
+                                                    <span>Use SQLite Embedding Cache</span>
+                                                    <p class="input-desc">Skips already-processed videos to make re-runs extremely fast.</p>
+                                                </label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="use_cache" checked>
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                            <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
+                                                <label class="switch-label" for="keep_keyframes">
+                                                    <span>Keep Extracted Keyframes (Debug)</span>
+                                                    <p class="input-desc">Preserves keyframe images on disk to skip extraction entirely on re-run.</p>
+                                                </label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="keep_keyframes">
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="config-row" style="margin-top: 1rem;">
+                                            <div class="input-group">
+                                                <button type="button" class="btn btn-secondary" id="btn-clear-cache-db" style="background: var(--accent-pink) !important; color: #000000 !important; border: var(--bw) solid #000000; box-shadow: var(--shadow-button); font-weight: 800; padding: 0.7rem 1.4rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                                    <i class="fa-solid fa-trash-can"></i> Clear SQLite Embedding Cache
+                                                </button>
+                                                <p class="input-desc">Clearing the cache will force Chehro to analyze all files from scratch on the next run, rebuilding face embeddings.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Card 3: Auto-Naming & Thresholds -->
+                                    <div class="dashboard-card glass" style="border: none !important; box-shadow: none !important; padding: 0 !important; margin-bottom: 1.5rem; background: transparent !important;">
+                                        <div class="card-header" style="margin-bottom: 1rem; padding: 0;">
+                                            <h3 style="font-size: 1.1rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem;">Auto-Naming & Threshold Settings</h3>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
+                                                <label class="switch-label" for="only_name_unnamed">
+                                                    <span>Only Name Unnamed Folders</span>
+                                                    <p class="input-desc">Does not overwrite folders you have manually named.</p>
+                                                </label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="only_name_unnamed" checked>
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                            <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
+                                                <label class="switch-label" for="merge_on_name_conflict">
+                                                    <span>Merge Folders on Name Conflict</span>
+                                                    <p class="input-desc">Merges two folders if the AI identifies them as the same person.</p>
+                                                </label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="merge_on_name_conflict" checked>
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="config-row" style="margin-top: 1rem;">
+                                            <div class="input-group toggle-group">
+                                                <label class="switch-label" for="prefer_popular_identities">
+                                                    <span>Prefer Popular Faces in Multi-Face Videos</span>
+                                                    <p class="input-desc">If a video has multiple faces, prefer the person who appears in more videos overall.</p>
+                                                </label>
+                                                <label class="switch">
+                                                    <input type="checkbox" id="prefer_popular_identities">
+                                                    <span class="slider round"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="config-row" style="margin-top: 1rem;">
+                                            <div class="input-group half">
+                                                <label for="name_confidence_threshold">Name Match Confidence</label>
+                                                <input type="range" id="name_confidence_threshold" min="0.3" max="0.9" step="0.05" value="0.55">
+                                                <span class="range-value" id="val-name_confidence_threshold">0.55</span>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="name_search_delay">Name Search Delay (Seconds)</label>
+                                                <input type="number" id="name_search_delay" min="0.5" max="10.0" step="0.5" value="4.0">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Card 4: Fine Tuning Thresholds -->
+                                    <div class="dashboard-card glass" style="border: none !important; box-shadow: none !important; padding: 0 !important; margin-bottom: 0; background: transparent !important;">
+                                        <div class="card-header" style="margin-bottom: 1rem; padding: 0;">
+                                            <h3 style="font-size: 1.1rem; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem;">AI Thresholds & Fine-Tuning</h3>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="face_det_threshold">Face Detection Confidence</label>
+                                                <input type="range" id="face_det_threshold" min="0.3" max="0.9" step="0.05" value="0.5">
+                                                <span class="range-value" id="val-face_det_threshold">0.50</span>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="gender_threshold">Gender Filter Confidence</label>
+                                                <input type="range" id="gender_threshold" min="0.5" max="0.95" step="0.05" value="0.65">
+                                                <span class="range-value" id="val-gender_threshold">0.65</span>
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="cluster_epsilon">Cluster Similarity Distance (Epsilon)</label>
+                                                <input type="range" id="cluster_epsilon" min="0.3" max="1.2" step="0.05" value="0.85">
+                                                <span class="range-value" id="val-cluster_epsilon">0.85</span>
+                                                <p class="input-desc">Smaller = strict (more folders), Larger = loose (fewer folders / merges varied angles).</p>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="min_cluster_size">Min Detections for Cluster</label>
+                                                <input type="number" id="min_cluster_size" min="1" max="10" value="2">
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <div class="input-group half">
+                                                <label for="min_eye_dist_ratio">Kissing & Profile Filter (Eye Distance Ratio)</label>
+                                                <input type="range" id="min_eye_dist_ratio" min="0.0" max="0.3" step="0.02" value="0.20">
+                                                <span class="range-value" id="val-min_eye_dist_ratio">0.20</span>
+                                                <p class="input-desc">0.0 (off) to 0.3 (strict). Filters side-profiles and overlapping faces during kissing scenes.</p>
+                                            </div>
+                                            <div class="input-group half">
+                                                <label for="min_face_size">Minimum Face Size (Pixels)</label>
+                                                <input type="number" id="min_face_size" min="20" max="250" value="60">
+                                                <p class="input-desc">Ignores tiny background faces.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
-
-                        <!-- Processing Parameters Card -->
-                        <div class="dashboard-card glass">
-                            <div class="card-header">
-                                <h3>Processing Settings</h3>
-                            </div>
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="mode">Sorting Mode</label>
-                                    <select id="mode">
-                                        <option value="move">Move Files (Saves Disk Space)</option>
-                                        <option value="copy">Copy Files (Keeps Originals)</option>
-                                    </select>
-                                </div>
-                                <div class="input-group half">
-                                    <label for="model_pack">InsightFace Model Pack</label>
-                                    <select id="model_pack">
-                                        <option value="buffalo_l">buffalo_l (Recommended — High Accuracy)</option>
-                                        <option value="buffalo_s">buffalo_s (Fast — Low Resource)</option>
-                                        <option value="antelopev2">antelopev2 (Maximum Accuracy — Slowest)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="keyframe_interval">Keyframe Sampling Interval</label>
-                                    <select id="keyframe_interval">
-                                        <option value="0">0 (Extract I-frames only — Fastest)</option>
-                                        <option value="1">1 second (Extract 1 frame per second)</option>
-                                        <option value="2">2 seconds (Extract 1 frame every 2s)</option>
-                                        <option value="5">5 seconds (Extract 1 frame every 5s)</option>
-                                    </select>
-                                </div>
-                                <div class="input-group half">
-                                    <label for="max_keyframes">Max Keyframes Per Video</label>
-                                    <input type="number" id="max_keyframes" min="10" max="1000" value="100">
-                                    <p class="input-desc">Cap to prevent processing bottlenecks on long clips.</p>
-                                </div>
-                            </div>
-
-                            <div class="config-row">
-                                <div class="input-group">
-                                    <label for="extraction_percent">Limit Analysis to % of Video Duration</label>
-                                    <input type="range" id="extraction_percent" min="5" max="100" step="5" value="100">
-                                    <span class="range-value" id="val-extraction_percent">100%</span>
-                                    <p class="input-desc">Only extract keyframes from the first X% of the video duration. Great for 30+ min videos where faces appear early.</p>
-                                </div>
-                            </div>
-
-                            <div class="config-row">
-                                <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
-                                    <label class="switch-label" for="use_cache">
-                                        <span>Use SQLite Embedding Cache</span>
-                                        <p class="input-desc">Skips already-processed videos to make re-runs extremely fast.</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="use_cache" checked>
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
-                                    <label class="switch-label" for="keep_keyframes">
-                                        <span>Keep Extracted Keyframes (Debug)</span>
-                                        <p class="input-desc">Preserves keyframe images on disk to skip extraction entirely on re-run.</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="keep_keyframes">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="config-row">
-                                <div class="input-group toggle-group">
-                                    <label class="switch-label" for="prefer_popular_identities">
-                                        <span>Prefer Popular Faces in Multi-Face Videos</span>
-                                        <p class="input-desc">If a video has multiple female faces, prefer the woman who appears in more videos overall across the library.</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="prefer_popular_identities">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="config-row">
-                                <div class="input-group">
-                                    <label for="default_video_player">Default Video Player</label>
-                                    <select id="default_video_player">
-                                        <option value="browser">In-App Player (Custom Plyr Player)</option>
-                                        <option value="vlc">Desktop Player (VLC / System Default)</option>
-                                    </select>
-                                    <p class="input-desc">Choose whether clicking playable videos opens them in the custom in-app player or launches your local desktop media player (VLC, MPC-HC, etc.). Non-native web formats like MKV always open in the desktop player.</p>
-                                </div>
-                            </div>
-
-                            <div class="config-row">
-                                <div class="input-group toggle-group half" style="margin-right: 0.75rem;">
-                                    <label class="switch-label" for="auto_name_folders">
-                                        <span>Auto-Name Folders after Sorting</span>
-                                        <p class="input-desc">Identifies real names of famous females using filenames and reverse search.</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="auto_name_folders">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="input-group toggle-group half" style="margin-left: 0.75rem;">
-                                    <label class="switch-label" for="only_name_unnamed">
-                                        <span>Only Auto-Name Unnamed Folders</span>
-                                        <p class="input-desc">Only search/rename default folders starting with 'female_' (e.g. female_001), skipping already named ones.</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="only_name_unnamed">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="config-row">
-                                <div class="input-group toggle-group">
-                                    <label class="switch-label" for="merge_on_name_conflict">
-                                        <span>Merge Folders on Name Conflict</span>
-                                        <p class="input-desc">If multiple folders match the same name, auto-merge them (otherwise suffixes like 2, 3 are used).</p>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="merge_on_name_conflict">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="name_confidence_threshold">Name Confidence Threshold</label>
-                                    <input type="range" id="name_confidence_threshold" min="0.3" max="1.0" step="0.05" value="0.5">
-                                    <span class="range-value" id="val-name_confidence_threshold">0.50</span>
-                                    <p class="input-desc">Minimum score needed to automatically rename folders.</p>
-                                </div>
-                                <div class="input-group half">
-                                    <label for="name_search_delay">Search Request Delay (Seconds)</label>
-                                    <input type="number" id="name_search_delay" min="1.0" max="10.0" step="0.5" value="4.0">
-                                    <p class="input-desc">Time to wait between reverse image search requests to prevent API rate limits.</p>
-                                </div>
-                            </div>
-                        </div>
-
-
-
-                        <!-- Fine Tuning Parameters Card -->
-                        <div class="dashboard-card glass">
-                            <div class="card-header">
-                                <h3>Threshold & Fine-Tuning</h3>
-                            </div>
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="face_det_threshold">Face Detection Confidence</label>
-                                    <input type="range" id="face_det_threshold" min="0.3" max="0.9" step="0.05" value="0.5">
-                                    <span class="range-value" id="val-face_det_threshold">0.50</span>
-                                </div>
-                                <div class="input-group half">
-                                    <label for="gender_threshold">Gender Filter Confidence</label>
-                                    <input type="range" id="gender_threshold" min="0.5" max="0.95" step="0.05" value="0.65">
-                                    <span class="range-value" id="val-gender_threshold">0.65</span>
-                                </div>
-                            </div>
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="cluster_epsilon">Cluster Similarity Distance (Epsilon)</label>
-                                    <input type="range" id="cluster_epsilon" min="0.3" max="1.2" step="0.05" value="0.85">
-                                    <span class="range-value" id="val-cluster_epsilon">0.85</span>
-                                    <p class="input-desc">Smaller = strict (more folders), Larger = loose (fewer folders / merges varied angles/expressions).</p>
-
-                                </div>
-                                <div class="input-group half">
-                                    <label for="min_cluster_size">Min Detections for Cluster</label>
-                                    <input type="number" id="min_cluster_size" min="1" max="10" value="2">
-                                </div>
-                            </div>
-                            <div class="config-row">
-                                <div class="input-group half">
-                                    <label for="min_eye_dist_ratio">Kissing & Profile Filter (Eye Distance Ratio)</label>
-                                    <input type="range" id="min_eye_dist_ratio" min="0.0" max="0.3" step="0.02" value="0.20">
-                                    <span class="range-value" id="val-min_eye_dist_ratio">0.20</span>
-                                    <p class="input-desc">0.0 (off) to 0.3 (strict). Filters side-profiles and overlapping faces during kissing scenes.</p>
-                                </div>
-                                <div class="input-group half">
-                                    <label for="min_face_size">Minimum Face Size (Pixels)</label>
-                                    <input type="number" id="min_face_size" min="20" max="250" value="60">
-                                    <p class="input-desc">Ignores tiny background faces.</p>
-                                </div>
-                            </div>
-                        </div>
-                        </div>
-
+                        
                         <!-- PANEL 2: Watch Party Settings & Tutorial -->
                         <div id="tab-watchparty-settings" class="settings-tab-panel">
                             <!-- Cloudflare Tunnel Configuration -->
@@ -860,34 +995,7 @@
                                 </div>
                             </div>
 
-                            <!-- Setup Tutorial -->
-                            <div class="dashboard-card glass">
-                                <div class="card-header">
-                                    <h3><i class="fa-solid fa-book" style="color: var(--accent); margin-right: 0.5rem;"></i> Setup Guide & Tutorial</h3>
-                                </div>
-                                <div class="guide-card">
-                                    <h4>1. How to use Cloudflare Tunnels (100% Free)</h4>
-                                    <ol>
-                                        <li>You don't need any local setup! If you leave the **Cloudflare Tunnel Token** empty, AuraSort will automatically download `cloudflared.exe` and generate a temporary shareable URL for you when you run a Watch Party.</li>
-                                        <li>If you want a persistent, custom domain (e.g. `watch.mywebsite.com`), log in to your **Cloudflare Dashboard**, navigate to **Access / Zero Trust** -> **Tunnels**, create a new tunnel, copy your **Tunnel Token**, and paste it above along with your domain name.</li>
-                                    </ol>
-                                </div>
-                                <div class="guide-card">
-                                    <h4>2. How to get a Free TURN Server (for Voice Chat)</h4>
-                                    <ol>
-                                        <li>WebRTC voice chat needs a public relay server to cross NAT/firewalls.</li>
-                                        <li>Go to [Metered.ca](https://www.metered.ca/) and sign up for a **Free Account** (includes 50GB of TURN data per month, enough for ~2,700 hours of talk time!).</li>
-                                        <li>On your Metered dashboard, copy the **TURN Server URL**, **Username**, and **Password (Credential)**, and paste them in the fields above.</li>
-                                    </ol>
-                                </div>
-                                <div class="guide-card">
-                                    <h4>3. How to choose HLS Transcoding</h4>
-                                    <ul>
-                                        <li>**Toggle ON**: If your home upload bandwidth is limited. AuraSort will slice the video into 4-second segments. Viewers fetch only the current segment and Cloudflare's CDN caches them so that multiple viewers do not pull duplicate data from your machine.</li>
-                                        <li>**Toggle OFF (Default)**: Viewers stream the raw MP4 file directly from your computer. Playback starts instantly with no conversion overhead, but uses more upload speed per viewer.</li>
-                                    </ul>
-                                </div>
-                            </div>
+
                         </div>
 
                         <div class="form-actions">
@@ -1174,7 +1282,7 @@
 
     <!-- Plyr custom video player JS -->
     <script src="{{ url_for('static', filename='js/plyr.polyfilled.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2.2"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=3.2"></script>
 </body>
 </html>
 
