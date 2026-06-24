@@ -2240,8 +2240,35 @@ def rename_folder():
         
     try:
         import sqlite3
-        # Rename the folder on disk
-        os.rename(src_dir, dest_dir)
+        import gc
+        import time
+        
+        # Rename the folder on disk with robust retries for Windows locks
+        renamed = False
+        last_err = None
+        for attempt in range(6):
+            try:
+                # Force Python garbage collection to release any unclosed file handles in this process
+                gc.collect()
+                os.rename(src_dir, dest_dir)
+                renamed = True
+                break
+            except PermissionError as pe:
+                last_err = pe
+                logger.warning(f"Rename attempt {attempt + 1} failed (folder locked). Retrying in 150ms...")
+                time.sleep(0.150)
+            except Exception as e:
+                raise e
+                
+        if not renamed:
+            friendly_msg = (
+                "Access denied: The folder or a file inside it is currently locked by another program. "
+                "This usually happens if a video is playing in VLC/another player, is open in a browser tab, "
+                "or is selected in Windows Explorer. Please close all players or tabs viewing files in this folder and try again."
+            )
+            logger.error(f"Error renaming folder (Access Denied): {last_err}")
+            return jsonify({'status': 'error', 'message': friendly_msg}), 403
+            
         logger.info(f"Renamed folder on disk: {src_dir} -> {dest_dir}")
         
         # Connect to DB and update paths and folder name references
