@@ -1923,23 +1923,23 @@
             transform: scale(0.95);
         }
 
-        /* YouTube Grid style UP NEXT Playlist */
+        /* Horizontal UP NEXT Playlist Carousel */
         .brutal-playlist-container {
             background: var(--bg-raised) !important;
             border: var(--bw) solid var(--border) !important;
             border-radius: 12px !important;
             box-shadow: var(--shadow-main) !important;
             padding: 1.25rem !important;
-            width: 100%;
-            max-width: 1100px;
-            align-self: center;
-            display: flex;
-            flex: 0 0 auto;
-            flex-direction: column;
-            gap: 1rem;
-            overflow: hidden;
-            margin-top: 1.25rem;
-            margin-bottom: 2rem;
+            width: 100% !important;
+            max-width: 1100px !important;
+            align-self: center !important;
+            display: flex !important;
+            flex: 0 0 auto !important;
+            flex-direction: column !important;
+            gap: 1rem !important;
+            overflow: hidden !important;
+            margin-top: 1.25rem !important;
+            margin-bottom: 2rem !important;
         }
         .playlist-title-row {
             font-size: 0.85rem;
@@ -1957,21 +1957,21 @@
             filter: drop-shadow(0 0 8px rgba(255, 107, 53, 0.25));
         }
         .horizontal-playlist-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            align-items: start;
-            gap: 1.25rem;
-            width: 100%;
-            max-height: 520px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 0.25rem 0.5rem 0.5rem 0.25rem;
-            scrollbar-width: thin;
-            scrollbar-color: var(--accent) rgba(255, 255, 255, 0.06);
-            scroll-behavior: smooth;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            gap: 1.25rem !important;
+            width: 100% !important;
+            min-height: 145px !important;
+            padding: 0.25rem 0.5rem 0.75rem 0.25rem !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: var(--accent) rgba(255, 255, 255, 0.06) !important;
+            scroll-behavior: smooth !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar {
-            width: 8px !important;
+            height: 8px !important;
         }
         .horizontal-playlist-row::-webkit-scrollbar-track {
             background: rgba(255, 255, 255, 0.03) !important;
@@ -1992,17 +1992,20 @@
         ::-webkit-scrollbar-button {
             display: none !important;
         }
-        .playlist-thumbnail-card {
-            width: 100%;
-            height: auto !important;
-            aspect-ratio: 16/9;
+        .playlist-thumbnail-card,
+        .playlist-thumbnail-card.playlist-item {
+            display: block !important;
+            flex: 0 0 220px !important;
+            width: 220px !important;
+            height: 124px !important;
+            aspect-ratio: 16/9 !important;
             background: rgba(8, 8, 11, 0.96) !important;
             border: var(--bw) solid var(--border) !important;
             border-radius: 8px !important;
             box-shadow: var(--shadow-small) !important;
-            overflow: hidden;
-            position: relative;
-            cursor: pointer;
+            overflow: hidden !important;
+            position: relative !important;
+            cursor: pointer !important;
             transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.18s ease, box-shadow 0.18s ease !important;
         }
         .playlist-thumbnail-card:hover {
@@ -2016,12 +2019,12 @@
         }
         .playlist-thumbnail-card::after {
             content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 35%, rgba(0, 0, 0, 0.78) 100%);
-            pointer-events: none;
-            opacity: 0.86;
-            transition: opacity 0.18s ease;
+            position: absolute !important;
+            inset: 0 !important;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 35%, rgba(0, 0, 0, 0.78) 100%) !important;
+            pointer-events: none !important;
+            opacity: 0.86 !important;
+            transition: opacity 0.18s ease !important;
         }
         .playlist-thumbnail-card:hover::after {
             opacity: 0.68;

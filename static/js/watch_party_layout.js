@@ -69,7 +69,7 @@
             if (panelId === 'voice') {
                 contentEl.style.display = 'flex';
             } else if (panelId === 'playlist') {
-                contentEl.style.display = 'grid';
+                contentEl.style.display = 'flex';
             } else {
                 contentEl.style.display = 'block';
             }
