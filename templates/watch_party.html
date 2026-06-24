@@ -88,20 +88,18 @@
             box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3), 2px 2px 0px #000000;
         }
 
-        /* Hotkey overlay styling */
+        /* Hotkey overlay styling - Optimized to eliminate backdrop filter rendering lag */
         .wp-hotkeys-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(10, 10, 12, 0.8);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            background: rgba(10, 10, 12, 0.85); /* Solid high-contrast Neo-Brutalist overlay */
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 99999;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.25s ease;
+            transition: opacity 0.15s ease-out; /* Simple, fast opacity fade */
         }
         .wp-hotkeys-overlay.show {
             opacity: 1;
@@ -115,13 +113,13 @@
             width: 90%;
             max-width: 540px;
             overflow: hidden;
-            transform: scale(0.9);
-            transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateY(15px); /* Smooth vertical slide-up instead of heavy scale */
+            transition: transform 0.15s ease-out; /* Lightweight transition */
             /* Claymorphic 3D volumetric shadows + Neo-Brutalist hard shadow */
             box-shadow: inset 4px 4px 8px rgba(255, 255, 255, 0.05), inset -4px -4px 8px rgba(0, 0, 0, 0.4), 8px 8px 0px #000000;
         }
         .wp-hotkeys-overlay.show .wp-hotkeys-card {
-            transform: scale(1);
+            transform: translateY(0);
         }
         .wp-hotkeys-header {
             background: #1e90ff; /* Neon bright clay blue */
@@ -216,9 +214,9 @@
             text-align: center;
         }
 
-        /* Sidebar transition rules */
+        /* Sidebar transition rules - Optimized to prevent high-frequency reflow/repaint calculations on video/canvas elements */
         .sidebar-pane {
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-left-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Toggles instantly to eliminate continuous layout resizing lag */
         }
         .main-container.sidebar-collapsed .sidebar-pane {
             width: 0px !important;
@@ -229,7 +227,7 @@
             overflow: hidden !important;
         }
         .video-wrapper, .playlist-card, .wp-playback-settings-bar {
-            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Toggles instantly to avoid continuous video texture scaling stutter */
         }
         .main-container.theater-mode .video-wrapper {
             max-width: 100% !important;
