@@ -423,13 +423,14 @@
         }
 
         .player-pane {
-            flex: 1.8;
+            flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 1.2rem;
-            gap: var(--bw * 4, 8px);
-            overflow-y: auto;
+            padding: 0;
+            overflow: hidden;
             min-width: 0;
+            min-height: 0;
+            height: 100%;
         }
 
         .video-wrapper {
@@ -437,55 +438,60 @@
             border: var(--bw) solid var(--border);
             aspect-ratio: 16/9;
             width: 100%;
-            max-width: 1100px;
-            align-self: center;
+            max-width: none;
             position: relative;
         }
 
         .watch-media-stage {
             width: 100%;
-            max-width: 1100px;
-            align-self: center;
+            max-width: none;
             min-width: 0;
+            min-height: 0;
+            flex: 1;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
             gap: 0.75rem;
             padding: 0.75rem;
-            background: rgba(8, 11, 16, 0.86);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
-            margin-bottom: 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            margin-bottom: 0;
         }
 
         .watch-main-layout {
             width: 100%;
+            height: 100%;
             min-width: 0;
-            display: grid;
-            grid-template-columns: minmax(220px, 260px) minmax(0, 1100px);
-            gap: 1rem;
-            align-items: start;
-            justify-content: center;
+            min-height: 0;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 0;
+            overflow: hidden;
         }
 
         .cowatch-left-panel {
             min-width: 0;
-            position: sticky;
-            top: 1rem;
-            align-self: start;
+            flex-shrink: 0;
         }
 
         .watch-center-column {
+            flex: 1;
             min-width: 0;
+            min-height: 0;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: stretch;
+            height: 100%;
+            position: relative;
+            background: #111214;
         }
 
         .watch-center-column .watch-media-stage,
         .watch-center-column .brutal-playlist-container {
             width: 100%;
-            max-width: 1100px;
+            max-width: none;
             align-self: stretch;
         }
 
@@ -504,15 +510,12 @@
 
         .watch-media-stage.focus-mode {
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             align-items: stretch;
-            align-content: flex-start;
             gap: 0.75rem;
-            min-height: 520px;
-            height: clamp(520px, calc(100vh - 260px), 780px);
-            max-height: none;
-            overflow-x: auto;
-            overflow-y: hidden;
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
         }
 
         .watch-media-stage .media-tile {
@@ -2949,17 +2952,40 @@
 
         /* --- LEFT SIDE PANEL UP NEXT INTEGRATION --- */
         @media (min-width: 901px) {
+            .player-pane {
+                padding: 0 !important;
+                gap: 0 !important;
+                overflow: hidden !important;
+                display: flex !important;
+                flex-direction: column !important;
+                height: 100% !important;
+                min-width: 0 !important;
+                min-height: 0 !important;
+            }
             .watch-main-layout {
-                grid-template-columns: 340px minmax(0, 1100px) !important;
-                gap: 1.25rem !important;
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: stretch !important;
+                gap: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                overflow: hidden !important;
             }
             .cowatch-left-panel {
-                position: sticky !important;
-                top: 1.2rem !important;
-                height: calc(100vh - 2.4rem) !important;
+                width: 340px !important;
+                min-width: 340px !important;
+                max-width: 340px !important;
+                height: 100% !important;
                 display: flex !important;
                 flex-direction: column !important;
                 gap: 1.25rem !important;
+                padding: 1.25rem !important;
+                border-right: var(--bw) solid var(--border) !important;
+                background: var(--bg-raised) !important;
+                overflow-y: auto !important;
+                flex-shrink: 0 !important;
+                position: relative !important;
+                top: 0 !important;
             }
             .cowatch-left-panel .brutal-playlist-container {
                 margin-top: 0 !important;
@@ -3074,16 +3100,8 @@
 
         /* Collapsible Left Panel overrides for desktop */
         @media (min-width: 901px) {
-            .watch-main-layout.left-collapsed {
-                grid-template-columns: minmax(0, 1100px) !important;
-            }
             .watch-main-layout.left-collapsed .cowatch-left-panel {
                 display: none !important;
-            }
-            /* When right panel is collapsed as well, allow stage to expand to 100% width */
-            .main-container.sidebar-collapsed .watch-center-column .watch-media-stage,
-            .watch-main-layout.left-collapsed .watch-center-column .watch-media-stage {
-                max-width: 100% !important;
             }
         }
 
@@ -3290,39 +3308,44 @@
         
         /* Grid count column modifiers */
         .watch-media-stage.count-1 {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
+            grid-template-rows: 1fr !important;
         }
         .watch-media-stage.count-1 .media-tile {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            max-height: calc(100vh - 300px);
-            margin: auto;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
         }
         
         .watch-media-stage.count-2 {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-rows: 1fr !important;
         }
         .watch-media-stage.count-2 .media-tile {
-            width: 100%;
-            aspect-ratio: 16 / 9;
+            width: 100% !important;
+            height: 100% !important;
         }
         
         .watch-media-stage.count-3,
         .watch-media-stage.count-4 {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
         }
         .watch-media-stage.count-3 .media-tile,
         .watch-media-stage.count-4 .media-tile {
-            width: 100%;
-            aspect-ratio: 16 / 9;
+            width: 100% !important;
+            height: 100% !important;
         }
         
         .watch-media-stage.count-5 {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            grid-template-rows: auto !important;
         }
         .watch-media-stage.count-5 .media-tile {
-            width: 100%;
-            aspect-ratio: 16 / 9;
+            width: 100% !important;
+            height: auto !important;
+            aspect-ratio: 16 / 9 !important;
         }
 
         .media-tile video {
@@ -3333,47 +3356,77 @@
         
         .media-tile.main-video-tile video,
         .media-tile.screen-share-tile video,
-        .media-tile-focused video {
+        .media-tile-focused video,
+        .media-tile .plyr,
+        .media-tile .plyr__video-wrapper,
+        .media-tile .plyr video {
             object-fit: contain !important;
         }
 
-        /* Focus mode auto layout grid */
+        /* Focus mode auto layout */
         .watch-media-stage.focus-mode {
-            display: grid;
-            grid-template-rows: 1fr;
-            grid-template-columns: 1fr;
-            height: calc(100vh - 260px);
-            min-height: 540px;
-            gap: 12px;
-            overflow: hidden;
-            background: #111214;
-        }
-        
-        .watch-media-stage.focus-mode.has-thumbnails {
-            grid-template-rows: 1fr 112px;
-            grid-template-columns: repeat(20, minmax(177px, 1fr));
-            overflow-x: auto;
-            overflow-y: hidden;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+            padding: 1rem !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            background: #111214 !important;
         }
         
         .watch-media-stage.focus-mode .media-tile-focused {
-            grid-row: 1;
-            grid-column: 1;
-            width: 100%;
-            height: 100%;
-            min-height: 0;
+            flex: 1 !important;
+            min-height: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
         }
         
-        .watch-media-stage.focus-mode.has-thumbnails .media-tile-focused {
-            grid-column: 1 / span 20;
+        /* Dynamic scrollable thumbnail strip */
+        .wp-thumbnail-strip {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 10px !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            width: 100% !important;
+            height: 120px !important;
+            min-height: 120px !important;
+            flex-shrink: 0 !important;
+            padding: 5px 0 !important;
+            box-sizing: border-box !important;
         }
         
-        .watch-media-stage.focus-mode.has-thumbnails .media-tile-thumbnail {
-            grid-row: 2;
-            height: 100px;
-            width: 177px;
-            min-width: 177px;
-            aspect-ratio: 16 / 9;
+        .wp-thumbnail-strip::-webkit-scrollbar {
+            height: 6px;
+        }
+        .wp-thumbnail-strip::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        .wp-thumbnail-strip::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .wp-thumbnail-strip .media-tile-thumbnail {
+            width: 177px !important;
+            min-width: 177px !important;
+            max-width: 177px !important;
+            height: 100px !important;
+            min-height: 100px !important;
+            aspect-ratio: 16 / 9 !important;
+            flex-shrink: 0 !important;
+            cursor: pointer !important;
+        }
+        
+        .wp-thumbnail-strip .media-tile-thumbnail video {
+            object-fit: cover !important;
+        }
+        
+        .wp-thumbnail-strip .media-tile-thumbnail.main-video-tile video,
+        .wp-thumbnail-strip .media-tile-thumbnail.screen-share-tile video {
+            object-fit: contain !important;
         }
 
         /* Drawer Styles for Mobile */

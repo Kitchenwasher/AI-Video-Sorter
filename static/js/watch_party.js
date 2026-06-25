@@ -3176,6 +3176,32 @@ if (!window.safeSessionStorage) {
             tile.classList.toggle('media-tile-focused', !!focusedMediaTileId && tileId === focusedMediaTileId);
             tile.classList.toggle('media-tile-thumbnail', !!focusedMediaTileId && tileId !== focusedMediaTileId);
         });
+
+        // Group non-focused tiles inside a horizontal scrolling thumbnail strip if focus mode is active
+        let strip = document.getElementById('wp-thumbnail-strip');
+        if (focusedMediaTileId && mediaTileIds.length > 1) {
+            if (!strip) {
+                strip = document.createElement('div');
+                strip.id = 'wp-thumbnail-strip';
+                strip.className = 'wp-thumbnail-strip';
+                stage.appendChild(strip);
+            }
+            // Move thumbnail tiles into the strip container
+            stage.querySelectorAll('.media-tile-thumbnail').forEach(tile => {
+                strip.appendChild(tile);
+            });
+        } else {
+            if (strip) {
+                // Return static tiles back to the stage first to preserve their DOM references
+                if (mainTile && mainTile.parentNode === strip) {
+                    stage.insertBefore(mainTile, strip);
+                }
+                if (screenTile && screenTile.parentNode === strip) {
+                    stage.insertBefore(screenTile, strip);
+                }
+                strip.remove();
+            }
+        }
     }
 
     function renderWebcamGrid() {
