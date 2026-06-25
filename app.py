@@ -284,6 +284,22 @@ with app.app_context():
                 conn.commit()
             logger.info("Added 'admin_token' column to 'watch_parties' table.")
             
+        # Check custom_sounds columns and alter table if needed
+        try:
+            cs_columns = [c['name'] for c in inspector.get_columns('custom_sounds')]
+            if 'uploaded_by' not in cs_columns:
+                with engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE custom_sounds ADD COLUMN uploaded_by VARCHAR(100)"))
+                    conn.commit()
+                logger.info("Added 'uploaded_by' column to 'custom_sounds' table.")
+            if 'duration' not in cs_columns:
+                with engine.connect() as conn:
+                    conn.execute(db.text("ALTER TABLE custom_sounds ADD COLUMN duration FLOAT"))
+                    conn.commit()
+                logger.info("Added 'duration' column to 'custom_sounds' table.")
+        except Exception as cs_err:
+            logger.warning(f"Failed to check/alter custom_sounds columns: {cs_err}")
+            
         # Automatically detect and heal Windows drive letter changes
         handle_drive_letter_change()
     except Exception as e:
@@ -480,7 +496,8 @@ def handle_join_event(data):
             'queue': party_state.get('queue', []),
             'public_tunnel_url': public_tunnel_url,
             'allow_screen_share': party_state.get('allow_screen_share', False),
-            'active_screen_share': party_state.get('active_screen_share', None)
+            'active_screen_share': party_state.get('active_screen_share', None),
+            'allow_soundboard': party_state.get('allow_soundboard', True)
         })
         
     logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
@@ -618,6 +635,82 @@ def handle_emoji_reaction(data):
         'client_name': client_name,
         'emoji': emoji
     }, to=party_id)
+
+@socketio.on('soundboard_play')
+def handle_soundboard_play(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    client_name = data.get('client_name')
+    sound_id = data.get('sound_id')
+    
+    if not party_id or not client_id or not sound_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        
+        # Check if allowed
+        allow_soundboard = party_state.get('allow_soundboard', True)
+        client_info = party_state['clients'].get(client_id)
+        is_admin = client_info.get('is_admin', False) if client_info else False
+        
+        if not allow_soundboard and not is_admin:
+            return
+            
+        # Cooldown check (rate limit) to prevent spam (1.5 seconds)
+        now = time.time()
+        cooldowns = party_state.setdefault('soundboard_cooldowns', {})
+        last_played = cooldowns.get(client_id, 0.0)
+        if now - last_played < 1.5 and not is_admin:
+            return
+        cooldowns[client_id] = now
+        
+    # Validate sound ID
+    display_name = None
+    for s in DEFAULT_SOUNDS:
+        if s['sound_id'] == sound_id:
+            display_name = s['display_name']
+            break
+            
+    if not display_name:
+        from utils.models import CustomSound
+        cs = CustomSound.query.filter_by(sound_id=sound_id).first()
+        if cs:
+            display_name = cs.display_name
+            
+    if not display_name:
+        return
+        
+    emit('soundboard_play_broadcast', {
+        'client_id': client_id,
+        'client_name': client_name,
+        'sound_id': sound_id,
+        'display_name': display_name
+    }, to=party_id)
+
+@socketio.on('toggle_soundboard')
+def handle_toggle_soundboard(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    allowed = bool(data.get('allowed', True))
+    
+    if not party_id or not client_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        client_info = party_state['clients'].get(client_id)
+        if not client_info or not client_info.get('is_admin', False):
+            return
+            
+        party_state['allow_soundboard'] = allowed
+        emit('soundboard_permission_changed', {
+            'allowed': allowed
+        }, to=party_id)
 
 @socketio.on('laser_move')
 def handle_laser_move(data):
@@ -3288,6 +3381,43 @@ WATCH_PARTY_PLAYABLE_EXTENSIONS = {
     '.jpg', '.jpeg', '.png', '.webp', '.gif'
 }
 
+DEFAULT_SOUNDS = [
+    {"sound_id": "vine_boom", "display_name": "Vine Boom", "url": "/static/sounds/vine_boom.wav"},
+    {"sound_id": "bruh", "display_name": "Bruh", "url": "/static/sounds/bruh.wav"},
+    {"sound_id": "wow", "display_name": "Wow", "url": "/static/sounds/wow.wav"},
+    {"sound_id": "applause", "display_name": "Applause", "url": "/static/sounds/applause.wav"},
+    {"sound_id": "laugh", "display_name": "Laugh", "url": "/static/sounds/laugh.wav"},
+    {"sound_id": "suspense", "display_name": "Suspense", "url": "/static/sounds/suspense.wav"},
+    {"sound_id": "pop", "display_name": "Pop", "url": "/static/sounds/pop.wav"},
+    {"sound_id": "error", "display_name": "Error/beep", "url": "/static/sounds/error.wav"},
+]
+
+def get_audio_duration(file_path):
+    import subprocess
+    import json
+    ffprobe_exe = find_ffprobe()
+    startupinfo = None
+    if os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    cmd = [
+        ffprobe_exe,
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'json',
+        file_path
+    ]
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, timeout=5)
+        if res.returncode == 0:
+            data = json.loads(res.stdout.decode('utf-8', errors='ignore'))
+            duration_val = data.get('format', {}).get('duration')
+            if duration_val:
+                return float(duration_val)
+    except Exception as e:
+        logger.error(f"Error checking duration with ffprobe: {e}")
+    return None
+
 def get_default_watch_party_filename(folder_name):
     """Return the first playable media file for a watch party folder."""
     if not folder_name or not is_safe_path_segment(folder_name):
@@ -3334,6 +3464,7 @@ def ensure_watch_party_state_defaults(party_state, folder_name=None):
     party_state.setdefault('buffering_peers', {})
     party_state.setdefault('allow_screen_share', False)
     party_state.setdefault('active_screen_share', None)
+    party_state.setdefault('allow_soundboard', True)
     return playback_state
 
 def get_watch_party_playback_snapshot(playback_state):
@@ -3928,6 +4059,194 @@ def change_watch_party_folder(party_id):
         
     except Exception as e:
         logger.error(f"Error changing folder for watch party {party_id}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/soundboard/list', methods=['GET'])
+def list_soundboard_sounds():
+    try:
+        from utils.models import CustomSound
+        customs = CustomSound.query.order_by(CustomSound.created_at.asc()).all()
+        custom_sounds = [
+            {
+                "sound_id": item.sound_id,
+                "display_name": item.display_name,
+                "url": f"/static/uploads/soundboard/{item.filename}",
+                "is_custom": True,
+                "uploaded_by": item.uploaded_by,
+                "duration": item.duration
+            } for item in customs
+        ]
+        return jsonify({
+            'status': 'success',
+            'default_sounds': DEFAULT_SOUNDS,
+            'custom_sounds': custom_sounds
+        })
+    except Exception as e:
+        logger.error(f"Error listing soundboard sounds: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/soundboard/upload', methods=['POST'])
+def upload_custom_sound(party_id):
+    admin_token = request.form.get('admin_token')
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty, CustomSound, db
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        display_name = request.form.get('display_name', '').strip()
+        if not display_name:
+            return jsonify({'status': 'error', 'message': 'Display name is required'}), 400
+        if len(display_name) > 100:
+            display_name = display_name[:100]
+            
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'status': 'error', 'message': 'No selected file'}), 400
+            
+        # Validate file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > 5 * 1024 * 1024:
+            return jsonify({'status': 'error', 'message': 'File size exceeds 5MB limit'}), 400
+            
+        from werkzeug.utils import secure_filename
+        orig_filename = secure_filename(file.filename)
+        ext = orig_filename.rsplit('.', 1)[1].lower() if '.' in orig_filename else ''
+        if ext not in {'mp3', 'wav', 'ogg', 'webm'}:
+            return jsonify({'status': 'error', 'message': 'Invalid file format. Allowed: mp3, wav, ogg, webm'}), 400
+            
+        upload_dir = os.path.join(app.static_folder, 'uploads', 'soundboard')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        import uuid
+        sound_id = f"custom_{str(uuid.uuid4())[:8]}"
+        filename = f"{sound_id}_{orig_filename}"
+        temp_path = os.path.join(upload_dir, filename)
+        file.save(temp_path)
+        
+        # Enforce audio duration <= 8 seconds using ffprobe
+        duration = get_audio_duration(temp_path)
+        if duration is not None and duration > 8.0:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+            return jsonify({'status': 'error', 'message': f'Audio duration ({round(duration, 2)}s) exceeds 8s limit'}), 400
+            
+        uploaded_by = request.form.get('client_name', '').strip() or "Host"
+        
+        new_sound = CustomSound(
+            sound_id=sound_id,
+            display_name=display_name,
+            filename=filename,
+            uploaded_by=uploaded_by,
+            duration=duration
+        )
+        db.session.add(new_sound)
+        db.session.commit()
+        
+        # Broadcast soundboard_updated to room
+        socketio.emit('soundboard_updated', to=party_id)
+        
+        return jsonify({
+            'status': 'success',
+            'sound': {
+                'sound_id': sound_id,
+                'display_name': display_name,
+                'url': f'/static/uploads/soundboard/{filename}',
+                'is_custom': True
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error uploading custom sound: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/soundboard/rename/<sound_id>', methods=['POST'])
+def rename_custom_sound(party_id, sound_id):
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    display_name = data.get('display_name', '').strip()
+    
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+    if not display_name:
+        return jsonify({'status': 'error', 'message': 'Display name is required'}), 400
+    if len(display_name) > 100:
+        display_name = display_name[:100]
+        
+    try:
+        from utils.models import WatchParty, CustomSound, db
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        sound = CustomSound.query.filter_by(sound_id=sound_id).first()
+        if not sound:
+            return jsonify({'status': 'error', 'message': 'Sound not found'}), 404
+            
+        sound.display_name = display_name
+        db.session.commit()
+        
+        # Broadcast soundboard_updated to room
+        socketio.emit('soundboard_updated', to=party_id)
+        
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error renaming custom sound: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/watch-party/<party_id>/soundboard/delete/<sound_id>', methods=['POST'])
+def delete_custom_sound(party_id, sound_id):
+    data = request.json or {}
+    admin_token = data.get('admin_token')
+    if not admin_token:
+        return jsonify({'status': 'error', 'message': 'admin_token is required'}), 400
+        
+    try:
+        from utils.models import WatchParty, CustomSound, db
+        party = WatchParty.query.get(party_id)
+        if not party or party.expires_at < datetime.utcnow():
+            return jsonify({'status': 'error', 'message': 'Watch party not found or expired'}), 404
+        if party.admin_token != admin_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
+        sound = CustomSound.query.filter_by(sound_id=sound_id).first()
+        if not sound:
+            return jsonify({'status': 'error', 'message': 'Sound not found'}), 404
+            
+        filename = sound.filename
+        upload_dir = os.path.join(app.static_folder, 'uploads', 'soundboard')
+        file_path = os.path.join(upload_dir, filename)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logger.error(f"Failed to delete custom sound file: {e}")
+                
+        db.session.delete(sound)
+        db.session.commit()
+        
+        # Broadcast soundboard_updated to room
+        socketio.emit('soundboard_updated', to=party_id)
+        
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error deleting custom sound: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

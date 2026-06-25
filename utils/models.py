@@ -62,3 +62,14 @@ class WatchParty(db.Model):
     admin_token = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
+
+
+class CustomSound(db.Model):
+    __tablename__ = 'custom_sounds'
+    id = db.Column(db.Integer, primary_key=True)
+    sound_id = db.Column(db.String(50), unique=True, nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    uploaded_by = db.Column(db.String(100), nullable=True)
+    duration = db.Column(db.Float, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)

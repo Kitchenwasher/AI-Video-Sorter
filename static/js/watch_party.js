@@ -503,6 +503,15 @@ if (!window.safeSessionStorage) {
     let isSlowMode = false;
     let slowModeTimer = null;
     let lastChatSentTime = 0;
+    
+    // Watch Party Soundboard State
+    let isSoundboardAllowed = true;
+    let soundboardVolume = parseFloat(localStorage.getItem('wp_soundboard_volume') || '0.5');
+    let soundboardMuted = localStorage.getItem('wp_soundboard_muted') === 'true';
+    let lastSoundboardPlayTime = 0;
+    let soundboardCache = {};
+    let activeAudioObjects = new Set();
+    let soundboardAudioUnlocked = false;
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('wp-toast-container');
@@ -1087,6 +1096,9 @@ if (!window.safeSessionStorage) {
 
         // Verify admin privileges
         checkAdminStatus();
+        
+        // Initialize Soundboard Controls & UI
+        initializeSoundboard();
 
         // Format active folder name initially if it's a custom uploaded media room
         const badgeEl = document.getElementById('wp-active-folder-name');
@@ -1233,6 +1245,42 @@ if (!window.safeSessionStorage) {
                 toggleScreenShare.checked = allowScreenShare;
             }
             updateScreenShareUI();
+        });
+
+        socket.on('soundboard_play_broadcast', (data) => {
+            const url = soundboardCache[data.sound_id];
+            if (url) {
+                playLocalSound(url);
+                addSystemChatMessage(`${data.client_name} played ${data.display_name}`);
+            } else {
+                fetch('/api/watch-party/soundboard/list')
+                    .then(res => res.json())
+                    .then(listData => {
+                        if (listData.status === 'success') {
+                            listData.default_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                            listData.custom_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                            const cachedUrl = soundboardCache[data.sound_id];
+                            if (cachedUrl) {
+                                playLocalSound(cachedUrl);
+                                addSystemChatMessage(`${data.client_name} played ${data.display_name}`);
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Error fetching sound list on play broadcast:', err));
+            }
+        });
+
+        socket.on('soundboard_updated', () => {
+            loadSoundboardList();
+        });
+
+        socket.on('soundboard_permission_changed', (data) => {
+            isSoundboardAllowed = data.allowed;
+            const sbRoomToggle = document.getElementById('soundboard-room-toggle');
+            if (sbRoomToggle) {
+                sbRoomToggle.checked = isSoundboardAllowed;
+            }
+            updateSoundboardUI();
         });
 
         socket.on('screen_share_started', (data) => {
@@ -1942,17 +1990,23 @@ if (!window.safeSessionStorage) {
     function handleSSEMessage(data) {
         switch (data.type) {
             case 'init':
-                // Initial playback state
                 isPlaybackLocked = data.playback_locked || false;
                 isSlowMode = data.slow_mode || false;
                 allowScreenShare = data.allow_screen_share || false;
                 activeScreenShare = data.active_screen_share || null;
+                isSoundboardAllowed = (data.allow_soundboard !== undefined) ? data.allow_soundboard : true;
                 
                 const toggleScreenShareInit = document.getElementById('admin-toggle-screen-share');
                 if (toggleScreenShareInit) {
                     toggleScreenShareInit.checked = allowScreenShare;
                 }
                 updateScreenShareUI();
+                
+                const sbRoomToggleInit = document.getElementById('soundboard-room-toggle');
+                if (sbRoomToggleInit) {
+                    sbRoomToggleInit.checked = isSoundboardAllowed;
+                }
+                updateSoundboardUI();
                 window.latestWatchPartyInitPayload = data;
                 window.dispatchEvent(new CustomEvent('watchPartyInitPayload', { detail: data }));
                 
@@ -3481,6 +3535,27 @@ if (!window.safeSessionStorage) {
                 searchInput.focus();
             });
         }
+        
+        // Soundboard Admin UI setup
+        const sbAddBtn = document.getElementById('soundboard-add-btn');
+        if (sbAddBtn) sbAddBtn.style.display = 'inline-block';
+        
+        const sbToggleLabel = document.getElementById('soundboard-admin-toggle-label');
+        if (sbToggleLabel) sbToggleLabel.style.display = 'flex';
+
+        const sbRoomToggle = document.getElementById('soundboard-room-toggle');
+        if (sbRoomToggle) {
+            sbRoomToggle.checked = isSoundboardAllowed;
+            sbRoomToggle.onchange = () => {
+                if (window.socket && window.socket.connected) {
+                    window.socket.emit('toggle_soundboard', {
+                        party_id: window.PARTY_ID,
+                        client_id: clientId,
+                        allowed: sbRoomToggle.checked
+                    });
+                }
+            };
+        }
     }
 
     function openFolderSwitcherModal() {
@@ -3601,4 +3676,431 @@ if (!window.safeSessionStorage) {
             container.appendChild(item);
         });
     }
+
+    // --- Watch Party Soundboard Helper Functions ---
+    function initializeSoundboard() {
+        const toggleBtn = document.getElementById('btn-soundboard-toggle');
+        const panel = document.getElementById('soundboard-panel');
+        const volumeSlider = document.getElementById('soundboard-volume-slider');
+        const muteBtn = document.getElementById('soundboard-mute-btn');
+        const warning = document.getElementById('soundboard-autoplay-warning');
+
+        // Toggle Soundboard Panel
+        if (toggleBtn && panel) {
+            toggleBtn.onclick = () => {
+                if (panel.style.display === 'none') {
+                    panel.style.display = 'flex';
+                    toggleBtn.style.color = 'var(--accent)';
+                    loadSoundboardList();
+                } else {
+                    panel.style.display = 'none';
+                    toggleBtn.style.color = 'var(--text-dim)';
+                }
+            };
+        }
+
+        // Volume slider setup
+        if (volumeSlider) {
+            volumeSlider.value = soundboardVolume;
+            volumeSlider.oninput = (e) => {
+                soundboardVolume = parseFloat(e.target.value);
+                localStorage.setItem('wp_soundboard_volume', soundboardVolume);
+                activeAudioObjects.forEach(audio => {
+                    audio.volume = soundboardVolume;
+                });
+            };
+        }
+
+        // Mute button setup
+        if (muteBtn) {
+            const icon = muteBtn.querySelector('i');
+            if (soundboardMuted) {
+                if (icon) {
+                    icon.className = 'fa-solid fa-volume-xmark';
+                    muteBtn.style.color = '#ef4444';
+                }
+            }
+            muteBtn.onclick = () => {
+                soundboardMuted = !soundboardMuted;
+                localStorage.setItem('wp_soundboard_muted', soundboardMuted);
+                
+                if (icon) {
+                    if (soundboardMuted) {
+                        icon.className = 'fa-solid fa-volume-xmark';
+                        muteBtn.style.color = '#ef4444';
+                        activeAudioObjects.forEach(audio => {
+                            audio.pause();
+                        });
+                        activeAudioObjects.clear();
+                    } else {
+                        icon.className = 'fa-solid fa-volume-high';
+                        muteBtn.style.color = 'var(--text)';
+                    }
+                }
+            };
+        }
+
+        // Autoplay warning click handler
+        if (warning) {
+            warning.onclick = () => {
+                unlockSoundboardAudio();
+            };
+        }
+
+        // Load initially
+        loadSoundboardList();
+
+        // Modals: Add Sound Modal
+        const soundboardAddBtn = document.getElementById('soundboard-add-btn');
+        const addSoundOverlay = document.getElementById('wp-add-sound-overlay');
+        const cancelAddBtn = document.getElementById('btn-wp-sound-cancel');
+        const submitAddBtn = document.getElementById('btn-wp-sound-submit');
+        const soundNameInput = document.getElementById('wp-sound-name');
+        const soundFileInput = document.getElementById('wp-sound-file');
+        const uploadErrorDiv = document.getElementById('wp-sound-upload-error');
+
+        if (soundboardAddBtn && addSoundOverlay) {
+            soundboardAddBtn.onclick = () => {
+                soundNameInput.value = '';
+                soundFileInput.value = '';
+                uploadErrorDiv.style.display = 'none';
+                addSoundOverlay.classList.add('active');
+            };
+
+            const closeAddModal = () => {
+                addSoundOverlay.classList.remove('active');
+            };
+
+            cancelAddBtn.onclick = closeAddModal;
+            addSoundOverlay.onclick = (e) => {
+                if (e.target === addSoundOverlay) closeAddModal();
+            };
+
+            submitAddBtn.onclick = () => {
+                const displayName = soundNameInput.value.trim();
+                const file = soundFileInput.files[0];
+
+                if (!displayName) {
+                    uploadErrorDiv.innerText = 'Display name is required';
+                    uploadErrorDiv.style.display = 'block';
+                    return;
+                }
+                if (!file) {
+                    uploadErrorDiv.innerText = 'Audio file is required';
+                    uploadErrorDiv.style.display = 'block';
+                    return;
+                }
+
+                if (file.size > 5 * 1024 * 1024) {
+                    uploadErrorDiv.innerText = 'File size exceeds 5MB limit';
+                    uploadErrorDiv.style.display = 'block';
+                    return;
+                }
+
+                submitAddBtn.disabled = true;
+                submitAddBtn.innerText = 'Uploading...';
+
+                const formData = new FormData();
+                formData.append('display_name', displayName);
+                formData.append('file', file);
+                formData.append('admin_token', adminToken);
+                formData.append('client_name', clientName);
+
+                fetch(`/api/watch-party/${window.PARTY_ID}/soundboard/upload`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        closeAddModal();
+                        showToast('Custom sound added successfully!', 'success');
+                    } else {
+                        uploadErrorDiv.innerText = data.message || 'Upload failed';
+                        uploadErrorDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error uploading sound:', err);
+                    uploadErrorDiv.innerText = 'An error occurred during upload.';
+                    uploadErrorDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    submitAddBtn.disabled = false;
+                    submitAddBtn.innerText = 'Upload';
+                });
+            };
+        }
+
+        // Modals: Rename Sound Modal
+        const renameSoundOverlay = document.getElementById('wp-rename-sound-overlay');
+        const cancelRenameBtn = document.getElementById('btn-wp-sound-rename-cancel');
+        const submitRenameBtn = document.getElementById('btn-wp-sound-rename-submit');
+        const renameNameInput = document.getElementById('wp-rename-sound-name');
+        const renameSoundIdInput = document.getElementById('wp-rename-sound-id');
+        const renameErrorDiv = document.getElementById('wp-sound-rename-error');
+
+        if (renameSoundOverlay) {
+            const closeRenameModal = () => {
+                renameSoundOverlay.classList.remove('active');
+            };
+
+            cancelRenameBtn.onclick = closeRenameModal;
+            renameSoundOverlay.onclick = (e) => {
+                if (e.target === renameSoundOverlay) closeRenameModal();
+            };
+
+            submitRenameBtn.onclick = () => {
+                const displayName = renameNameInput.value.trim();
+                const soundId = renameSoundIdInput.value;
+
+                if (!displayName) {
+                    renameErrorDiv.innerText = 'Display name is required';
+                    renameErrorDiv.style.display = 'block';
+                    return;
+                }
+
+                submitRenameBtn.disabled = true;
+                submitRenameBtn.innerText = 'Saving...';
+
+                fetch(`/api/watch-party/${window.PARTY_ID}/soundboard/rename/${soundId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_token: adminToken,
+                        display_name: displayName
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        closeRenameModal();
+                        showToast('Sound renamed successfully!', 'success');
+                    } else {
+                        renameErrorDiv.innerText = data.message || 'Rename failed';
+                        renameErrorDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error renaming sound:', err);
+                    renameErrorDiv.innerText = 'An error occurred during rename.';
+                    renameErrorDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    submitRenameBtn.disabled = false;
+                    submitRenameBtn.innerText = 'Save';
+                });
+            };
+        }
+    }
+
+    async function loadSoundboardList() {
+        try {
+            const res = await fetch('/api/watch-party/soundboard/list');
+            const data = await res.json();
+            if (data.status === 'success') {
+                // Populate cache
+                data.default_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                data.custom_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                
+                renderSoundboardGrid(data.default_sounds, data.custom_sounds);
+            }
+        } catch (err) {
+            console.error('Error fetching soundboard list:', err);
+        }
+    }
+
+    function renderSoundboardGrid(defaultSounds, customSounds) {
+        const grid = document.getElementById('soundboard-grid');
+        if (!grid) return;
+
+        grid.innerHTML = '';
+        const allSounds = [...defaultSounds, ...customSounds];
+        const isUserAdmin = !!adminToken;
+
+        allSounds.forEach(sound => {
+            const chip = document.createElement('div');
+            chip.className = 'sound-chip';
+            chip.setAttribute('data-sound-id', sound.sound_id);
+
+            const playDiv = document.createElement('div');
+            playDiv.style.display = 'flex';
+            playDiv.style.alignItems = 'center';
+            playDiv.style.gap = '0.35rem';
+            playDiv.style.flex = '1';
+            playDiv.style.minWidth = '0';
+            
+            const badgeHtml = sound.is_custom 
+                ? `<span style="font-size: 0.55rem; background: rgba(255, 140, 0, 0.15); color: var(--accent); padding: 1px 3px; border-radius: 3px; font-weight: 800; text-transform: uppercase; margin-left: 0.25rem; flex-shrink: 0;" title="Uploaded by ${escapeHTML(sound.uploaded_by || 'Host')}">Custom</span>`
+                : '';
+            
+            playDiv.innerHTML = `
+                <i class="fa-solid fa-play" style="font-size: 0.65rem; color: var(--accent); opacity: 0.7;"></i>
+                <span style="font-size: 0.75rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${escapeHTML(sound.display_name)}</span>
+                ${badgeHtml}
+            `;
+            chip.appendChild(playDiv);
+
+            if (isUserAdmin && sound.is_custom) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.style.display = 'flex';
+                actionsDiv.style.alignItems = 'center';
+                actionsDiv.style.gap = '0.25rem';
+
+                // Rename button
+                const renameBtn = document.createElement('button');
+                renameBtn.className = 'sb-edit-btn';
+                renameBtn.title = 'Rename';
+                renameBtn.style.background = 'transparent';
+                renameBtn.style.border = 'none';
+                renameBtn.style.color = 'var(--text-muted)';
+                renameBtn.style.cursor = 'pointer';
+                renameBtn.style.padding = '0.15rem';
+                renameBtn.style.fontSize = '0.65rem';
+                renameBtn.style.display = 'flex';
+                renameBtn.style.alignItems = 'center';
+                renameBtn.style.transition = 'color 0.15s';
+                renameBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                renameBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openRenameSoundModal(sound.sound_id, sound.display_name);
+                };
+
+                // Delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'sb-del-btn';
+                deleteBtn.title = 'Delete';
+                deleteBtn.style.background = 'transparent';
+                deleteBtn.style.border = 'none';
+                deleteBtn.style.color = 'rgba(239, 68, 68, 0.6)';
+                deleteBtn.style.cursor = 'pointer';
+                deleteBtn.style.padding = '0.15rem';
+                deleteBtn.style.fontSize = '0.65rem';
+                deleteBtn.style.display = 'flex';
+                deleteBtn.style.alignItems = 'center';
+                deleteBtn.style.transition = 'color 0.15s';
+                deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteCustomSound(sound.sound_id);
+                };
+
+                actionsDiv.appendChild(renameBtn);
+                actionsDiv.appendChild(deleteBtn);
+                chip.appendChild(actionsDiv);
+            }
+
+            // Chip click play trigger
+            chip.onclick = () => {
+                const now = Date.now();
+                if (now - lastSoundboardPlayTime < 1000 && !isUserAdmin) {
+                    showToast('Soundboard is on cooldown!', 'warning');
+                    return;
+                }
+                lastSoundboardPlayTime = now;
+
+                if (window.socket && window.socket.connected) {
+                    window.socket.emit('soundboard_play', {
+                        party_id: window.PARTY_ID,
+                        client_id: clientId,
+                        client_name: clientName,
+                        sound_id: sound.sound_id
+                    });
+                }
+            };
+
+            grid.appendChild(chip);
+        });
+
+        updateSoundboardUI();
+    }
+
+    function openRenameSoundModal(soundId, currentName) {
+        const renameSoundOverlay = document.getElementById('wp-rename-sound-overlay');
+        const renameNameInput = document.getElementById('wp-rename-sound-name');
+        const renameSoundIdInput = document.getElementById('wp-rename-sound-id');
+        const renameErrorDiv = document.getElementById('wp-sound-rename-error');
+
+        if (!renameSoundOverlay) return;
+        renameNameInput.value = currentName;
+        renameSoundIdInput.value = soundId;
+        renameErrorDiv.style.display = 'none';
+        renameSoundOverlay.classList.add('active');
+    }
+
+    function deleteCustomSound(soundId) {
+        if (!confirm('Are you sure you want to delete this custom sound?')) return;
+
+        fetch(`/api/watch-party/${window.PARTY_ID}/soundboard/delete/${soundId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ admin_token: adminToken })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Sound deleted successfully!', 'success');
+            } else {
+                showToast('Failed to delete sound: ' + data.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Error deleting sound:', err);
+            showToast('An error occurred while deleting the sound.', 'error');
+        });
+    }
+
+    function updateSoundboardUI() {
+        const grid = document.getElementById('soundboard-grid');
+        if (!grid) return;
+
+        const chips = grid.querySelectorAll('.sound-chip');
+        const isUserAdmin = !!adminToken;
+
+        chips.forEach(chip => {
+            if (!isSoundboardAllowed && !isUserAdmin) {
+                chip.style.opacity = '0.4';
+                chip.style.cursor = 'not-allowed';
+                chip.style.pointerEvents = 'none';
+            } else {
+                chip.style.opacity = '1';
+                chip.style.cursor = 'pointer';
+                chip.style.pointerEvents = 'auto';
+            }
+        });
+    }
+
+    function playLocalSound(url) {
+        if (soundboardMuted) return;
+        try {
+            const audio = new Audio(url);
+            audio.volume = soundboardVolume;
+            activeAudioObjects.add(audio);
+            audio.onended = () => activeAudioObjects.delete(audio);
+            audio.onerror = () => activeAudioObjects.delete(audio);
+            audio.play().catch(err => {
+                console.warn('Autoplay blocked soundboard audio playback:', err);
+                const warning = document.getElementById('soundboard-autoplay-warning');
+                if (warning) warning.style.display = 'block';
+                activeAudioObjects.delete(audio);
+            });
+        } catch (e) {
+            console.error('Error playing sound:', e);
+        }
+    }
+
+    function unlockSoundboardAudio() {
+        if (soundboardAudioUnlocked) return;
+        const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD');
+        silentAudio.play().then(() => {
+            soundboardAudioUnlocked = true;
+            const warning = document.getElementById('soundboard-autoplay-warning');
+            if (warning) warning.style.display = 'none';
+            console.log('Soundboard audio unlocked successfully.');
+        }).catch(err => {
+            console.warn('Soundboard audio unlock failed or deferred:', err);
+        });
+    }
+    document.addEventListener('click', unlockSoundboardAudio, { once: true });
+    document.addEventListener('keydown', unlockSoundboardAudio, { once: true });
 })();
