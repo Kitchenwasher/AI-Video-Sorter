@@ -480,6 +480,10 @@ if (!window.safeSessionStorage) {
     let partyPassword = sessionStorage.getItem(`wp_password_${window.PARTY_ID}`) || '';
     
     let localStream = null;
+    let localScreenStream = null;
+    let screenSenders = {}; // maps peerId -> array of RTCRtpSender
+    let allowScreenShare = false;
+    let activeScreenShare = null;
     let sseSource = null;
     let currentFilename = null;
     let mediaLoadSequence = 0;
@@ -794,6 +798,19 @@ if (!window.safeSessionStorage) {
         }
     }
 
+    function initScreenShareButton() {
+        const btnScreenShare = document.getElementById('btn-wp-screen-share');
+        if (btnScreenShare) {
+            btnScreenShare.onclick = () => {
+                if (localScreenStream) {
+                    stopLocalScreenShare();
+                } else {
+                    startLocalScreenShare();
+                }
+            };
+        }
+    }
+
     function initCustomMedia() {
         const customBtn = document.getElementById('btn-wp-custom-media');
         const overlay = document.getElementById('wp-custom-media-overlay');
@@ -939,6 +956,7 @@ if (!window.safeSessionStorage) {
         initCustomMedia();
         initFolderDropdown();
         initThemeToggle();
+        initScreenShareButton();
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');
@@ -1203,6 +1221,31 @@ if (!window.safeSessionStorage) {
 
         socket.on('signal_event', (data) => {
             handleSSEMessage({ type: 'signal', ...data });
+        });
+
+        socket.on('screen_share_permission_changed', (data) => {
+            allowScreenShare = data.allowed;
+            const toggleScreenShare = document.getElementById('admin-toggle-screen-share');
+            if (toggleScreenShare) {
+                toggleScreenShare.checked = allowScreenShare;
+            }
+            updateScreenShareUI();
+        });
+
+        socket.on('screen_share_started', (data) => {
+            activeScreenShare = data;
+            addLogEntry('System', `${data.name} started screen sharing.`);
+            addSystemChatMessage(`${data.name} started screen sharing.`);
+            updateScreenShareUI();
+        });
+
+        socket.on('screen_share_stopped', (data) => {
+            if (activeScreenShare && activeScreenShare.client_id === data.client_id) {
+                activeScreenShare = null;
+            }
+            addLogEntry('System', `Screen sharing stopped.`);
+            addSystemChatMessage(`Screen sharing stopped.`);
+            updateScreenShareUI();
         });
 
         socket.on('folder_changed', (data) => {
@@ -1894,6 +1937,14 @@ if (!window.safeSessionStorage) {
                 // Initial playback state
                 isPlaybackLocked = data.playback_locked || false;
                 isSlowMode = data.slow_mode || false;
+                allowScreenShare = data.allow_screen_share || false;
+                activeScreenShare = data.active_screen_share || null;
+                
+                const toggleScreenShareInit = document.getElementById('admin-toggle-screen-share');
+                if (toggleScreenShareInit) {
+                    toggleScreenShareInit.checked = allowScreenShare;
+                }
+                updateScreenShareUI();
                 window.latestWatchPartyInitPayload = data;
                 window.dispatchEvent(new CustomEvent('watchPartyInitPayload', { detail: data }));
                 
@@ -2182,6 +2233,166 @@ if (!window.safeSessionStorage) {
         return lines.join('\r\n');
     }
 
+    function updateScreenShareUI() {
+        const btn = document.getElementById('btn-wp-screen-share');
+        const text = document.getElementById('wp-screen-share-btn-text');
+        const container = document.getElementById('wp-screen-share-container');
+        const bannerText = document.getElementById('wp-screen-share-text');
+        
+        if (!btn || !text) return;
+        
+        const isSelfSharing = localScreenStream !== null;
+        
+        if (isSelfSharing) {
+            btn.disabled = false;
+            btn.style.setProperty('background', 'var(--accent-pink)', 'important');
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+            text.innerText = 'Stop Sharing';
+        } else if (activeScreenShare) {
+            btn.disabled = true;
+            btn.style.setProperty('background', 'rgba(255,255,255,0.05)', 'important');
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            text.innerText = 'Screen Share Active';
+        } else {
+            const isAllowed = !!adminToken || allowScreenShare;
+            if (isAllowed) {
+                btn.disabled = false;
+                btn.style.setProperty('background', 'var(--accent-blue)', 'important');
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+                text.innerText = 'Share Screen';
+            } else {
+                btn.disabled = true;
+                btn.style.setProperty('background', 'rgba(255,255,255,0.05)', 'important');
+                btn.style.opacity = '0.4';
+                btn.style.pointerEvents = 'none';
+                text.innerText = 'Share Screen (Disabled)';
+            }
+        }
+        
+        if (container) {
+            if (activeScreenShare) {
+                container.style.display = 'flex';
+                if (bannerText) {
+                    const displayName = activeScreenShare.client_id === clientId ? 'You' : activeScreenShare.name;
+                    bannerText.innerText = `Screen shared by ${displayName}`;
+                }
+            } else {
+                container.style.display = 'none';
+                const video = document.getElementById('wp-screen-share-video');
+                if (video && video.srcObject && !isSelfSharing) {
+                    video.srcObject = null;
+                }
+            }
+        }
+    }
+
+    async function startLocalScreenShare() {
+        if (localScreenStream) return;
+        
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    width: { max: 1920 },
+                    height: { max: 1080 },
+                    frameRate: { max: 30 }
+                },
+                audio: false
+            });
+            
+            localScreenStream = stream;
+            
+            const video = document.getElementById('wp-screen-share-video');
+            if (video) {
+                video.srcObject = stream;
+                video.muted = true;
+            }
+            
+            if (window.socket && window.socket.connected) {
+                window.socket.emit('screen_share_start', {
+                    party_id: window.PARTY_ID,
+                    client_id: clientId
+                });
+            }
+            
+            const videoTrack = stream.getVideoTracks()[0];
+            for (const peerId in peerConnections) {
+                const pc = peerConnections[peerId];
+                if (pc) {
+                    if (!screenSenders[peerId]) {
+                        screenSenders[peerId] = [];
+                    }
+                    const sender = pc.addTrack(videoTrack, stream);
+                    screenSenders[peerId].push(sender);
+                    
+                    pc.createOffer()
+                        .then(offer => pc.setLocalDescription(offer).then(() => offer))
+                        .then(offer => sendSignal(peerId, offer))
+                        .catch(err => console.error(`Error negotiating screen share with peer ${peerId}:`, err));
+                }
+            }
+            
+            videoTrack.addEventListener('ended', () => {
+                console.log("Local screen share track ended natively by browser.");
+                stopLocalScreenShare();
+            });
+            
+            updateScreenShareUI();
+            
+        } catch (err) {
+            console.error("Failed to start screen share:", err);
+            showToast("Screen share cancelled or not allowed.", "warning");
+        }
+    }
+
+    function stopLocalScreenShare() {
+        if (!localScreenStream) return;
+        
+        localScreenStream.getTracks().forEach(track => {
+            try { track.stop(); } catch(e) {}
+        });
+        localScreenStream = null;
+        
+        for (const peerId in peerConnections) {
+            const pc = peerConnections[peerId];
+            const senders = screenSenders[peerId];
+            if (pc && senders) {
+                senders.forEach(sender => {
+                    try { pc.removeTrack(sender); } catch(e) {}
+                });
+                delete screenSenders[peerId];
+                
+                pc.createOffer()
+                    .then(offer => pc.setLocalDescription(offer).then(() => offer))
+                    .then(offer => sendSignal(peerId, offer))
+                    .catch(err => console.error(`Error negotiating screen share stop with peer ${peerId}:`, err));
+            }
+        }
+        
+        if (window.socket && window.socket.connected) {
+            window.socket.emit('screen_share_stop', {
+                party_id: window.PARTY_ID,
+                client_id: clientId
+            });
+        }
+        
+        const video = document.getElementById('wp-screen-share-video');
+        if (video) {
+            video.srcObject = null;
+        }
+        
+        updateScreenShareUI();
+    }
+
+    function displayRemoteScreenShare(peerId, stream) {
+        const video = document.getElementById('wp-screen-share-video');
+        if (video) {
+            video.srcObject = stream;
+        }
+    }
+
     function createPeerConnection(peerId, isInitiator) {
         if (peerConnections[peerId]) {
             try { peerConnections[peerId].close(); } catch(e) {}
@@ -2196,6 +2407,17 @@ if (!window.safeSessionStorage) {
         if (localStream) {
             localStream.getTracks().forEach(track => {
                 pc.addTrack(track, localStream);
+            });
+        }
+
+        // Add local screen share tracks if active
+        if (localScreenStream) {
+            if (!screenSenders[peerId]) {
+                screenSenders[peerId] = [];
+            }
+            localScreenStream.getVideoTracks().forEach(track => {
+                const sender = pc.addTrack(track, localScreenStream);
+                screenSenders[peerId].push(sender);
             });
         }
 
@@ -2222,9 +2444,14 @@ if (!window.safeSessionStorage) {
 
         // Receive remote track
         pc.ontrack = (event) => {
-            console.log(`Received remote audio track from peer ${peerId}`);
             const stream = event.streams[0];
-            playRemoteStream(peerId, stream);
+            if (event.track.kind === 'audio') {
+                console.log(`Received remote audio track from peer ${peerId}`);
+                playRemoteStream(peerId, stream);
+            } else if (event.track.kind === 'video') {
+                console.log(`Received remote video (screen share) track from peer ${peerId}`);
+                displayRemoteScreenShare(peerId, stream);
+            }
         };
 
         // If initiator, send offer
@@ -2722,6 +2949,20 @@ if (!window.safeSessionStorage) {
         const folderSelectContainer = document.getElementById('wp-folder-select-container');
         if (folderSelectContainer) {
             folderSelectContainer.style.display = 'flex';
+        }
+
+        const toggleScreenShare = document.getElementById('admin-toggle-screen-share');
+        if (toggleScreenShare) {
+            toggleScreenShare.checked = allowScreenShare;
+            toggleScreenShare.onchange = () => {
+                if (window.socket && window.socket.connected) {
+                    window.socket.emit('toggle_screen_share_permission', {
+                        party_id: window.PARTY_ID,
+                        client_id: clientId,
+                        allowed: toggleScreenShare.checked
+                    });
+                }
+            };
         }
 
         const globalSearchContainer = document.getElementById('wp-global-search-container');

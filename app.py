@@ -413,7 +413,9 @@ def handle_join_event(data):
             'turn_username': turn_username,
             'turn_credential': turn_credential,
             'queue': party_state.get('queue', []),
-            'public_tunnel_url': public_tunnel_url
+            'public_tunnel_url': public_tunnel_url,
+            'allow_screen_share': party_state.get('allow_screen_share', False),
+            'active_screen_share': party_state.get('active_screen_share', None)
         })
         
     logger.info(f"Socket.IO client {client_name} ({client_id}) joined room {party_id} (is_admin: {is_admin})")
@@ -811,6 +813,101 @@ def handle_signal_event(data):
                 'signal': signal_payload
             }, to=target_client['sid'])
 
+@socketio.on('toggle_screen_share_permission')
+def handle_toggle_screen_share_permission(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    allowed = bool(data.get('allowed', False))
+    
+    if not party_id or not client_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        client_info = party_state['clients'].get(client_id)
+        if not client_info or not client_info.get('is_admin', False):
+            return
+            
+        party_state['allow_screen_share'] = allowed
+        emit('screen_share_permission_changed', {
+            'allowed': allowed
+        }, to=party_id)
+
+
+@socketio.on('screen_share_start')
+def handle_screen_share_start(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    
+    if not party_id or not client_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        
+        client_info = party_state['clients'].get(client_id)
+        if not client_info:
+            return
+            
+        is_admin = client_info.get('is_admin', False)
+        allowed_by_room = party_state.get('allow_screen_share', False)
+        
+        if not is_admin and not allowed_by_room:
+            return
+            
+        active = party_state.get('active_screen_share')
+        if active and active.get('client_id') != client_id:
+            if not is_admin:
+                return
+            emit('screen_share_stopped', {
+                'client_id': active.get('client_id')
+            }, to=party_id)
+            
+        party_state['active_screen_share'] = {
+            'client_id': client_id,
+            'name': client_info['name']
+        }
+        
+        emit('screen_share_started', {
+            'client_id': client_id,
+            'name': client_info['name']
+        }, to=party_id)
+
+
+@socketio.on('screen_share_stop')
+def handle_screen_share_stop(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    
+    if not party_id or not client_id:
+        return
+        
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        
+        client_info = party_state['clients'].get(client_id)
+        if not client_info:
+            return
+            
+        active = party_state.get('active_screen_share')
+        if not active:
+            return
+            
+        is_admin = client_info.get('is_admin', False)
+        if active.get('client_id') == client_id or is_admin:
+            stopped_client_id = active.get('client_id')
+            party_state['active_screen_share'] = None
+            emit('screen_share_stopped', {
+                'client_id': stopped_client_id
+            }, to=party_id)
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
     with watch_parties_lock:
@@ -826,6 +923,14 @@ def handle_disconnect():
                             'client_name': client['name'],
                             'buffering': False
                         }, to=party_id)
+                        
+                    active = party_state.get('active_screen_share')
+                    if active and active.get('client_id') == client_id:
+                        party_state['active_screen_share'] = None
+                        emit('screen_share_stopped', {
+                            'client_id': client_id
+                        }, to=party_id)
+                        
                     del party_state['clients'][client_id]
                     emit('peer_left', {
                         'client_id': client_id,
@@ -3159,6 +3264,8 @@ def ensure_watch_party_state_defaults(party_state, folder_name=None):
     party_state.setdefault('cooldowns', {})
     party_state.setdefault('queue', [])
     party_state.setdefault('buffering_peers', {})
+    party_state.setdefault('allow_screen_share', False)
+    party_state.setdefault('active_screen_share', None)
     return playback_state
 
 def get_watch_party_playback_snapshot(playback_state):
