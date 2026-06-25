@@ -64,38 +64,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 from utils.models import db
 db.init_app(app)
 
-with app.app_context():
-    try:
-        db.create_all()
-        logger.info("PostgreSQL database tables verified/created successfully.")
-        
-        # Check if rating column exists in watch_history, if not add it
-        engine = db.engine
-        from sqlalchemy import inspect
-        inspector = inspect(engine)
-        columns = [c['name'] for c in inspector.get_columns('watch_history')]
-        if 'rating' not in columns:
-            with engine.connect() as conn:
-                conn.execute(db.text("ALTER TABLE watch_history ADD COLUMN rating INTEGER"))
-                conn.commit()
-            logger.info("Added 'rating' column to 'watch_history' table.")
 
-        pf_columns = [c['name'] for c in inspector.get_columns('processed_files')]
-        if 'analysis_fingerprint' not in pf_columns:
-            with engine.connect() as conn:
-                conn.execute(db.text("ALTER TABLE processed_files ADD COLUMN analysis_fingerprint VARCHAR"))
-                conn.commit()
-            logger.info("Added 'analysis_fingerprint' column to 'processed_files' table.")
-            
-        # Check if admin_token exists in watch_parties, if not add it
-        wp_columns = [c['name'] for c in inspector.get_columns('watch_parties')]
-        if 'admin_token' not in wp_columns:
-            with engine.connect() as conn:
-                conn.execute(db.text("ALTER TABLE watch_parties ADD COLUMN admin_token VARCHAR(255)"))
-                conn.commit()
-            logger.info("Added 'admin_token' column to 'watch_parties' table.")
-    except Exception as e:
-        logger.error(f"Failed to initialize database tables: {e}")
 
 # Global state
 pipeline_state = {
@@ -221,8 +190,104 @@ def save_settings(config_obj):
         logger.error(f"Failed to save settings.json: {e}")
 
 
+def handle_drive_letter_change():
+    global current_config
+    output_dir = current_config.output_dir
+    if not os.path.exists(output_dir):
+        import string
+        drive, rest = os.path.splitdrive(output_dir)
+        if drive and os.name == 'nt':
+            for letter in string.ascii_uppercase:
+                alt_drive = f"{letter}:"
+                if alt_drive.upper() == drive.upper():
+                    continue
+                candidate_dir = alt_drive + rest
+                if os.path.exists(candidate_dir):
+                    new_drive = alt_drive
+                    old_drive = drive
+                    logger.info(f"Detected drive letter change: '{output_dir}' not found, but '{candidate_dir}' exists. Automatically healing paths from {old_drive} to {new_drive}.")
+                    
+                    # Update config
+                    current_config.output_dir = candidate_dir
+                    in_drive, in_rest = os.path.splitdrive(current_config.input_dir)
+                    if in_drive.upper() == old_drive.upper():
+                        current_config.input_dir = new_drive + in_rest
+                    
+                    # Save settings to disk
+                    try:
+                        save_settings(current_config)
+                    except Exception as e:
+                        logger.error(f"Failed to save settings.json during drive healing: {e}")
+                        
+                    # Update database records
+                    try:
+                        from utils.models import ProcessedFile, WatchHistory, db
+                        
+                        # ProcessedFiles paths
+                        files = ProcessedFile.query.all()
+                        updated_files = 0
+                        for f in files:
+                            if f.file_path.upper().startswith(output_dir.upper()):
+                                suffix = f.file_path[len(output_dir):]
+                                f.file_path = current_config.output_dir + suffix
+                                updated_files += 1
+                        
+                        # WatchHistory paths
+                        histories = WatchHistory.query.all()
+                        updated_histories = 0
+                        for h in histories:
+                            if h.file_path.upper().startswith(output_dir.upper()):
+                                suffix = h.file_path[len(output_dir):]
+                                h.file_path = current_config.output_dir + suffix
+                                updated_histories += 1
+                                
+                        if updated_files > 0 or updated_histories > 0:
+                            db.session.commit()
+                            logger.info(f"Successfully auto-healed {updated_files} ProcessedFile paths and {updated_histories} WatchHistory paths in database.")
+                    except Exception as e:
+                        logger.error(f"Failed to commit database updates for drive healing: {e}")
+                        db.session.rollback()
+                    break
+
+
 # Load config
 current_config = load_settings()
+
+with app.app_context():
+    try:
+        db.create_all()
+        logger.info("PostgreSQL database tables verified/created successfully.")
+        
+        # Check if rating column exists in watch_history, if not add it
+        engine = db.engine
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        columns = [c['name'] for c in inspector.get_columns('watch_history')]
+        if 'rating' not in columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE watch_history ADD COLUMN rating INTEGER"))
+                conn.commit()
+            logger.info("Added 'rating' column to 'watch_history' table.")
+
+        pf_columns = [c['name'] for c in inspector.get_columns('processed_files')]
+        if 'analysis_fingerprint' not in pf_columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE processed_files ADD COLUMN analysis_fingerprint VARCHAR"))
+                conn.commit()
+            logger.info("Added 'analysis_fingerprint' column to 'processed_files' table.")
+            
+        # Check if admin_token exists in watch_parties, if not add it
+        wp_columns = [c['name'] for c in inspector.get_columns('watch_parties')]
+        if 'admin_token' not in wp_columns:
+            with engine.connect() as conn:
+                conn.execute(db.text("ALTER TABLE watch_parties ADD COLUMN admin_token VARCHAR(255)"))
+                conn.commit()
+            logger.info("Added 'admin_token' column to 'watch_parties' table.")
+            
+        # Automatically detect and heal Windows drive letter changes
+        handle_drive_letter_change()
+    except Exception as e:
+        logger.error(f"Failed to initialize database tables: {e}")
 
 def is_safe_path_segment(s: str) -> bool:
     """Checks if a string is a safe path segment (prevents directory traversal)."""
