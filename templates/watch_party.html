@@ -1027,51 +1027,53 @@
             }
         }
         
-        /* Emoji Action Bar */
-        .emoji-action-bar {
+        /* Sidebar Emoji Reaction Bar */
+        .emoji-action-bar-sidebar {
             display: flex;
+            justify-content: space-around;
             align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            background: rgba(25, 25, 30, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            padding: 8px 16px;
-            width: fit-content;
-            margin: 0.5rem auto 0;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 0.35rem 0.5rem;
+            background: rgba(18, 18, 22, 0.8) !important;
+            border-top: 1px solid var(--border);
+            border-bottom: none;
+            gap: 0.25rem;
+            margin: 0.25rem 0.75rem 0.25rem 0.75rem;
+            border-radius: 20px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 5;
         }
         
-        .emoji-btn {
+        .emoji-btn-sidebar {
             background: transparent;
             border: none;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 8px;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            outline: none;
+            transition: transform 0.1s ease, filter 0.15s ease;
             position: relative;
         }
         
-        .emoji-btn:hover {
-            transform: scale(1.25) translateY(-4px);
-            background: rgba(255, 255, 255, 0.08);
+        .emoji-btn-sidebar:hover {
+            transform: scale(1.3) rotate(3deg);
+            filter: drop-shadow(0 0 5px var(--accent-yellow));
         }
         
-        .emoji-btn:active {
-            transform: scale(0.95);
+        .emoji-btn-sidebar:active {
+            transform: scale(0.9);
         }
-        
-        .emoji-btn::after {
+
+        .emoji-btn-sidebar::after {
             content: attr(data-key);
             position: absolute;
-            bottom: -6px;
+            bottom: -3px;
             right: -2px;
             background: var(--accent);
             color: #121216;
-            font-size: 0.6rem;
+            font-size: 0.55rem;
             font-weight: 800;
             border-radius: 4px;
             padding: 1px 3px;
@@ -1865,63 +1867,7 @@
             text-align: center;
         }
 
-        /* Emoji action bar container styling */
-        .brutal-emoji-container {
-            display: flex;
-            align-items: center;
-            background: var(--bg-raised) !important;
-            border: var(--bw) solid #000000 !important;
-            border-radius: 4px;
-            box-shadow: var(--shadow-small) !important;
-            margin-top: 0.75rem;
-            align-self: center;
-            overflow: hidden;
-            max-width: 1100px;
-            width: 100%;
-            position: relative;
-        }
-        .brutal-emoji-container::after {
-            content: '';
-            position: absolute;
-            left: 0; right: 0; bottom: 0;
-            height: 3px;
-            background: var(--accent-pink);
-            pointer-events: none;
-        }
-        .emoji-label {
-            background: var(--accent-yellow) !important;
-            color: #000000 !important;
-            border-right: var(--bw) solid #000000;
-            font-weight: 900;
-            font-size: 0.75rem;
-            padding: 0.5rem 0.85rem;
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            letter-spacing: 0.5px;
-        }
-        .emoji-action-bar-new {
-            display: flex;
-            align-items: center;
-            flex-grow: 1;
-            padding: 0 0.5rem;
-            gap: 0.5rem;
-        }
-        .emoji-btn-new {
-            background: transparent;
-            border: none;
-            font-size: 1.25rem;
-            cursor: pointer;
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            transition: transform 0.1s ease;
-        }
-        .emoji-btn-new:hover {
-            transform: scale(1.25) rotate(4deg);
-        }
-        .emoji-btn-new:active {
-            transform: scale(0.95);
-        }
+
 
         /* Vertical UP NEXT Playlist */
         .brutal-playlist-container {
@@ -2597,20 +2543,7 @@
                 </div>
             </div>
             
-            <!-- Emoji Reaction Bar -->
-            <div class="brutal-emoji-container" id="emoji-action-bar">
-                <div class="emoji-label">
-                    <i class="fa-solid fa-bolt"></i> REACT
-                </div>
-                <div class="emoji-action-bar-new">
-                    <button class="emoji-btn-new" data-emoji="😂" data-key="1">😂</button>
-                    <button class="emoji-btn-new" data-emoji="🔥" data-key="2">🔥</button>
-                    <button class="emoji-btn-new" data-emoji="💀" data-key="3">💀</button>
-                    <button class="emoji-btn-new" data-emoji="👁️" data-key="4">👁️</button>
-                    <button class="emoji-btn-new" data-emoji="💖" data-key="5">💖</button>
-                    <button class="emoji-btn-new" data-emoji="👀" data-key="6">👀</button>
-                </div>
-            </div>
+
             
             <!-- Playback Settings Bar (Modular Speed, Subtitles, Audio track) -->
             <div class="wp-playback-settings-bar" id="wp-playback-settings-bar">
@@ -2737,6 +2670,15 @@
                         <div class="chat-entry system">
                             Welcome to the Watch Party! Type a message below to chat live.
                         </div>
+                    </div>
+                    <!-- Emoji Reaction Bar -->
+                    <div class="emoji-action-bar-sidebar" id="emoji-action-bar">
+                        <button class="emoji-btn-sidebar" data-emoji="😂" data-key="1">😂</button>
+                        <button class="emoji-btn-sidebar" data-emoji="🔥" data-key="2">🔥</button>
+                        <button class="emoji-btn-sidebar" data-emoji="❤️" data-key="3">❤️</button>
+                        <button class="emoji-btn-sidebar" data-emoji="😮" data-key="4">😮</button>
+                        <button class="emoji-btn-sidebar" data-emoji="👏" data-key="5">👏</button>
+                        <button class="emoji-btn-sidebar" data-emoji="💀" data-key="6">💀</button>
                     </div>
                     <div class="chat-input-container">
                         <input type="text" class="chat-input" id="wp-chat-input" placeholder="Type a message...">

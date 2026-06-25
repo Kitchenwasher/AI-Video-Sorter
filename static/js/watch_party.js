@@ -481,6 +481,7 @@ if (!window.safeSessionStorage) {
     
     let localStream = null;
     let localScreenStream = null;
+    let lastReactionTime = 0;
     let screenSenders = {}; // maps peerId -> array of RTCRtpSender
     let allowScreenShare = false;
     let activeScreenShare = null;
@@ -1313,14 +1314,13 @@ if (!window.safeSessionStorage) {
                 return;
             }
             
-            // Map keys 1-6 to emojis
             const emojiMap = {
                 '1': '😂',
                 '2': '🔥',
-                '3': '💀',
-                '4': '👁️',
-                '5': '💖',
-                '6': '👀'
+                '3': '❤️',
+                '4': '😮',
+                '5': '👏',
+                '6': '💀'
             };
             if (emojiMap[e.key]) {
                 e.preventDefault();
@@ -1362,6 +1362,11 @@ if (!window.safeSessionStorage) {
 
     function sendEmojiReaction(emoji) {
         if (!window.socket) return;
+        const now = Date.now();
+        if (now - lastReactionTime < 500) {
+            return;
+        }
+        lastReactionTime = now;
         window.socket.emit('emoji_reaction', {
             party_id: window.PARTY_ID,
             client_id: clientId,

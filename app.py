@@ -610,6 +610,9 @@ def handle_emoji_reaction(data):
     if not party_id or not client_id or not emoji:
         return
         
+    if emoji not in {'😂', '🔥', '❤️', '😮', '👏', '💀'}:
+        return
+        
     emit('emoji_reaction_broadcast', {
         'client_id': client_id,
         'client_name': client_name,
