@@ -22,17 +22,44 @@
         localStorage.setItem('wp_theater_mode', theaterModeActive);
 
         if (theaterModeActive) {
-            mainContainer.classList.add('sidebar-collapsed', 'theater-mode');
+            // Save state before entering theater mode
+            const layout = document.querySelector('.watch-main-layout');
+            const leftCollapsedCurrent = layout ? layout.classList.contains('left-collapsed') : false;
+            const rightCollapsedCurrent = mainContainer.classList.contains('sidebar-collapsed');
+
+            localStorage.setItem('wp_pre_theater_left_collapsed', leftCollapsedCurrent);
+            localStorage.setItem('wp_pre_theater_right_collapsed', rightCollapsedCurrent);
+
+            mainContainer.classList.add('theater-mode');
+            
+            // Collapse both panels using dock controller functions if available
+            if (typeof window.toggleLeftPanel === 'function') {
+                window.toggleLeftPanel(true);
+            }
+            if (typeof window.toggleRightPanel === 'function') {
+                window.toggleRightPanel(true);
+            }
+
             if (btnTheater) {
                 btnTheater.classList.add('active');
-                // Neo-Brutalist active green background
                 btnTheater.style.background = '#2ed573';
             }
         } else {
-            mainContainer.classList.remove('sidebar-collapsed', 'theater-mode');
+            mainContainer.classList.remove('theater-mode');
+            
+            // Restore previous panel states
+            const restoreLeft = localStorage.getItem('wp_pre_theater_left_collapsed') === 'true';
+            const restoreRight = localStorage.getItem('wp_pre_theater_right_collapsed') === 'true';
+
+            if (typeof window.toggleLeftPanel === 'function') {
+                window.toggleLeftPanel(restoreLeft);
+            }
+            if (typeof window.toggleRightPanel === 'function') {
+                window.toggleRightPanel(restoreRight);
+            }
+
             if (btnTheater) {
                 btnTheater.classList.remove('active');
-                // Neo-Brutalist default orange background
                 btnTheater.style.background = '#ffa502';
             }
         }

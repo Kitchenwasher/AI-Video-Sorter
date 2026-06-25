@@ -222,9 +222,11 @@
             width: 0px !important;
             min-width: 0px !important;
             max-width: 0px !important;
-            border-left-width: 0px !important;
+            border-width: 0px !important;
             padding: 0px !important;
+            margin: 0px !important;
             overflow: hidden !important;
+            display: none !important;
         }
         .video-wrapper, .playlist-card, .brutal-playlist-container, .wp-playback-settings-bar {
             /* Toggles instantly to avoid continuous video texture scaling stutter */
@@ -443,7 +445,6 @@
         }
 
         .watch-media-stage {
-            width: 100%;
             max-width: none;
             min-width: 0;
             min-height: 0;
@@ -452,11 +453,14 @@
             grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
             gap: 0.75rem;
             padding: 0.75rem;
-            background: transparent;
-            border: none;
-            border-radius: 0;
-            box-shadow: none;
-            margin-bottom: 0;
+            background: rgba(30, 31, 34, 0.4) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+            margin: 12px !important;
+            box-sizing: border-box !important;
         }
 
         .watch-main-layout {
@@ -2976,17 +2980,38 @@
                 width: 340px !important;
                 min-width: 340px !important;
                 max-width: 340px !important;
-                height: 100% !important;
+                height: calc(100% - 24px) !important;
+                margin: 12px 0 12px 12px !important;
                 display: flex !important;
                 flex-direction: column !important;
                 gap: 1.25rem !important;
                 padding: 1.25rem !important;
-                border-right: var(--bw) solid var(--border) !important;
-                background: var(--bg-raised) !important;
+                border: var(--bw) solid var(--border) !important;
+                border-radius: 12px !important;
+                background: rgba(30, 31, 34, 0.85) !important;
+                backdrop-filter: blur(16px) !important;
+                -webkit-backdrop-filter: blur(16px) !important;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
                 overflow-y: auto !important;
                 flex-shrink: 0 !important;
                 position: relative !important;
                 top: 0 !important;
+            }
+            .sidebar-pane {
+                flex: 0.7 !important;
+                max-width: 360px !important;
+                min-width: 260px !important;
+                height: calc(100% - 24px) !important;
+                margin: 12px 12px 12px 0 !important;
+                border: var(--bw) solid var(--border) !important;
+                background: rgba(30, 31, 34, 0.85) !important;
+                backdrop-filter: blur(16px) !important;
+                -webkit-backdrop-filter: blur(16px) !important;
+                border-radius: 12px !important;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+                overflow: hidden !important;
+                display: flex !important;
+                flex-direction: column !important;
             }
             .cowatch-left-panel .brutal-playlist-container {
                 margin-top: 0 !important;
@@ -3100,10 +3125,50 @@
 
         /* --- DISCORD-LIKE WATCH PARTY CALL UI OVERRIDES --- */
 
+        .panel-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.15);
+            flex-shrink: 0;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+        .panel-header-title {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .panel-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .panel-close-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+        }
+
         /* Collapsible Left Panel overrides for desktop */
         @media (min-width: 901px) {
             .watch-main-layout.left-collapsed .cowatch-left-panel {
                 display: none !important;
+                margin: 0 !important;
+                border-width: 0 !important;
             }
         }
 
@@ -3294,60 +3359,68 @@
             margin: 0 !important;
         }
 
-        /* Dynamic Discord Call Grid Layouts */
-        .watch-media-stage {
-            display: grid;
-            gap: 12px;
-            width: 100%;
-            min-height: 480px;
-            background: #111214;
-            border-radius: 16px;
-            padding: 12px;
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
-            margin-bottom: 0.75rem;
-            box-sizing: border-box;
-        }
-        
         /* Grid count column modifiers */
         .watch-media-stage.count-1 {
-            grid-template-columns: 1fr !important;
-            grid-template-rows: 1fr !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         .watch-media-stage.count-1 .media-tile {
-            width: 100% !important;
-            height: 100% !important;
+            aspect-ratio: 16 / 9 !important;
+            width: auto !important;
+            height: auto !important;
             max-width: 100% !important;
             max-height: 100% !important;
+            flex: 1 1 auto !important;
         }
         
         .watch-media-stage.count-2 {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            grid-template-rows: 1fr !important;
+            grid-template-rows: auto !important;
+            align-content: center !important;
         }
         .watch-media-stage.count-2 .media-tile {
+            aspect-ratio: 16 / 9 !important;
             width: 100% !important;
-            height: 100% !important;
+            height: auto !important;
         }
         
-        .watch-media-stage.count-3,
+        .watch-media-stage.count-3 {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-rows: auto !important;
+            align-content: center !important;
+        }
+        .watch-media-stage.count-3 .media-tile {
+            aspect-ratio: 16 / 9 !important;
+            width: 100% !important;
+            height: auto !important;
+        }
+        .watch-media-stage.count-3 .media-tile:nth-child(3) {
+            grid-column: 1 / -1 !important;
+            width: calc(50% - 6px) !important;
+            justify-self: center !important;
+        }
+
         .watch-media-stage.count-4 {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+            grid-template-rows: auto !important;
+            align-content: center !important;
         }
-        .watch-media-stage.count-3 .media-tile,
         .watch-media-stage.count-4 .media-tile {
+            aspect-ratio: 16 / 9 !important;
             width: 100% !important;
-            height: 100% !important;
+            height: auto !important;
         }
         
         .watch-media-stage.count-5 {
             grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             grid-template-rows: auto !important;
+            align-content: center !important;
         }
         .watch-media-stage.count-5 .media-tile {
+            aspect-ratio: 16 / 9 !important;
             width: 100% !important;
             height: auto !important;
-            aspect-ratio: 16 / 9 !important;
         }
 
         .media-tile video {
@@ -3559,8 +3632,11 @@
             <div class="watch-main-layout">
                 <aside class="cowatch-left-panel" aria-label="Co-Watch Controls">
                     <div class="wp-playback-settings-bar" id="wp-playback-settings-bar">
-                        <div class="wp-playback-settings-title">
-                            <i class="fa-solid fa-sliders"></i> Co-Watch Controls
+                        <div class="wp-playback-settings-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span><i class="fa-solid fa-sliders"></i> Co-Watch Controls</span>
+                            <button class="panel-close-btn" id="btn-close-left-panel" title="Hide left panel" aria-label="Hide left panel">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
                         <div class="wp-playback-settings-pills">
                             <!-- Speed Control Pill -->
@@ -3804,6 +3880,12 @@
         
         <!-- Right: Side Panel (Mic, Chat, Peers) -->
         <div class="sidebar-pane">
+            <div class="panel-header-row right-panel-header">
+                <span class="panel-header-title"><i class="fa-solid fa-comments"></i> Room Panel</span>
+                <button class="panel-close-btn" id="btn-close-right-panel" title="Hide chat panel" aria-label="Hide chat panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
             <!-- Voice & Audio Settings (Feature 6) -->
             <div class="sidebar-section" style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.85rem; background: var(--bg-raised); border: var(--bw) solid var(--border); border-radius: 8px;">
                 <div class="local-user-profile-card">

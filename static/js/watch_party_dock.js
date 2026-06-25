@@ -146,6 +146,23 @@
             };
         }
 
+        // Close Buttons Inside Panels
+        const closeLeftBtn = document.getElementById('btn-close-left-panel');
+        if (closeLeftBtn) {
+            closeLeftBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.toggleLeftPanel(true);
+            };
+        }
+
+        const closeRightBtn = document.getElementById('btn-close-right-panel');
+        if (closeRightBtn) {
+            closeRightBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.toggleRightPanel(true);
+            };
+        }
+
         // Floating Handles
         const leftHandle = document.getElementById('wp-left-float-handle');
         if (leftHandle) {
