@@ -1238,7 +1238,7 @@ def restrict_public_access():
             return render_template(
                 'public_landing.html',
                 title="Private Host",
-                message="This is a private AuraSort server. The administrative dashboard is only accessible from the local host machine.",
+                message="This is a private Chehro server. The administrative dashboard is only accessible from the local host machine.",
                 icon="fa-shield-halved",
                 is_danger=False
             )
