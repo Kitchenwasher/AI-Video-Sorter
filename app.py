@@ -436,13 +436,15 @@ def handle_join_event(data):
             }
         
         party_state = watch_parties_state[party_id]
-        ensure_watch_party_state_defaults(party_state, party.folder_name)
+        ensure_watch_party_state_defaults(party_state, party.folder_name, party_id)
         if client_id in party_state.get('kicked_clients', []):
             emit('kicked_direct')
             return
             
         if admin_token and party_state['admin_token'] == admin_token:
             is_admin = True
+            if not party_state.get('host_client_id'):
+                party_state['host_client_id'] = client_id
             
         party_state['clients'][client_id] = {
             'name': client_name,
@@ -482,14 +484,13 @@ def handle_join_event(data):
                 logger.error(f"Error generating dynamic TURN credentials: {e}")
         
         # Send init payload to client
-        buffering_peers = prune_stale_buffering_peers(party_state)
         emit('init_payload', {
-            'playback_state': get_watch_party_playback_snapshot(party_state['playback_state']),
+            'playback_state': get_watch_party_playback_snapshot(party_state['playback_state'], party_id),
             'playback_locked': party_state.get('playback_locked', False),
             'slow_mode': party_state.get('slow_mode', False),
             'is_admin': is_admin,
             'peers': [{'client_id': c_id, 'name': c['name'], 'avatar': c.get('avatar', 'cool_kid'), 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
-            'buffering_peers': [{'client_id': c_id, 'client_name': peer.get('name', 'Viewer'), 'buffering': True} for c_id, peer in buffering_peers.items() if c_id != client_id],
+            'buffering_peers': [],
             'turn_server': turn_server,
             'turn_username': turn_username,
             'turn_credential': turn_credential,
@@ -497,6 +498,8 @@ def handle_join_event(data):
             'public_tunnel_url': public_tunnel_url,
             'allow_screen_share': party_state.get('allow_screen_share', False),
             'active_screen_share': party_state.get('active_screen_share', None),
+            'allow_webcam': party_state.get('allow_webcam', True),
+            'active_webcams': party_state.get('active_webcams', {}),
             'allow_soundboard': party_state.get('allow_soundboard', True)
         })
         
@@ -550,35 +553,10 @@ def handle_sync_event(data):
             if not is_admin:
                 return
                 
-        playback_state = ensure_watch_party_state_defaults(party_state)
-        previous_filename = playback_state.get('filename')
-        target_filename = filename or previous_filename
-        was_playing = bool(playback_state.get('playing', False))
-        is_playing = True if action == 'play' else False if action == 'pause' else was_playing
-
-        playback_state.update({
-            'filename': target_filename,
-            'position': position,
-            'playing': is_playing,
-            'last_updated': time.time()
-        })
-        if target_filename != previous_filename:
-            party_state.setdefault('buffering_peers', {}).clear()
-            playback_state['subtitle'] = None
-            playback_state['audio_track'] = None
-        
-        emit('sync_event', {
-            'action': action,
-            'position': position,
-            'filename': target_filename,
-            'client_id': client_id,
-            'sender_id': client_id,
-            'playing': is_playing,
-            'speed': playback_state.get('speed', 1.0),
-            'subtitle': playback_state.get('subtitle'),
-            'audio_track': playback_state.get('audio_track'),
-            'timestamp': time.time() * 1000
-        }, to=party_id, include_self=False)
+        sync_state = update_watch_party_playback_state(
+            party_id, party_state, client_id, action, position=position, filename=filename
+        )
+        emit('sync_event', sync_state, to=party_id)
 
 @socketio.on('chat')
 def handle_chat_event(data):
@@ -755,37 +733,9 @@ def handle_clear_drawings(data):
 
 @socketio.on('peer_buffering')
 def handle_peer_buffering(data):
-    party_id = data.get('party_id')
-    client_id = data.get('client_id')
-    buffering = data.get('buffering', False)
-    
-    if not party_id or not client_id:
-        return
-
-    with watch_parties_lock:
-        if party_id not in watch_parties_state:
-            return
-
-        party_state = watch_parties_state[party_id]
-        client_info = party_state.get('clients', {}).get(client_id)
-        if not client_info:
-            return
-
-        client_name = client_info.get('name') or 'Viewer'
-        buffering_peers = prune_stale_buffering_peers(party_state)
-        if buffering:
-            buffering_peers[client_id] = {
-                'name': client_name,
-                'updated_at': time.time()
-            }
-        else:
-            buffering_peers.pop(client_id, None)
-
-        emit('peer_buffering_broadcast', {
-            'client_id': client_id,
-            'client_name': client_name,
-            'buffering': bool(buffering)
-        }, to=party_id, include_self=False)
+    # Buffering is local-only in the authoritative soft-sync model.
+    # Ignore legacy client emits so one viewer can never pause or block the room.
+    return
 
 @socketio.on('sync_ping')
 def handle_sync_ping(data):
@@ -880,15 +830,21 @@ def handle_speed_change(data):
         if party_id not in watch_parties_state:
             return
         party_state = watch_parties_state[party_id]
-        playback_state = ensure_watch_party_state_defaults(party_state)
-        playback_snapshot = get_watch_party_playback_snapshot(playback_state)
-        playback_state['position'] = playback_snapshot.get('position', playback_state.get('position', 0.0))
-        playback_state['speed'] = speed
-        playback_state['last_updated'] = time.time()
+        sync_state = update_watch_party_playback_state(
+            party_id,
+            party_state,
+            client_id,
+            'speed',
+            position=None,
+            filename=None,
+            speed=speed
+        )
         emit('speed_changed_broadcast', {
             'client_id': client_id,
-            'speed': speed
-        }, to=party_id, include_self=False)
+            'speed': sync_state.get('speed', speed),
+            'playback_state': sync_state
+        }, to=party_id)
+        emit('sync_event', sync_state, to=party_id)
 @socketio.on('subtitle_change')
 def handle_subtitle_change(data):
     party_id = data.get('party_id')
@@ -1068,6 +1024,96 @@ def handle_screen_share_stop(data):
                 'client_id': stopped_client_id
             }, to=party_id)
 
+@socketio.on('toggle_webcam_permission')
+def handle_toggle_webcam_permission(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+    allowed = bool(data.get('allowed', True))
+
+    if not party_id or not client_id:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        client_info = party_state['clients'].get(client_id)
+        if not client_info or not client_info.get('is_admin', False):
+            return
+
+        party_state['allow_webcam'] = allowed
+        if not allowed:
+            active_webcams = party_state.setdefault('active_webcams', {})
+            for active_client_id in list(active_webcams.keys()):
+                active_client = party_state['clients'].get(active_client_id, {})
+                if not active_client.get('is_admin', False):
+                    active_webcams.pop(active_client_id, None)
+                    emit('webcam_stopped', {
+                        'client_id': active_client_id
+                    }, to=party_id)
+
+        emit('webcam_permission_changed', {
+            'allowed': allowed,
+            'message': 'Webcam is disabled by admin.' if not allowed else ''
+        }, to=party_id)
+
+
+@socketio.on('webcam_start')
+def handle_webcam_start(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+
+    if not party_id or not client_id:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+
+        client_info = party_state['clients'].get(client_id)
+        if not client_info:
+            return
+
+        is_admin = client_info.get('is_admin', False)
+        allowed_by_room = party_state.get('allow_webcam', True)
+        if not is_admin and not allowed_by_room:
+            emit('webcam_permission_changed', {
+                'allowed': False,
+                'message': 'Webcam is disabled by admin.'
+            }, room=request.sid)
+            return
+
+        active_webcams = party_state.setdefault('active_webcams', {})
+        active_webcams[client_id] = {
+            'client_id': client_id,
+            'name': client_info['name'],
+            'avatar': client_info.get('avatar', 'cool_kid'),
+            'is_admin': is_admin
+        }
+
+        emit('webcam_started', active_webcams[client_id], to=party_id)
+
+
+@socketio.on('webcam_stop')
+def handle_webcam_stop(data):
+    party_id = data.get('party_id')
+    client_id = data.get('client_id')
+
+    if not party_id or not client_id:
+        return
+
+    with watch_parties_lock:
+        if party_id not in watch_parties_state:
+            return
+        party_state = watch_parties_state[party_id]
+        active_webcams = party_state.setdefault('active_webcams', {})
+        active_webcams.pop(client_id, None)
+
+        emit('webcam_stopped', {
+            'client_id': client_id
+        }, to=party_id)
+
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -1076,19 +1122,19 @@ def handle_disconnect():
             for client_id, client in list(party_state['clients'].items()):
                 if client['sid'] == request.sid:
                     buffering_peers = party_state.setdefault('buffering_peers', {})
-                    was_buffering = client_id in buffering_peers
                     buffering_peers.pop(client_id, None)
-                    if was_buffering:
-                        emit('peer_buffering_broadcast', {
-                            'client_id': client_id,
-                            'client_name': client['name'],
-                            'buffering': False
-                        }, to=party_id)
                         
                     active = party_state.get('active_screen_share')
                     if active and active.get('client_id') == client_id:
                         party_state['active_screen_share'] = None
                         emit('screen_share_stopped', {
+                            'client_id': client_id
+                        }, to=party_id)
+
+                    active_webcams = party_state.setdefault('active_webcams', {})
+                    if client_id in active_webcams:
+                        active_webcams.pop(client_id, None)
+                        emit('webcam_stopped', {
                             'client_id': client_id
                         }, to=party_id)
                         
@@ -3382,14 +3428,14 @@ WATCH_PARTY_PLAYABLE_EXTENSIONS = {
 }
 
 DEFAULT_SOUNDS = [
-    {"sound_id": "vine_boom", "display_name": "Vine Boom", "url": "/static/sounds/vine_boom.wav"},
-    {"sound_id": "bruh", "display_name": "Bruh", "url": "/static/sounds/bruh.wav"},
-    {"sound_id": "wow", "display_name": "Wow", "url": "/static/sounds/wow.wav"},
-    {"sound_id": "applause", "display_name": "Applause", "url": "/static/sounds/applause.wav"},
-    {"sound_id": "laugh", "display_name": "Laugh", "url": "/static/sounds/laugh.wav"},
-    {"sound_id": "suspense", "display_name": "Suspense", "url": "/static/sounds/suspense.wav"},
-    {"sound_id": "pop", "display_name": "Pop", "url": "/static/sounds/pop.wav"},
-    {"sound_id": "error", "display_name": "Error/beep", "url": "/static/sounds/error.wav"},
+    {"sound_id": "vine_boom", "display_name": "Vine Boom", "url": "/static/sounds/soundboard/vine_boom.mp3"},
+    {"sound_id": "bruh", "display_name": "Bruh", "url": "/static/sounds/soundboard/bruh.mp3"},
+    {"sound_id": "wow", "display_name": "Wow", "url": "/static/sounds/soundboard/wow.mp3"},
+    {"sound_id": "applause", "display_name": "Applause", "url": "/static/sounds/soundboard/applause.mp3"},
+    {"sound_id": "laugh", "display_name": "Laugh", "url": "/static/sounds/soundboard/laugh.mp3"},
+    {"sound_id": "suspense", "display_name": "Suspense", "url": "/static/sounds/soundboard/suspense.mp3"},
+    {"sound_id": "pop", "display_name": "Pop", "url": "/static/sounds/soundboard/pop.mp3"},
+    {"sound_id": "error", "display_name": "Error/beep", "url": "/static/sounds/soundboard/error.mp3"},
 ]
 
 def get_audio_duration(file_path):
@@ -3445,14 +3491,27 @@ def get_default_watch_party_filename(folder_name):
 
     return None
 
-def ensure_watch_party_state_defaults(party_state, folder_name=None):
+def ensure_watch_party_state_defaults(party_state, folder_name=None, room_id=None):
     playback_state = party_state.setdefault('playback_state', {})
     if not playback_state.get('filename') and folder_name:
         playback_state['filename'] = get_default_watch_party_filename(folder_name)
+    if playback_state.get('current_media') and not playback_state.get('filename'):
+        playback_state['filename'] = playback_state.get('current_media')
+    if playback_state.get('filename') and not playback_state.get('current_media'):
+        playback_state['current_media'] = playback_state.get('filename')
+    if playback_state.get('updated_at') is None:
+        playback_state['updated_at'] = playback_state.get('last_updated', time.time())
+    if playback_state.get('last_updated') is None:
+        playback_state['last_updated'] = playback_state.get('updated_at', time.time())
+    if room_id:
+        playback_state['room_id'] = room_id
     playback_state.setdefault('position', 0.0)
     playback_state.setdefault('playing', False)
     playback_state.setdefault('last_updated', time.time())
+    playback_state.setdefault('updated_at', playback_state.get('last_updated', time.time()))
     playback_state.setdefault('speed', 1.0)
+    playback_state.setdefault('media_version', 1)
+    playback_state.setdefault('last_command_id', 0)
     playback_state.setdefault('subtitle', None)
     playback_state.setdefault('audio_track', None)
 
@@ -3464,15 +3523,101 @@ def ensure_watch_party_state_defaults(party_state, folder_name=None):
     party_state.setdefault('buffering_peers', {})
     party_state.setdefault('allow_screen_share', False)
     party_state.setdefault('active_screen_share', None)
+    party_state.setdefault('allow_webcam', True)
+    party_state.setdefault('active_webcams', {})
     party_state.setdefault('allow_soundboard', True)
+    party_state.setdefault('last_command_id', playback_state.get('last_command_id', 0))
+    party_state.setdefault('host_client_id', None)
     return playback_state
 
-def get_watch_party_playback_snapshot(playback_state):
+def get_watch_party_playback_snapshot(playback_state, room_id=None):
     snapshot = dict(playback_state or {})
+    now = time.time()
+    if room_id:
+        snapshot['room_id'] = room_id
+    if snapshot.get('current_media') and not snapshot.get('filename'):
+        snapshot['filename'] = snapshot.get('current_media')
+    if snapshot.get('filename') and not snapshot.get('current_media'):
+        snapshot['current_media'] = snapshot.get('filename')
+    snapshot['updated_at'] = snapshot.get('updated_at', snapshot.get('last_updated', now))
+    snapshot['last_updated'] = snapshot.get('last_updated', snapshot.get('updated_at', now))
+    snapshot.setdefault('media_version', 1)
+    snapshot.setdefault('last_command_id', 0)
+    snapshot['server_time'] = now
     if snapshot.get('playing'):
-        elapsed = max(0.0, time.time() - snapshot.get('last_updated', time.time()))
+        elapsed = max(0.0, now - snapshot.get('updated_at', snapshot.get('last_updated', now)))
         speed = snapshot.get('speed', 1.0) or 1.0
         snapshot['position'] = max(0.0, snapshot.get('position', 0.0) + (elapsed * speed))
+        snapshot['updated_at'] = now
+        snapshot['last_updated'] = now
+    return snapshot
+
+def update_watch_party_playback_state(party_id, party_state, client_id, action, position=None, filename=None, speed=None):
+    """Apply a playback command to the authoritative room state and return a snapshot."""
+    playback_state = ensure_watch_party_state_defaults(party_state, party_state.get('folder_name'), party_id)
+    now = time.time()
+    current_snapshot = get_watch_party_playback_snapshot(playback_state, party_id)
+    current_media = playback_state.get('current_media') or playback_state.get('filename')
+    target_media = filename or current_media
+    media_changed = bool(target_media and target_media != current_media)
+
+    try:
+        target_position = float(position) if position is not None else float(current_snapshot.get('position', 0.0))
+    except (TypeError, ValueError):
+        target_position = float(current_snapshot.get('position', 0.0) or 0.0)
+
+    if action in ('change_media', 'media_change') or media_changed:
+        target_position = 0.0 if position is None else max(0.0, target_position)
+        playback_state['media_version'] = int(playback_state.get('media_version', 1) or 1) + 1
+        playback_state['subtitle'] = None
+        playback_state['audio_track'] = None
+        party_state.setdefault('buffering_peers', {}).clear()
+    else:
+        target_position = max(0.0, target_position)
+
+    if speed is None:
+        target_speed = playback_state.get('speed', 1.0) or 1.0
+    else:
+        try:
+            target_speed = float(speed)
+        except (TypeError, ValueError):
+            target_speed = playback_state.get('speed', 1.0) or 1.0
+        if target_speed <= 0:
+            target_speed = 1.0
+
+    was_playing = bool(playback_state.get('playing', False))
+    if action == 'play':
+        is_playing = True
+    elif action == 'pause':
+        is_playing = False
+    elif action in ('change_media', 'media_change'):
+        is_playing = False
+    else:
+        is_playing = was_playing
+
+    command_id = int(party_state.get('last_command_id', playback_state.get('last_command_id', 0)) or 0) + 1
+    party_state['last_command_id'] = command_id
+
+    playback_state.update({
+        'room_id': party_id,
+        'filename': target_media,
+        'current_media': target_media,
+        'position': target_position,
+        'playing': is_playing,
+        'speed': target_speed,
+        'updated_at': now,
+        'last_updated': now,
+        'last_command_id': command_id
+    })
+
+    snapshot = get_watch_party_playback_snapshot(playback_state, party_id)
+    snapshot.update({
+        'action': action,
+        'client_id': client_id,
+        'sender_id': client_id,
+        'host_client_id': party_state.get('host_client_id'),
+        'admin_id': party_state.get('host_client_id')
+    })
     return snapshot
 
 def prune_stale_buffering_peers(party_state):
@@ -3723,7 +3868,7 @@ def stream_watch_party(party_id):
                 }
                 
             party_state = watch_parties_state[party_id]
-            ensure_watch_party_state_defaults(party_state, party.folder_name)
+            ensure_watch_party_state_defaults(party_state, party.folder_name, party_id)
             
             # Register new client
             party_state['clients'][client_id] = {
@@ -3732,6 +3877,8 @@ def stream_watch_party(party_id):
                 'last_seen': time.time(),
                 'is_admin': is_admin
             }
+            if is_admin and not party_state.get('host_client_id'):
+                party_state['host_client_id'] = client_id
             
             # Broadcast join event to all other clients
             join_msg = {
@@ -3747,10 +3894,15 @@ def stream_watch_party(party_id):
             # Queue current playback state to new client
             q.put({
                 'type': 'init',
-                'playback_state': get_watch_party_playback_snapshot(party_state['playback_state']),
+                'playback_state': get_watch_party_playback_snapshot(party_state['playback_state'], party_id),
                 'playback_locked': party_state.get('playback_locked', False),
                 'slow_mode': party_state.get('slow_mode', False),
                 'is_admin': is_admin,
+                'allow_screen_share': party_state.get('allow_screen_share', False),
+                'active_screen_share': party_state.get('active_screen_share', None),
+                'allow_webcam': party_state.get('allow_webcam', True),
+                'active_webcams': party_state.get('active_webcams', {}),
+                'allow_soundboard': party_state.get('allow_soundboard', True),
                 'peers': [{'client_id': c_id, 'name': c['name'], 'is_admin': c.get('is_admin', False)} for c_id, c in party_state['clients'].items() if c_id != client_id],
                 'queue': party_state.get('queue', [])
             })
@@ -3778,6 +3930,17 @@ def stream_watch_party(party_id):
                 if party_id in watch_parties_state:
                     party_state = watch_parties_state[party_id]
                     if client_id in party_state['clients']:
+                        active_webcams = party_state.setdefault('active_webcams', {})
+                        if client_id in active_webcams:
+                            active_webcams.pop(client_id, None)
+                            webcam_stop_msg = {
+                                'type': 'webcam_stopped',
+                                'client_id': client_id
+                            }
+                            for c_id, client in party_state['clients'].items():
+                                if c_id != client_id:
+                                    client['queue'].put(webcam_stop_msg)
+
                         del party_state['clients'][client_id]
                         
                         # Broadcast leave event
@@ -3824,40 +3987,17 @@ def sync_watch_party(party_id):
             if not is_admin:
                 return jsonify({'status': 'ignored', 'message': 'Playback is locked by admin'}), 200
                 
-        # Update playback state
-        playback_state = ensure_watch_party_state_defaults(party_state)
-        previous_filename = playback_state.get('filename')
-        target_filename = filename or previous_filename
-        was_playing = bool(playback_state.get('playing', False))
-        is_playing = True if action == 'play' else False if action == 'pause' else was_playing
-        playback_state.update({
-            'filename': target_filename,
-            'position': position,
-            'playing': is_playing,
-            'last_updated': time.time()
-        })
-        if target_filename != previous_filename:
-            party_state.setdefault('buffering_peers', {}).clear()
-            playback_state['subtitle'] = None
-            playback_state['audio_track'] = None
-        
-        # Broadcast event to other clients
-        sync_msg = {
+        # Update playback state and broadcast the full authoritative snapshot.
+        sync_msg = update_watch_party_playback_state(
+            party_id, party_state, client_id, action, position=position, filename=filename
+        )
+        sync_msg.update({
             'type': 'sync',
-            'action': action,
-            'position': position,
-            'filename': target_filename,
-            'sender_id': client_id,
-            'playing': is_playing,
-            'speed': playback_state.get('speed', 1.0),
-            'subtitle': playback_state.get('subtitle'),
-            'audio_track': playback_state.get('audio_track')
-        }
+        })
         for c_id, client in party_state['clients'].items():
-            if c_id != client_id:
-                client['queue'].put(sync_msg)
+            client['queue'].put(sync_msg)
                 
-    return jsonify({'status': 'success'})
+    return jsonify({'status': 'success', 'playback_state': sync_msg})
 
 
 @app.route('/api/watch-party/<party_id>/chat', methods=['POST'])
@@ -4035,22 +4175,23 @@ def change_watch_party_folder(party_id):
                     None
                 )
                 
-            party_state['playback_state'] = {
-                'filename': selected_filename,
-                'position': 0.0,
-                'playing': False,
-                'last_updated': time.time(),
-                'speed': previous_speed,
-                'subtitle': None,
-                'audio_track': None
-            }
-            party_state.setdefault('buffering_peers', {}).clear()
+            ensure_watch_party_state_defaults(party_state, new_folder_name, party_id)
+            playback_snapshot = update_watch_party_playback_state(
+                party_id,
+                party_state,
+                'system',
+                'change_media',
+                position=0.0,
+                filename=selected_filename,
+                speed=previous_speed
+            )
             
             # Broadcast folder change over Socket.IO room
             socketio.emit('folder_changed', {
                 'folder_name': new_folder_name,
                 'files': new_media_files,
                 'target_filename': selected_filename,
+                'playback_state': playback_snapshot,
                 'sender_id': 'system'
             }, to=party_id)
                 
@@ -4284,13 +4425,12 @@ def kick_watch_party_client(party_id):
                 # Emit direct kick to target client over Socket.IO
                 socketio.emit('kicked_direct', {}, to=target_client['sid'])
                 buffering_peers = party_state.setdefault('buffering_peers', {})
-                was_buffering = target_client_id in buffering_peers
                 buffering_peers.pop(target_client_id, None)
-                if was_buffering:
-                    socketio.emit('peer_buffering_broadcast', {
-                        'client_id': target_client_id,
-                        'client_name': target_client['name'],
-                        'buffering': False
+                active_webcams = party_state.setdefault('active_webcams', {})
+                if target_client_id in active_webcams:
+                    active_webcams.pop(target_client_id, None)
+                    socketio.emit('webcam_stopped', {
+                        'client_id': target_client_id
                     }, to=party_id)
                 
                 # Immediately remove from clients list to update participant UI instantly

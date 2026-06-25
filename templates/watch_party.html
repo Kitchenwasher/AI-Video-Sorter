@@ -64,28 +64,28 @@
             font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: #000000 !important;
-            background: #ffa502; /* Puffy bright orange/yellow */
-            border: 2.5px solid #000000;
+            color: var(--on-warm) !important;
+            background: var(--accent-yellow);
+            border: 2.5px solid var(--border);
             border-radius: 14px;
             cursor: pointer;
             transition: all 0.15s ease;
             /* Claymorphic inner shadow/light + Neo-Brutalist solid shadow */
-            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3), 3px 3px 0px #000000;
+            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3), 3px 3px 0px rgba(2, 6, 23, 0.55);
             user-select: none;
         }
         .wp-brutal-btn:hover {
             transform: translate(-1px, -1px);
-            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.5), inset -2px -2px 4px rgba(0, 0, 0, 0.2), 4px 4px 0px #000000;
-            background: #ff7f50; /* slightly darker warm coral */
+            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.5), inset -2px -2px 4px rgba(0, 0, 0, 0.2), 4px 4px 0px rgba(2, 6, 23, 0.55);
+            background: var(--accent-orange);
         }
         .wp-brutal-btn:active {
             transform: translate(2px, 2px);
-            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.2), inset -1px -1px 2px rgba(0, 0, 0, 0.4), 1px 1px 0px #000000;
+            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.2), inset -1px -1px 2px rgba(0, 0, 0, 0.4), 1px 1px 0px rgba(2, 6, 23, 0.55);
         }
         .wp-brutal-btn.active {
-            background: #2ed573; /* Puffy clay green */
-            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3), 2px 2px 0px #000000;
+            background: var(--accent-lime);
+            box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3), 2px 2px 0px rgba(2, 6, 23, 0.55);
         }
 
         /* Hotkey overlay styling - Optimized to eliminate backdrop filter rendering lag */
@@ -106,9 +106,9 @@
             pointer-events: auto;
         }
         .wp-hotkeys-card {
-            background: #1e1e24;
-            color: #f3f3f3;
-            border: 3px solid #000000;
+            background: var(--bg-raised);
+            color: var(--text);
+            border: 3px solid var(--border);
             border-radius: 24px;
             width: 90%;
             max-width: 540px;
@@ -116,16 +116,16 @@
             transform: translateY(15px); /* Smooth vertical slide-up instead of heavy scale */
             transition: transform 0.15s ease-out; /* Lightweight transition */
             /* Claymorphic 3D volumetric shadows + Neo-Brutalist hard shadow */
-            box-shadow: inset 4px 4px 8px rgba(255, 255, 255, 0.05), inset -4px -4px 8px rgba(0, 0, 0, 0.4), 8px 8px 0px #000000;
+            box-shadow: inset 4px 4px 8px rgba(255, 255, 255, 0.05), inset -4px -4px 8px rgba(0, 0, 0, 0.4), 8px 8px 0px rgba(2, 6, 23, 0.55);
         }
         .wp-hotkeys-overlay.show .wp-hotkeys-card {
             transform: translateY(0);
         }
         .wp-hotkeys-header {
-            background: #1e90ff; /* Neon bright clay blue */
-            color: #000000;
+            background: var(--accent-blue);
+            color: var(--on-warm);
             padding: 1rem 1.5rem;
-            border-bottom: 3px solid #000000;
+            border-bottom: 3px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -136,8 +136,8 @@
             box-shadow: inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.3);
         }
         .wp-hotkeys-close-btn {
-            background: #ff4757; /* soft clay red */
-            border: 2px solid #000000;
+            background: var(--color-danger);
+            border: 2px solid var(--border);
             border-radius: 50%;
             width: 28px;
             height: 28px;
@@ -145,18 +145,18 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            color: #000000;
+            color: var(--on-warm);
             font-weight: 900;
-            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.4), 2px 2px 0px #000000;
+            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.4), 2px 2px 0px rgba(2, 6, 23, 0.55);
             transition: all 0.1s ease;
         }
         .wp-hotkeys-close-btn:hover {
             transform: translate(-1px, -1px);
-            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.4), 3px 3px 0px #000000;
+            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.4), 3px 3px 0px rgba(2, 6, 23, 0.55);
         }
         .wp-hotkeys-close-btn:active {
             transform: translate(1px, 1px);
-            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3), 1px 1px 0px #000000;
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3), 1px 1px 0px rgba(2, 6, 23, 0.55);
         }
         .wp-hotkeys-content {
             padding: 1.5rem;
@@ -200,16 +200,16 @@
             gap: 0.25rem;
         }
         .wp-key-cap {
-            background: #2f3542;
-            color: #ffffff;
-            border: 2px solid #000000;
+            background: var(--bg-hover);
+            color: var(--text);
+            border: 2px solid var(--border);
             border-radius: 8px;
             padding: 0.25rem 0.5rem;
             font-family: 'Outfit', sans-serif;
             font-weight: 700;
             font-size: 0.7rem;
             text-transform: uppercase;
-            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.2), inset -1px -1px 2px rgba(0, 0, 0, 0.5), 2px 2px 0px #000000;
+            box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.2), inset -1px -1px 2px rgba(0, 0, 0, 0.5), 2px 2px 0px rgba(2, 6, 23, 0.55);
             min-width: 24px;
             text-align: center;
         }
@@ -334,12 +334,12 @@
             transition: all 0.15s;
         }
         .queue-remove-btn:hover {
-            color: #ef4444;
+            color: var(--color-danger);
             background: rgba(239, 68, 68, 0.1);
         }
         .playlist-item-thumb-wrapper:hover .btn-add-to-queue {
             background: var(--accent) !important;
-            color: #101013 !important;
+            color: var(--on-accent) !important;
             border-color: var(--accent) !important;
             transform: scale(1.1);
         }
@@ -347,19 +347,34 @@
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
         :root {
-            --bg: #0F0F11;
-            --bg-raised: #1A1A1E;
-            --bg-overlay: #131316;
-            --text: #F3F3F3;
-            --text-dim: #888890;
-            --text-muted: #5C5C64;
-            --accent: #FF8C00;
-            --border: #2C2C30;
+            --bg: #080B10;
+            --bg-raised: #111827;
+            --bg-overlay: #171C26;
+            --bg-hover: #202838;
+            --text: #F8FAFC;
+            --text-main: #F8FAFC;
+            --text-dim: #94A3B8;
+            --text-muted: #64748B;
+            --accent: #8B5CF6;
+            --accent-hover: #A78BFA;
+            --accent-dim: #6D28D9;
+            --accent-orange: #F59E0B;
+            --accent-blue: #22D3EE;
+            --accent-pink: #C084FC;
+            --accent-lime: #10B981;
+            --accent-yellow: #F59E0B;
+            --accent-red: #EF4444;
+            --color-success: #10B981;
+            --color-danger: #EF4444;
+            --on-accent: #F8FAFC;
+            --on-warm: #111827;
+            --border: #2A3441;
+            --border-strong: #334155;
             --font-sans: 'Outfit', 'Inter', system-ui, sans-serif;
             --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
             --bw: 2px;
             --plyr-color-main: var(--accent);
-            --plyr-video-control-color-hover: #0F0F11;
+            --plyr-video-control-color-hover: var(--on-accent);
             --plyr-video-control-background-hover: var(--accent);
             --plyr-control-radius: 0px;
         }
@@ -414,6 +429,7 @@
             padding: 1.2rem;
             gap: var(--bw * 4, 8px);
             overflow-y: auto;
+            min-width: 0;
         }
 
         .video-wrapper {
@@ -424,6 +440,239 @@
             max-width: 1100px;
             align-self: center;
             position: relative;
+        }
+
+        .watch-media-stage {
+            width: 100%;
+            max-width: 1100px;
+            align-self: center;
+            min-width: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(8, 11, 16, 0.86);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+            margin-bottom: 0.75rem;
+        }
+
+        .watch-main-layout {
+            width: 100%;
+            min-width: 0;
+            display: grid;
+            grid-template-columns: minmax(220px, 260px) minmax(0, 1100px);
+            gap: 1rem;
+            align-items: start;
+            justify-content: center;
+        }
+
+        .cowatch-left-panel {
+            min-width: 0;
+            position: sticky;
+            top: 1rem;
+            align-self: start;
+        }
+
+        .watch-center-column {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .watch-center-column .watch-media-stage,
+        .watch-center-column .brutal-playlist-container {
+            width: 100%;
+            max-width: 1100px;
+            align-self: stretch;
+        }
+
+        .watch-media-stage.count-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .watch-media-stage.count-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .watch-media-stage.count-3,
+        .watch-media-stage.count-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .watch-media-stage.focus-mode {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            align-content: flex-start;
+            gap: 0.75rem;
+            min-height: 520px;
+            height: clamp(520px, calc(100vh - 260px), 780px);
+            max-height: none;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .watch-media-stage .media-tile {
+            position: relative;
+            overflow: hidden;
+            min-height: 180px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: #000;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            cursor: zoom-in;
+        }
+
+        .watch-media-stage .media-tile:hover,
+        .watch-media-stage .media-tile.media-tile-focused {
+            border-color: rgba(139, 92, 246, 0.72);
+            box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.34), 0 16px 42px rgba(0, 0, 0, 0.38);
+        }
+
+        .watch-media-stage.focus-mode .media-tile {
+            flex: 0 0 clamp(150px, 18vw, 220px);
+            width: clamp(150px, 18vw, 220px);
+            height: 122px;
+            min-height: 0;
+            max-height: 122px;
+            order: 2;
+            aspect-ratio: 16 / 9;
+        }
+
+        .watch-media-stage.focus-mode .media-tile.media-tile-focused {
+            flex: 0 0 100%;
+            width: 100%;
+            height: 100%;
+            min-height: 420px;
+            max-height: none;
+            order: 1;
+            cursor: zoom-out;
+            aspect-ratio: auto;
+        }
+
+        .watch-media-stage.focus-mode.has-thumbnails .media-tile.media-tile-focused {
+            height: calc(100% - 137px);
+        }
+
+        .watch-media-stage.focus-mode .media-tile:not(.media-tile-focused) {
+            cursor: pointer;
+        }
+
+        .watch-media-stage.focus-mode .media-tile.media-tile-focused video,
+        .watch-media-stage.focus-mode .media-tile.media-tile-focused img,
+        .watch-media-stage.focus-mode .media-tile.media-tile-focused .plyr,
+        .watch-media-stage.focus-mode .media-tile.media-tile-focused .plyr__video-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+        }
+
+        .watch-media-stage.focus-mode .media-tile.media-tile-thumbnail video {
+            object-fit: cover;
+        }
+
+        .watch-media-stage .video-wrapper {
+            max-width: none;
+            align-self: stretch;
+        }
+
+        @media (max-width: 900px) {
+            .watch-media-stage.focus-mode {
+                min-height: 430px;
+                height: clamp(430px, calc(100vh - 220px), 640px);
+            }
+
+            .watch-media-stage.focus-mode .media-tile.media-tile-focused {
+                min-height: 300px;
+            }
+
+            .watch-media-stage.focus-mode .media-tile {
+                flex-basis: 150px;
+                width: 150px;
+                height: 96px;
+                max-height: 96px;
+            }
+
+            .watch-media-stage.focus-mode.has-thumbnails .media-tile.media-tile-focused {
+                height: calc(100% - 111px);
+            }
+        }
+
+        .media-tile-label,
+        .webcam-label {
+            position: absolute;
+            left: 0.55rem;
+            top: 0.55rem;
+            right: auto;
+            bottom: auto;
+            z-index: 12;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-width: 0;
+            max-width: calc(100% - 1.1rem);
+            padding: 0.24rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(8, 11, 16, 0.74);
+            color: var(--text);
+            font-size: 0.68rem;
+            font-weight: 800;
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+        }
+
+        .media-tile-label span,
+        .webcam-label span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .screen-share-tile {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 16 / 9;
+        }
+
+        .screen-share-tile.active {
+            display: flex;
+        }
+
+        .screen-share-tile video,
+        .webcam-tile video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            background: #000;
+        }
+
+        .webcam-tile video {
+            object-fit: cover;
+        }
+
+        .screen-share-banner {
+            position: absolute;
+            left: 0.55rem;
+            top: 0.55rem;
+            z-index: 12;
+            background: rgba(8, 11, 16, 0.76);
+            border: 1px solid rgba(34, 211, 238, 0.38);
+            box-shadow: 0 0 14px rgba(34, 211, 238, 0.18);
+            padding: 0.28rem 0.58rem;
+            border-radius: 999px;
+            color: var(--text);
+            font-size: 0.72rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            pointer-events: none;
         }
 
         .plyr { width: 100%; height: 100%; background: #000; }
@@ -508,9 +757,9 @@
         }
 
         .btn-mic {
-            background: #FF2E93;
+            background: var(--accent-pink);
             color: var(--text);
-            border: var(--bw) solid #FF2E93;
+            border: var(--bw) solid var(--accent-pink);
             width: 36px;
             height: 36px;
             cursor: pointer;
@@ -522,9 +771,9 @@
         }
 
         .btn-mic.active {
-            background: #22c55e;
-            border-color: #22c55e;
-            box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+            background: var(--color-success);
+            border-color: var(--color-success);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
         }
 
         /* Chat & Sidebar UI styling */
@@ -699,17 +948,17 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #6b7280;
+            background: var(--text-muted);
             transition: background 0.2s, box-shadow 0.2s;
         }
 
         .voice-indicator.speaking {
-            background: #22c55e;
-            box-shadow: 0 0 8px #22c55e;
+            background: var(--color-success);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.45);
         }
 
         .voice-indicator.muted {
-            background: #ef4444;
+            background: var(--color-danger);
         }
 
         /* System Logs list */
@@ -747,7 +996,7 @@
         }
 
         .modal-box {
-            background: #101013;
+            background: var(--bg-raised);
             border: 1px solid var(--border);
             border-radius: 16px;
             width: 100%;
@@ -836,7 +1085,7 @@
 
         /* Slider Switch Styling */
         .switch-container input:checked + .slider {
-            background-color: #eab308;
+            background-color: var(--accent-yellow);
         }
         .switch-container .slider:before {
             position: absolute;
@@ -855,12 +1104,12 @@
 
         /* Crown styles */
         .crown-badge {
-            color: #eab308;
+            color: var(--accent-yellow);
             margin-right: 0.2rem;
             text-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
         }
         .chat-entry.outgoing .crown-badge {
-            color: #fffbeb;
+            color: var(--on-accent);
         }
 
         /* Message Action controls */
@@ -880,7 +1129,7 @@
             opacity: 1;
         }
         .chat-entry:hover .btn-msg-delete:hover {
-            color: #ef4444;
+            color: var(--color-danger);
         }
         .chat-entry.outgoing .btn-msg-delete {
             color: rgba(255,255,255,0.7);
@@ -902,14 +1151,14 @@
             transition: all 0.2s;
         }
         .btn-peer-action.mute {
-            color: #ef4444;
+            color: var(--color-danger);
         }
         .btn-peer-action.mute:hover {
             background: rgba(239, 68, 68, 0.15);
             transform: scale(1.1);
         }
         .btn-peer-action.kick {
-            color: #ef4444;
+            color: var(--color-danger);
         }
         .btn-peer-action.kick:hover {
             background: rgba(239, 68, 68, 0.15);
@@ -923,7 +1172,7 @@
             left: 1rem;
             background: rgba(0, 0, 0, 0.75);
             border: 1px solid rgba(234, 179, 8, 0.4);
-            color: #eab308;
+            color: var(--accent-yellow);
             padding: 0.35rem 0.65rem;
             border-radius: 6px;
             font-size: 0.75rem;
@@ -950,7 +1199,7 @@
             pointer-events: none;
         }
         .wp-toast {
-            background: #101013;
+            background: var(--bg-raised);
             border: 1px solid var(--border);
             border-left: 4px solid var(--accent);
             color: var(--text-main);
@@ -1004,7 +1253,7 @@
             border-radius: 20px;
             padding: 2px 8px;
             font-size: 0.7rem;
-            color: #F3F3F3;
+            color: var(--text);
             font-weight: 600;
             white-space: nowrap;
             margin-top: 4px;
@@ -1072,7 +1321,7 @@
             bottom: -3px;
             right: -2px;
             background: var(--accent);
-            color: #121216;
+            color: var(--on-accent);
             font-size: 0.55rem;
             font-weight: 800;
             border-radius: 4px;
@@ -1091,9 +1340,9 @@
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .sound-chip:hover {
-            background: rgba(255, 140, 0, 0.1) !important;
-            border-color: rgba(255, 140, 0, 0.3) !important;
-            box-shadow: 0 0 8px rgba(255, 140, 0, 0.15);
+            background: rgba(139, 92, 246, 0.1) !important;
+            border-color: rgba(139, 92, 246, 0.3) !important;
+            box-shadow: 0 0 8px rgba(139, 92, 246, 0.18);
             transform: translateY(-1px);
         }
         .sound-chip:active {
@@ -1101,7 +1350,143 @@
             box-shadow: none;
         }
         .sb-edit-btn:hover { color: var(--accent) !important; }
-        .sb-del-btn:hover { color: #ef4444 !important; }
+        .sb-del-btn:hover { color: var(--color-danger) !important; }
+
+        .soundboard-event-stack {
+            align-self: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            max-width: 90%;
+            pointer-events: none;
+        }
+
+        .soundboard-event-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            max-width: 100%;
+            padding: 0.22rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(139, 92, 246, 0.12);
+            border: 1px solid rgba(139, 92, 246, 0.22);
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            font-weight: 700;
+            line-height: 1.2;
+            opacity: 0.92;
+            transform: translateY(0);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+
+        .soundboard-event-pill span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .soundboard-event-pill i {
+            color: var(--accent);
+            font-size: 0.65rem;
+            flex-shrink: 0;
+        }
+
+        .soundboard-event-pill.fade-out {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+
+        .webcam-tile {
+            position: relative;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            min-height: 88px;
+            border-radius: 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            cursor: zoom-in;
+        }
+
+        .webcam-tile video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            background: var(--bg);
+        }
+
+        .webcam-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .webcam-placeholder i {
+            color: var(--accent);
+            font-size: 1rem;
+        }
+
+        .webcam-label {
+            position: absolute;
+            left: 0.55rem;
+            right: auto;
+            top: 0.55rem;
+            bottom: auto;
+            z-index: 12;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-width: 0;
+            max-width: calc(100% - 1.1rem);
+            padding: 0.24rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(8, 11, 16, 0.74);
+            color: var(--text);
+            font-size: 0.68rem;
+            font-weight: 800;
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+        }
+
+        .webcam-label span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .webcam-avatar-mini {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--on-warm);
+            font-size: 0.55rem;
+            flex-shrink: 0;
+        }
+
+        .camera-toggle-btn {
+            background: var(--bg-hover) !important;
+        }
+
+        .camera-toggle-btn.active {
+            background: var(--accent-blue) !important;
+            color: var(--on-warm) !important;
+        }
+
+        .camera-toggle-btn.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
         
         #soundboard-volume-slider {
             -webkit-appearance: none;
@@ -1177,7 +1562,7 @@
         .laser-toolbar-btn {
             background: transparent;
             border: none;
-            color: #888890;
+            color: var(--text-dim);
             cursor: pointer;
             padding: 6px 10px;
             font-size: 0.85rem;
@@ -1191,13 +1576,13 @@
             transition: all 0.2s ease;
         }
         .laser-toolbar-btn:hover {
-            color: #F3F3F3;
+            color: var(--text);
             background: rgba(255, 255, 255, 0.06);
         }
         .laser-toolbar-btn.active {
-            color: #121216;
+            color: var(--on-accent);
             background: var(--accent);
-            box-shadow: 0 4px 12px rgba(255, 140, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
         }
         
         .color-dot-picker {
@@ -1210,24 +1595,20 @@
         }
         .color-dot-picker.selected {
             transform: scale(1.25);
-            border-color: #F3F3F3;
+            border-color: var(--text);
         }
         
         /* Playback Buffering Overlay */
         .buffering-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 10, 12, 0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            right: 16px;
+            bottom: 16px;
+            width: auto;
+            height: auto;
+            background: transparent;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 1rem;
             z-index: 1000 !important;
             opacity: 0;
             pointer-events: none;
@@ -1235,39 +1616,38 @@
         }
         .buffering-overlay.active {
             opacity: 1;
-            pointer-events: auto;
         }
         
         .buffering-card {
-            background: rgba(25, 25, 30, 0.85);
+            background: rgba(25, 25, 30, 0.92);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 24px 36px;
+            border-radius: 999px;
+            padding: 10px 14px;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            gap: 12px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            transform: scale(0.9);
+            gap: 10px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+            transform: translateY(8px);
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .buffering-overlay.active .buffering-card {
-            transform: scale(1);
+            transform: translateY(0);
         }
         
         .buffering-spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top: 3px solid var(--accent);
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            border-top: 2px solid var(--accent);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
         .buffering-text {
             font-family: 'Outfit', sans-serif;
-            font-size: 0.95rem;
+            font-size: 0.78rem;
             font-weight: 600;
-            color: #F3F3F3;
+            color: var(--text);
             letter-spacing: -0.1px;
             text-align: center;
         }
@@ -1281,105 +1661,114 @@
            NEO-BRUTALIST OVERRIDES FOR WATCH PARTY
            ============================================ */
         :root {
-            --bg: #0C0C0E !important;
-            --bg-raised: #1A1A22 !important;
-            --bg-overlay: #131318 !important;
-            --text: #FFFFFF !important;
-            --text-dim: #A0A0AB !important;
-            --text-muted: #6E6E7A !important;
+            --bg: #080B10 !important;
+            --bg-raised: #111827 !important;
+            --bg-overlay: #171C26 !important;
+            --bg-hover: #202838 !important;
+            --text: #F8FAFC !important;
+            --text-main: #F8FAFC !important;
+            --text-dim: #94A3B8 !important;
+            --text-muted: #64748B !important;
             
-            --accent: #FF6B35 !important;
-            --accent-orange: #FF6B35 !important;
-            --accent-blue: #00D8FF !important;
-            --accent-pink: #FF007F !important;
-            --accent-lime: #39FF14 !important;
-            --accent-yellow: #FFD000 !important;
-            --accent-red: #FF3131 !important;
+            --accent: #8B5CF6 !important;
+            --accent-hover: #A78BFA !important;
+            --accent-dim: #6D28D9 !important;
+            --accent-orange: #F59E0B !important;
+            --accent-blue: #22D3EE !important;
+            --accent-pink: #C084FC !important;
+            --accent-lime: #10B981 !important;
+            --accent-yellow: #F59E0B !important;
+            --accent-red: #EF4444 !important;
+            --color-success: #10B981 !important;
+            --color-danger: #EF4444 !important;
+            --on-accent: #F8FAFC !important;
+            --on-warm: #111827 !important;
             
-            --border: #000000 !important;
+            --border: #2A3441 !important;
+            --border-strong: #334155 !important;
             --bw: 3px !important;
             
-            --shadow-main: 5px 5px 0px #000000 !important;
+            --shadow-main: 5px 5px 0px rgba(2, 6, 23, 0.55) !important;
             --shadow-accent: 5px 5px 0px var(--accent) !important;
-            --shadow-button: 3px 3px 0px #000000 !important;
-            --shadow-small: 3px 3px 0px #000000 !important;
+            --shadow-button: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
+            --shadow-small: 3px 3px 0px rgba(2, 6, 23, 0.45) !important;
         }
 
         /* Header, wrappers and cards */
         .header {
-            border-bottom: var(--bw) solid #000000 !important;
+            border-bottom: var(--bw) solid var(--border) !important;
             background: var(--bg-raised) !important;
         }
         .video-wrapper {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-main) !important;
         }
         .playlist-card {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-main) !important;
             background: var(--bg-raised) !important;
         }
         .sidebar-pane {
-            border-left: var(--bw) solid #000000 !important;
+            border-left: var(--bw) solid var(--border) !important;
             background: var(--bg-raised) !important;
         }
         .local-user-card {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             background: var(--bg) !important;
             box-shadow: var(--shadow-small) !important;
         }
 
         /* Buttons in Watch Party */
         .wp-brutal-btn {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-button) !important;
             border-radius: 4px !important;
             font-weight: 800 !important;
         }
         .wp-brutal-btn:hover {
             transform: translate(-1px, -1px) !important;
-            box-shadow: 4px 4px 0px #000000 !important;
+            box-shadow: 4px 4px 0px rgba(2, 6, 23, 0.55) !important;
         }
         .wp-brutal-btn:active {
             transform: translate(2px, 2px) !important;
-            box-shadow: 1px 1px 0px #000000 !important;
+            box-shadow: 1px 1px 0px rgba(2, 6, 23, 0.55) !important;
         }
 
         /* Text Chat elements */
         .chat-entry.incoming {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
-            box-shadow: 3px 3px 0px #000000 !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             color: var(--text) !important;
         }
         .chat-entry.outgoing {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-blue) !important;
-            color: #000000 !important;
-            box-shadow: 3px 3px 0px #000000 !important;
+            color: var(--on-warm) !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
         }
         .chat-entry.outgoing .chat-sender {
-            color: #000000 !important;
+            color: var(--on-warm) !important;
             font-weight: 800 !important;
         }
         .chat-entry.outgoing .chat-time {
             color: rgba(0,0,0,0.6) !important;
         }
         .chat-entry.system {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-yellow) !important;
-            color: #000000 !important;
-            box-shadow: 2px 2px 0px #000000 !important;
+            color: var(--on-warm) !important;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             font-weight: 700 !important;
         }
         .chat-input-container {
-            border-top: var(--bw) solid #000000 !important;
+            border-top: var(--bw) solid var(--border) !important;
         }
         .chat-input {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
             box-shadow: var(--shadow-small) !important;
             border-radius: 4px !important;
@@ -1389,9 +1778,9 @@
             box-shadow: 4px 4px 0px var(--accent-blue) !important;
         }
         .btn-send {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-yellow) !important;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
             box-shadow: var(--shadow-button) !important;
             border-radius: 4px !important;
         }
@@ -1401,26 +1790,26 @@
 
         /* Peer cards / queue items */
         .peer-item, .queue-item, .playlist-item:not(.playlist-thumbnail-card) {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             box-shadow: var(--shadow-small) !important;
             background: var(--bg) !important;
             border-radius: 4px !important;
         }
         .queue-item:hover, .playlist-item:not(.playlist-thumbnail-card):hover {
-            border-color: #000000 !important;
+            border-color: var(--border) !important;
             transform: translate(-1px, -1px) !important;
-            box-shadow: 4px 4px 0px #000000 !important;
+            box-shadow: 4px 4px 0px rgba(2, 6, 23, 0.55) !important;
         }
 
         /* Audio slider styling */
         .peer-volume-slider::-webkit-slider-runnable-track {
-            background: #000000 !important;
+            background: var(--border-strong) !important;
             height: 6px !important;
-            border: 1px solid #000000 !important;
+            border: 1px solid var(--border) !important;
         }
         .peer-volume-slider::-webkit-slider-thumb {
             background: var(--accent-yellow) !important;
-            border: 1px solid #000000 !important;
+            border: 1px solid var(--border) !important;
             width: 12px !important;
             height: 12px !important;
         }
@@ -1432,18 +1821,18 @@
 
         /* Hotkeys Modal */
         .wp-hotkeys-card {
-            border: var(--bw) solid #000000 !important;
-            box-shadow: 8px 8px 0px #000000 !important;
+            border: var(--bw) solid var(--border) !important;
+            box-shadow: 8px 8px 0px rgba(2, 6, 23, 0.55) !important;
             background: var(--bg-raised) !important;
         }
         .wp-hotkeys-header {
-            border-bottom: var(--bw) solid #000000 !important;
+            border-bottom: var(--bw) solid var(--border) !important;
             background: var(--accent-blue) !important;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
         }
         .wp-key-cap {
-            border: 2px solid #000000 !important;
-            box-shadow: 2px 2px 0px #000000 !important;
+            border: 2px solid var(--border) !important;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55) !important;
             background: var(--bg) !important;
         }
 
@@ -1454,23 +1843,23 @@
         }
         ::-webkit-scrollbar-track {
             background: var(--bg) !important;
-            border-left: var(--bw) solid #000000 !important;
+            border-left: var(--bw) solid var(--border) !important;
         }
         ::-webkit-scrollbar-thumb {
             background: var(--accent-yellow) !important;
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
         }
 
     
         /* Modal Box & Input overrides */
         .modal-box {
-            border: var(--bw) solid #000000 !important;
-            box-shadow: 8px 8px 0px #000000 !important;
+            border: var(--bw) solid var(--border) !important;
+            box-shadow: 8px 8px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             background: var(--bg-raised) !important;
         }
         .input-field {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
             color: var(--text) !important;
             box-shadow: var(--shadow-small) !important;
@@ -1483,13 +1872,13 @@
 
         /* Modal Box & Input overrides */
         .modal-box {
-            border: var(--bw) solid #000000 !important;
-            box-shadow: 8px 8px 0px #000000 !important;
+            border: var(--bw) solid var(--border) !important;
+            box-shadow: 8px 8px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             background: var(--bg-raised) !important;
         }
         .input-field {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
             color: var(--text) !important;
             box-shadow: var(--shadow-small) !important;
@@ -1502,13 +1891,29 @@
 
         /* Light Mode Theme Overrides */
         body[data-theme="light"] {
-            --bg: #F5F4F0 !important;
+            --bg: #F8FAFC !important;
             --bg-raised: #FFFFFF !important;
-            --bg-overlay: #EAE9E4 !important;
-            --text: #000000 !important;
-            --text-dim: #3E3E44 !important;
-            --text-muted: #6C6C76 !important;
-            --accent: #FF6B35 !important;
+            --bg-overlay: #E2E8F0 !important;
+            --bg-hover: #F1F5F9 !important;
+            --text: #0F172A !important;
+            --text-main: #0F172A !important;
+            --text-dim: #475569 !important;
+            --text-muted: #64748B !important;
+            --accent: #7C3AED !important;
+            --accent-hover: #8B5CF6 !important;
+            --accent-dim: #6D28D9 !important;
+            --accent-orange: #D97706 !important;
+            --accent-blue: #0891B2 !important;
+            --accent-pink: #9333EA !important;
+            --accent-lime: #059669 !important;
+            --accent-yellow: #D97706 !important;
+            --accent-red: #DC2626 !important;
+            --color-success: #059669 !important;
+            --color-danger: #DC2626 !important;
+            --border: #CBD5E1 !important;
+            --border-strong: #94A3B8 !important;
+            --on-accent: #FFFFFF !important;
+            --on-warm: #111827 !important;
         }
     
     
@@ -1516,111 +1921,120 @@
            NEO-BRUTALIST OVERRIDES FOR WATCH PARTY
            ============================================ */
         :root {
-            --bg: #0C0C0E;
-            --bg-raised: #1A1A22;
-            --bg-overlay: #131318;
-            --text: #FFFFFF;
-            --text-dim: #A0A0AB;
-            --text-muted: #6E6E7A;
+            --bg: #080B10;
+            --bg-raised: #111827;
+            --bg-overlay: #171C26;
+            --bg-hover: #202838;
+            --text: #F8FAFC;
+            --text-main: #F8FAFC;
+            --text-dim: #94A3B8;
+            --text-muted: #64748B;
             
-            --accent: #FF6B35;
-            --accent-orange: #FF6B35;
-            --accent-blue: #00D8FF;
-            --accent-pink: #FF007F;
-            --accent-lime: #39FF14;
-            --accent-yellow: #FFD000;
-            --accent-red: #FF3131;
+            --accent: #8B5CF6;
+            --accent-hover: #A78BFA;
+            --accent-dim: #6D28D9;
+            --accent-orange: #F59E0B;
+            --accent-blue: #22D3EE;
+            --accent-pink: #C084FC;
+            --accent-lime: #10B981;
+            --accent-yellow: #F59E0B;
+            --accent-red: #EF4444;
+            --color-success: #10B981;
+            --color-danger: #EF4444;
+            --on-accent: #F8FAFC;
+            --on-warm: #111827;
             
-            --border: #000000;
+            --border: #2A3441;
+            --border-strong: #334155;
             --bw: 3px;
             
-            --shadow-main: 5px 5px 0px #000000;
+            --shadow-main: 5px 5px 0px rgba(2, 6, 23, 0.55);
             --shadow-accent: 5px 5px 0px var(--accent);
-            --shadow-button: 3px 3px 0px #000000;
-            --shadow-small: 3px 3px 0px #000000;
+            --shadow-button: 3px 3px 0px rgba(2, 6, 23, 0.55);
+            --shadow-small: 3px 3px 0px rgba(2, 6, 23, 0.45);
         }
 
         #wp-folder-dropdown-select option {
-            background: #1A1A22 !important;
-            color: #ffffff !important;
+            background: var(--bg-raised) !important;
+            color: var(--text) !important;
             font-family: inherit;
         }
 
         /* Header, wrappers and cards */
         .header {
-            border-bottom: var(--bw) solid #000000 !important;
+            border-bottom: var(--bw) solid var(--border) !important;
             background: var(--bg-raised) !important;
         }
         .video-wrapper {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-main) !important;
         }
         .playlist-card {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-main) !important;
             background: var(--bg-raised) !important;
         }
         .sidebar-pane {
-            border-left: var(--bw) solid #000000 !important;
+            border-left: var(--bw) solid var(--border) !important;
             background: var(--bg-raised) !important;
         }
         .local-user-card {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             background: var(--bg) !important;
             box-shadow: var(--shadow-small) !important;
         }
 
         /* Buttons in Watch Party */
         .wp-brutal-btn {
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-button) !important;
             border-radius: 4px !important;
             font-weight: 800 !important;
         }
         .wp-brutal-btn:hover {
             transform: translate(-1px, -1px) !important;
-            box-shadow: 4px 4px 0px #000000 !important;
+            box-shadow: 4px 4px 0px rgba(2, 6, 23, 0.55) !important;
         }
         .wp-brutal-btn:active {
             transform: translate(2px, 2px) !important;
-            box-shadow: 1px 1px 0px #000000 !important;
+            box-shadow: 1px 1px 0px rgba(2, 6, 23, 0.55) !important;
         }
 
         /* Text Chat elements */
         .chat-entry.incoming {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
-            box-shadow: 3px 3px 0px #000000 !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             color: var(--text) !important;
         }
         .chat-entry.outgoing {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-blue) !important;
-            color: #000000 !important;
-            box-shadow: 3px 3px 0px #000000 !important;
+            color: var(--on-warm) !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
         }
         .chat-entry.outgoing .chat-sender {
-            color: #000000 !important;
+            color: var(--on-warm) !important;
             font-weight: 800 !important;
         }
         .chat-entry.outgoing .chat-time {
             color: rgba(0,0,0,0.6) !important;
         }
         .chat-entry.system {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-yellow) !important;
-            color: #000000 !important;
-            box-shadow: 2px 2px 0px #000000 !important;
+            color: var(--on-warm) !important;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55) !important;
             border-radius: 4px !important;
             font-weight: 700 !important;
         }
         .chat-input-container {
-            border-top: var(--bw) solid #000000 !important;
+            border-top: var(--bw) solid var(--border) !important;
         }
         .chat-input {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--bg) !important;
             box-shadow: var(--shadow-small) !important;
             border-radius: 4px !important;
@@ -1630,9 +2044,9 @@
             box-shadow: 4px 4px 0px var(--accent-blue) !important;
         }
         .btn-send {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             background: var(--accent-yellow) !important;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
             box-shadow: var(--shadow-button) !important;
             border-radius: 4px !important;
         }
@@ -1642,26 +2056,26 @@
 
         /* Peer cards / queue items */
         .peer-item, .queue-item, .playlist-item:not(.playlist-thumbnail-card) {
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             box-shadow: var(--shadow-small) !important;
             background: var(--bg) !important;
             border-radius: 4px !important;
         }
         .queue-item:hover, .playlist-item:not(.playlist-thumbnail-card):hover {
-            border-color: #000000 !important;
+            border-color: var(--border) !important;
             transform: translate(-1px, -1px) !important;
-            box-shadow: 4px 4px 0px #000000 !important;
+            box-shadow: 4px 4px 0px rgba(2, 6, 23, 0.55) !important;
         }
 
         /* Audio slider styling */
         .peer-volume-slider::-webkit-slider-runnable-track {
-            background: #000000 !important;
+            background: var(--border-strong) !important;
             height: 6px !important;
-            border: 1px solid #000000 !important;
+            border: 1px solid var(--border) !important;
         }
         .peer-volume-slider::-webkit-slider-thumb {
             background: var(--accent-yellow) !important;
-            border: 1px solid #000000 !important;
+            border: 1px solid var(--border) !important;
             width: 12px !important;
             height: 12px !important;
         }
@@ -1673,18 +2087,18 @@
 
         /* Hotkeys Modal */
         .wp-hotkeys-card {
-            border: var(--bw) solid #000000 !important;
-            box-shadow: 8px 8px 0px #000000 !important;
+            border: var(--bw) solid var(--border) !important;
+            box-shadow: 8px 8px 0px rgba(2, 6, 23, 0.55) !important;
             background: var(--bg-raised) !important;
         }
         .wp-hotkeys-header {
-            border-bottom: var(--bw) solid #000000 !important;
+            border-bottom: var(--bw) solid var(--border) !important;
             background: var(--accent-blue) !important;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
         }
         .wp-key-cap {
-            border: 2px solid #000000 !important;
-            box-shadow: 2px 2px 0px #000000 !important;
+            border: 2px solid var(--border) !important;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55) !important;
             background: var(--bg) !important;
         }
 
@@ -1695,8 +2109,8 @@
         /* Header Rebrand Logo */
         .logo-sticker {
             background: var(--accent-yellow) !important;
-            border: 2.5px solid #000000 !important;
-            box-shadow: 3px 3px 0px #000000 !important;
+            border: 2.5px solid var(--border) !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
             padding: 0.4rem 0.8rem !important;
             transform: rotate(-1.5deg);
             display: inline-flex;
@@ -1707,7 +2121,7 @@
             font-family: 'Outfit', sans-serif;
             font-weight: 900;
             font-size: 1.15rem;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
             letter-spacing: 0.5px;
         }
         .logo-sticker .logo-text span {
@@ -1724,7 +2138,7 @@
             align-items: center;
             gap: 0.75rem;
             background: var(--bg-raised) !important;
-            border: var(--bw) solid #000000 !important;
+            border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-small) !important;
             border-radius: 8px;
             padding: 0.75rem;
@@ -1734,14 +2148,14 @@
             width: 42px;
             height: 42px;
             border-radius: 50%;
-            border: 2px solid #000000;
+            border: 2px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.25rem;
-            color: #000000;
+            color: var(--on-warm);
             flex-shrink: 0;
-            box-shadow: 2px 2px 0px #000000;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55);
         }
         .local-profile-info {
             flex-grow: 1;
@@ -1782,9 +2196,9 @@
         }
         .brutal-mic-toggle-btn {
             background: var(--accent-pink) !important;
-            border: 2px solid #000000 !important;
-            box-shadow: 2px 2px 0px #000000 !important;
-            color: #ffffff !important;
+            border: 2px solid var(--border) !important;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55) !important;
+            color: var(--on-accent) !important;
             width: 32px;
             height: 32px;
             border-radius: 4px;
@@ -1797,23 +2211,23 @@
         }
         .brutal-mic-toggle-btn.unmuted {
             background: var(--accent-lime) !important;
-            color: #000000 !important;
+            color: var(--on-warm) !important;
         }
         .brutal-mic-toggle-btn:hover {
             transform: translate(-1px, -1px);
-            box-shadow: 3px 3px 0px #000000 !important;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55) !important;
         }
         .brutal-mic-toggle-btn:active {
             transform: translate(1px, 1px);
-            box-shadow: 1px 1px 0px #000000 !important;
+            box-shadow: 1px 1px 0px rgba(2, 6, 23, 0.55) !important;
         }
 
         /* Edit Profile Modal Grid */
         .profile-modal-box {
             max-width: 480px !important;
             width: 90% !important;
-            border: 3px solid #000000 !important;
-            box-shadow: 8px 8px 0px #000000, 0px 0px 20px rgba(0,0,0,0.5) !important;
+            border: 3px solid var(--border) !important;
+            box-shadow: 8px 8px 0px rgba(2, 6, 23, 0.55), 0px 0px 20px rgba(0,0,0,0.5) !important;
             position: relative;
         }
         .profile-modal-box::after {
@@ -1864,7 +2278,7 @@
         }
         .avatar-option-card {
             background: var(--bg) !important;
-            border: 2px solid #000000 !important;
+            border: 2px solid var(--border) !important;
             border-radius: 6px;
             padding: 0.5rem 0.25rem;
             display: flex;
@@ -1874,11 +2288,11 @@
             gap: 0.35rem;
             cursor: pointer;
             transition: all 0.15s ease;
-            box-shadow: 2px 2px 0px #000000;
+            box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55);
         }
         .avatar-option-card:hover {
             transform: translate(-1px, -1px);
-            box-shadow: 3px 3px 0px #000000;
+            box-shadow: 3px 3px 0px rgba(2, 6, 23, 0.55);
         }
         .avatar-option-card.selected {
             background: var(--bg-raised) !important;
@@ -1889,13 +2303,13 @@
             width: 38px;
             height: 38px;
             border-radius: 50%;
-            border: 1.5px solid #000000;
+            border: 1.5px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.1rem;
-            color: #000000;
-            box-shadow: 1px 1px 0px #000000;
+            color: var(--on-warm);
+            box-shadow: 1px 1px 0px rgba(2, 6, 23, 0.55);
         }
         .avatar-option-card span {
             font-size: 0.58rem;
@@ -1917,6 +2331,7 @@
             padding: 1.25rem !important;
             width: 100% !important;
             max-width: 1100px !important;
+            min-width: 0 !important;
             align-self: center !important;
             display: flex !important;
             flex: 0 0 auto !important;
@@ -2017,7 +2432,7 @@
             aspect-ratio: 16/9 !important;
             position: relative !important;
             overflow: hidden !important;
-            background: #000000 !important;
+            background: var(--border-strong) !important;
             border-bottom: var(--bw) solid var(--border) !important;
             flex: 0 0 auto !important;
         }
@@ -2090,7 +2505,7 @@
         .playlist-item-title {
             font-size: 0.78rem !important;
             font-weight: 700 !important;
-            color: #FFFFFF !important;
+            color: var(--text) !important;
             display: -webkit-box !important;
             -webkit-line-clamp: 2 !important;
             -webkit-box-orient: vertical !important;
@@ -2190,6 +2605,11 @@
         /* --- PREMIUM CO-WATCH CONTROLS SYSTEM --- */
         .wp-playback-settings-bar {
             margin-top: 0.75rem;
+            width: 100% !important;
+            max-width: 1100px !important;
+            min-width: 0 !important;
+            align-self: center !important;
+            box-sizing: border-box !important;
             background: var(--bg-raised) !important;
             border: var(--bw) solid var(--border) !important;
             box-shadow: var(--shadow-main) !important;
@@ -2231,6 +2651,8 @@
             align-items: center !important;
             gap: 0.85rem !important;
             flex-wrap: wrap !important;
+            min-width: 0 !important;
+            justify-content: flex-end !important;
         }
 
         .wp-control-pill {
@@ -2244,6 +2666,49 @@
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
             position: relative;
             box-shadow: var(--shadow-small) !important;
+        }
+
+        .cowatch-left-panel .wp-playback-settings-bar {
+            margin-top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            align-self: stretch !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            justify-content: flex-start !important;
+            gap: 0.85rem !important;
+            padding: 0.85rem !important;
+            border-radius: 10px !important;
+        }
+
+        .cowatch-left-panel .wp-playback-settings-title {
+            justify-content: flex-start !important;
+            padding-bottom: 0.65rem !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+        }
+
+        .cowatch-left-panel .wp-playback-settings-pills {
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            justify-content: flex-start !important;
+            gap: 0.7rem !important;
+        }
+
+        .cowatch-left-panel .wp-control-pill {
+            width: 100% !important;
+            justify-content: space-between !important;
+            border-radius: 10px !important;
+            padding: 0.55rem 0.65rem 0.55rem 0.75rem !important;
+            gap: 0.5rem !important;
+        }
+
+        .cowatch-left-panel .wp-select-wrapper {
+            flex: 0 0 auto !important;
+        }
+
+        .cowatch-left-panel .wp-control-select {
+            max-width: 118px !important;
         }
 
         /* Subtle neon glows on hover */
@@ -2350,8 +2815,8 @@
 
         /* Style select options background to match dark premium theme */
         .wp-control-select option {
-            background: #1A1A22 !important;
-            color: #ffffff !important;
+            background: var(--bg-raised) !important;
+            color: var(--text) !important;
             font-family: inherit;
         }
 
@@ -2389,6 +2854,12 @@
 
         /* Responsive adjustments */
         @media (max-width: 900px) {
+            .watch-main-layout {
+                grid-template-columns: 1fr;
+            }
+            .cowatch-left-panel {
+                position: static;
+            }
             .wp-playback-settings-bar {
                 flex-direction: column !important;
                 align-items: flex-start !important;
@@ -2398,6 +2869,11 @@
             .wp-playback-settings-pills {
                 width: 100% !important;
                 justify-content: flex-start !important;
+            }
+            .watch-media-stage,
+            .wp-playback-settings-bar,
+            .brutal-playlist-container {
+                max-width: 100% !important;
             }
         }
 
@@ -2455,20 +2931,20 @@
             <button id="btn-wp-custom-media" class="wp-brutal-btn" style="display: none; background: var(--accent-pink) !important;" title="Load Custom Media URL"><i class="fa-solid fa-compact-disc"></i> Custom Media</button>
             
             <!-- Active folder selector -->
-            <div id="wp-folder-select-container" style="display: none; align-items: center; border: var(--bw) solid #000000; background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px #000000; overflow: hidden; padding-right: 0.5rem;">
+            <div id="wp-folder-select-container" style="display: none; align-items: center; border: var(--bw) solid var(--border); background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55); overflow: hidden; padding-right: 0.5rem;">
                 <select id="wp-folder-dropdown-select" style="background: transparent; border: none; color: var(--text); font-family: inherit; font-weight: 800; font-size: 0.75rem; padding: 0.4rem 0.65rem; outline: none; cursor: pointer;">
                     <option value="" disabled selected>LOCAL FOLDER (ACTIVE)</option>
                 </select>
             </div>
             
             <!-- Admin-only Global Library Search Pill -->
-            <div id="wp-global-search-container" style="display: none; align-items: center; border: var(--bw) solid #000000; background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px #000000; padding: 0 0.5rem; gap: 0.4rem; position: relative;">
+            <div id="wp-global-search-container" style="display: none; align-items: center; border: var(--bw) solid var(--border); background: var(--bg-raised); border-radius: 4px; box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55); padding: 0 0.5rem; gap: 0.4rem; position: relative;">
                 <i class="fa-solid fa-globe" style="color: var(--accent-blue); font-size: 0.8rem;" title="Search full indexed library"></i>
                 <input type="text" id="wp-global-search-input" placeholder="Search entire library..." style="background: transparent; border: none; color: var(--text); font-size: 0.75rem; outline: none; width: 160px; font-family: inherit; font-weight: 800; padding: 0.4rem 0.2rem;" autocomplete="off">
                 <button id="wp-global-search-clear" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0; display: none; align-items: center; justify-content: center; font-size: 0.75rem;"><i class="fa-solid fa-xmark"></i></button>
                 
                 <!-- Results Dropdown Popover -->
-                <div id="wp-global-search-results" style="display: none; position: absolute; top: 115%; left: 0; min-width: 380px; max-height: 400px; overflow-y: auto; background: var(--bg-raised); border: var(--bw) solid #000000; border-radius: 4px; box-shadow: 4px 4px 0px #000000; z-index: 1000; padding: 0.5rem; flex-direction: column; gap: 0.25rem;">
+                <div id="wp-global-search-results" style="display: none; position: absolute; top: 115%; left: 0; min-width: 380px; max-height: 400px; overflow-y: auto; background: var(--bg-raised); border: var(--bw) solid var(--border); border-radius: 4px; box-shadow: 4px 4px 0px rgba(2, 6, 23, 0.55); z-index: 1000; padding: 0.5rem; flex-direction: column; gap: 0.25rem;">
                 </div>
             </div>
             
@@ -2487,7 +2963,7 @@
             </button>
             
             <!-- Theater Mode Button -->
-            <button id="btn-wp-theater" class="wp-brutal-btn" style="background: #ffa502 !important;" title="Toggle Theater Mode">
+            <button id="btn-wp-theater" class="wp-brutal-btn" style="background: var(--accent-yellow) !important;" title="Toggle Theater Mode">
                 <i class="fa-solid fa-display"></i> Theater Mode
             </button>
             <button id="btn-wp-hotkeys" style="display: none;"></button>
@@ -2499,7 +2975,58 @@
     <div class="main-container">
         <!-- Left: Video Panel -->
         <div class="player-pane">
-            <div class="video-wrapper" style="position: relative;">
+            <div class="watch-main-layout">
+                <aside class="cowatch-left-panel" aria-label="Co-Watch Controls">
+                    <div class="wp-playback-settings-bar" id="wp-playback-settings-bar">
+                        <div class="wp-playback-settings-title">
+                            <i class="fa-solid fa-sliders"></i> Co-Watch Controls
+                        </div>
+                        <div class="wp-playback-settings-pills">
+                            <!-- Speed Control Pill -->
+                            <div class="wp-control-pill">
+                                <label for="wp-speed-select" class="wp-control-label wp-speed-label">
+                                    <i class="fa-solid fa-gauge-high"></i> Speed
+                                </label>
+                                <div class="wp-select-wrapper">
+                                    <select id="wp-speed-select" class="wp-control-select">
+                                        <option value="0.75">0.75x</option>
+                                        <option value="1" selected>1.0x</option>
+                                        <option value="1.25">1.25x</option>
+                                        <option value="1.5">1.5x</option>
+                                        <option value="2">2.0x</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Subtitles Control Pill -->
+                            <div class="wp-control-pill">
+                                <label for="wp-subtitle-select" class="wp-control-label wp-subs-label">
+                                    <i class="fa-solid fa-closed-captioning"></i> Subs
+                                </label>
+                                <div class="wp-select-wrapper">
+                                    <select id="wp-subtitle-select" class="wp-control-select">
+                                        <option value="none" selected>Disabled</option>
+                                        <!-- Dynamically loaded subtitle files -->
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Audio Track Control Pill -->
+                            <div class="wp-control-pill">
+                                <label for="wp-audio-select" class="wp-control-label wp-audio-label">
+                                    <i class="fa-solid fa-music"></i> Audio
+                                </label>
+                                <div class="wp-select-wrapper">
+                                    <select id="wp-audio-select" class="wp-control-select">
+                                        <option value="default" selected>Default</option>
+                                        <!-- Dynamically loaded HLS tracks -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+                <div class="watch-center-column">
+            <div class="watch-media-stage count-1" id="wp-media-stage">
+            <div class="video-wrapper media-tile main-video-tile" id="wp-main-video-tile" data-media-tile-id="main-video" data-media-type="mainVideo" style="position: relative;">
                 <div class="player-lock-overlay" id="wp-player-lock-overlay">
                     <i class="fa-solid fa-lock"></i> Playback Locked by Host
                 </div>
@@ -2509,7 +3036,7 @@
                 <div class="buffering-overlay" id="wp-buffering-overlay">
                     <div class="buffering-card">
                         <div class="buffering-spinner"></div>
-                        <div class="buffering-text" id="wp-buffering-text">Waiting for peers to buffer...</div>
+                        <div class="buffering-text" id="wp-buffering-text">Buffering locally...</div>
                     </div>
                 </div>
                 
@@ -2530,23 +3057,13 @@
                     <div class="color-dot-picker" data-color="#1e90ff" style="background: #1e90ff;" title="Blue"></div>
                     <div class="color-dot-picker" data-color="#ffa502" style="background: #ffa502;" title="Orange"></div>
                     <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
-                    <button class="laser-toolbar-btn" id="btn-clear-drawings" title="Clear All Drawings" style="color: #ef4444; padding: 4px 8px;">
+                    <button class="laser-toolbar-btn" id="btn-clear-drawings" title="Clear All Drawings" style="color: var(--color-danger); padding: 4px 8px;">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </div>
                 
                 <video id="lightbox-video" controls playsinline></video>
                 <canvas class="laser-canvas" id="laser-canvas"></canvas>
-                
-                <!-- Screen share overlay container -->
-                <div id="wp-screen-share-container" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1001; align-items: center; justify-content: center;">
-                    <video id="wp-screen-share-video" style="width: 100%; height: 100%; object-fit: contain;" autoplay playsinline></video>
-                    <!-- Screen Share Indicator Banner -->
-                    <div id="wp-screen-share-banner" style="position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.85); border: 2px solid var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); padding: 0.5rem 1rem; border-radius: 4px; color: #fff; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; z-index: 1002;">
-                        <i class="fa-solid fa-desktop" style="color: var(--accent-blue);"></i>
-                        <span id="wp-screen-share-text">Screen shared by ...</span>
-                    </div>
-                </div>
                 
                 <!-- Floating Glassmorphic Gallery & Slideshow Toolbar (Feature 5) -->
                 <div id="wp-gallery-toolbar" class="wp-gallery-toolbar" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 22, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 30px; padding: 0.5rem 1rem; align-items: center; gap: 0.75rem; z-index: 1000; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); transition: opacity 0.3s, transform 0.3s; pointer-events: auto; flex-wrap: wrap;">
@@ -2567,7 +3084,7 @@
                             <option value="10000">10s</option>
                             <option value="15000">15s</option>
                         </select>
-                        <span id="wp-slideshow-badge" style="display: none; background: var(--accent); color: #101013; font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; animation: pulse 1.5s infinite;">Slideshow</span>
+                        <span id="wp-slideshow-badge" style="display: none; background: var(--accent); color: var(--on-accent); font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; animation: pulse 1.5s infinite;">Slideshow</span>
                     </div>
                     
                     <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15);"></div>
@@ -2581,57 +3098,15 @@
                     </div>
                 </div>
             </div>
-            
-
-            
-            <!-- Playback Settings Bar (Modular Speed, Subtitles, Audio track) -->
-            <div class="wp-playback-settings-bar" id="wp-playback-settings-bar">
-                <div class="wp-playback-settings-title">
-                    <i class="fa-solid fa-sliders"></i> Co-Watch Controls
-                </div>
-                <div class="wp-playback-settings-pills">
-                    <!-- Speed Control Pill -->
-                    <div class="wp-control-pill">
-                        <label for="wp-speed-select" class="wp-control-label wp-speed-label">
-                            <i class="fa-solid fa-gauge-high"></i> Speed
-                        </label>
-                        <div class="wp-select-wrapper">
-                            <select id="wp-speed-select" class="wp-control-select">
-                                <option value="0.75">0.75x</option>
-                                <option value="1" selected>1.0x</option>
-                                <option value="1.25">1.25x</option>
-                                <option value="1.5">1.5x</option>
-                                <option value="2">2.0x</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Subtitles Control Pill -->
-                    <div class="wp-control-pill">
-                        <label for="wp-subtitle-select" class="wp-control-label wp-subs-label">
-                            <i class="fa-solid fa-closed-captioning"></i> Subs
-                        </label>
-                        <div class="wp-select-wrapper">
-                            <select id="wp-subtitle-select" class="wp-control-select">
-                                <option value="none" selected>Disabled</option>
-                                <!-- Dynamically loaded subtitle files -->
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Audio Track Control Pill -->
-                    <div class="wp-control-pill">
-                        <label for="wp-audio-select" class="wp-control-label wp-audio-label">
-                            <i class="fa-solid fa-music"></i> Audio
-                        </label>
-                        <div class="wp-select-wrapper">
-                            <select id="wp-audio-select" class="wp-control-select">
-                                <option value="default" selected>Default</option>
-                                <!-- Dynamically loaded HLS tracks -->
-                            </select>
-                        </div>
+                <div id="wp-screen-share-container" class="media-tile screen-share-tile" data-media-tile-id="screen-share" data-media-type="screenShare">
+                    <video id="wp-screen-share-video" autoplay playsinline></video>
+                    <div id="wp-screen-share-banner" class="screen-share-banner">
+                        <i class="fa-solid fa-desktop" style="color: var(--accent-blue);"></i>
+                        <span id="wp-screen-share-text">Screen shared by ...</span>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Horizontal UP NEXT Playlist Row -->
             <div class="brutal-playlist-container" id="wp-playlist-container">
                 <div class="playlist-title-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
@@ -2647,6 +3122,8 @@
                 </div>
                 <div class="horizontal-playlist-row" id="wp-playlist-grid">
                     <!-- Loaded dynamically -->
+                </div>
+            </div>
                 </div>
             </div>
         </div>
@@ -2668,6 +3145,9 @@
                     </div>
                     <button class="brutal-mic-toggle-btn" id="btn-mic-toggle" title="Toggle Microphone" disabled>
                         <i class="fa-solid fa-microphone-slash" id="brutal-mic-icon"></i>
+                    </button>
+                    <button class="brutal-mic-toggle-btn camera-toggle-btn" id="btn-webcam-toggle" title="Toggle Camera" disabled>
+                        <i class="fa-solid fa-video-slash" id="webcam-icon"></i>
                     </button>
                     <!-- Toggle Voice settings panel visibility -->
                     <button class="panel-toggle-btn" id="btn-toggle-voice-settings" title="Toggle Voice Settings" style="margin-left: 0.25rem;">
@@ -2765,7 +3245,7 @@
                 <div id="sidebar-queue-container" style="display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 0 0.25rem;">
                     <div class="queue-header-info" style="font-size: 0.75rem; color: var(--text-muted); padding: 0.25rem 0 0.5rem 0; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                         <span>Drag items to reorder</span>
-                        <button class="btn" id="btn-clear-queue" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 4px; cursor: pointer; transition: all 0.15s; font-family: inherit;">Clear Queue</button>
+                        <button class="btn" id="btn-clear-queue" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; background: rgba(239, 68, 68, 0.12); color: var(--color-danger); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 4px; cursor: pointer; transition: all 0.15s; font-family: inherit;">Clear Queue</button>
                     </div>
                     <div id="wp-queue-list" class="queue-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0;">
                         <div class="queue-empty-state" style="padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
@@ -2884,10 +3364,10 @@
                 </div>
                 
                 <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.75rem;">
-                    <button class="btn" id="btn-wp-profile-randomize" style="background: var(--accent-yellow) !important; color: #000000 !important; font-weight: 800; border: var(--bw) solid #000000; box-shadow: 2px 2px 0px #000000;"><i class="fa-solid fa-dice"></i> RANDOMIZE</button>
+                    <button class="btn" id="btn-wp-profile-randomize" style="background: var(--accent-yellow) !important; color: var(--on-warm) !important; font-weight: 800; border: var(--bw) solid var(--border); box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55);"><i class="fa-solid fa-dice"></i> RANDOMIZE</button>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn" id="btn-wp-profile-cancel" style="background: rgba(255,255,255,0.05); color: var(--text-main);">CANCEL</button>
-                        <button class="btn" id="btn-wp-profile-save" style="background: var(--accent-pink) !important; color: #FFFFFF !important; font-weight: 800; border: var(--bw) solid #000000; box-shadow: 2px 2px 0px #000000;">SAVE</button>
+                        <button class="btn" id="btn-wp-profile-save" style="background: var(--accent-pink) !important; color: var(--on-accent) !important; font-weight: 800; border: var(--bw) solid var(--border); box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55);">SAVE</button>
                     </div>
                 </div>
             </div>
@@ -2903,7 +3383,7 @@
                 <input type="text" class="input-field" id="wp-custom-media-url" placeholder="Enter stream URL (http://... or https://...)" style="width: 100%;">
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
                     <button class="btn" id="btn-wp-custom-media-cancel" style="background: rgba(255,255,255,0.05); color: var(--text-main);">Cancel</button>
-                    <button class="btn btn-primary" id="btn-wp-custom-media-submit" style="background: var(--accent-pink) !important; color: #FFFFFF !important; font-weight: 800; border: var(--bw) solid #000000; box-shadow: 2px 2px 0px #000000;">Load URL</button>
+                    <button class="btn btn-primary" id="btn-wp-custom-media-submit" style="background: var(--accent-pink) !important; color: var(--on-accent) !important; font-weight: 800; border: var(--bw) solid var(--border); box-shadow: 2px 2px 0px rgba(2, 6, 23, 0.55);">Load URL</button>
                 </div>
             </div>
         </div>
@@ -2929,7 +3409,7 @@
     <!-- Admin Panel Modal -->
     <div class="modal-overlay" id="wp-admin-overlay">
         <div class="modal-box" style="max-width: 480px;">
-            <h3 style="margin-top: 0; color: #eab308; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <h3 style="margin-top: 0; color: var(--accent-yellow); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
                 <span><i class="fa-solid fa-crown"></i> Admin Control Panel</span>
                 <button id="btn-wp-admin-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
             </h3>
@@ -2959,7 +3439,7 @@
                             <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
                         </label>
                     </div>
-                    <button class="btn" id="btn-admin-clear-chat" style="width: 100%; font-size: 0.8rem; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25);">
+                    <button class="btn" id="btn-admin-clear-chat" style="width: 100%; font-size: 0.8rem; background: rgba(239, 68, 68, 0.12); color: var(--color-danger); border: 1px solid rgba(239, 68, 68, 0.25);">
                         <i class="fa-solid fa-trash-can"></i> Clear Chat History
                     </button>
                 </div>
@@ -2971,6 +3451,18 @@
                         <span style="font-size: 0.8rem; color: var(--text-muted);">Allow participants to share screen</span>
                         <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
                             <input type="checkbox" id="admin-toggle-screen-share" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Section: Webcam Permission -->
+                <div style="background: rgba(255,255,255,0.02); padding: 0.85rem; border-radius: 10px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-main); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Webcams</h4>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Allow participants to turn on cameras</span>
+                        <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 22px;">
+                            <input type="checkbox" id="admin-toggle-webcam" checked style="opacity: 0; width: 0; height: 0;">
                             <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); border-radius: 22px; transition: .3s;"></span>
                         </label>
                     </div>
@@ -3001,7 +3493,7 @@
                         <button class="btn btn-wp-extend-hours" style="flex: 1; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text-main); padding: 0.5rem 0.25rem;" data-hours="24">+24 Hours</button>
                     </div>
                     <hr style="border: 0; border-top: 1px solid var(--border); margin: 0.25rem 0;">
-                    <button class="btn" id="btn-admin-end-party" style="background: #ef4444; color: white; font-weight: 700; font-size: 0.8rem; padding: 0.55rem; width: 100%;">
+                    <button class="btn" id="btn-admin-end-party" style="background: var(--color-danger); color: var(--on-accent); font-weight: 700; font-size: 0.8rem; padding: 0.55rem; width: 100%;">
                         <i class="fa-solid fa-skull-crossbones"></i> End Party & Disconnect All
                     </button>
                 </div>
@@ -3013,7 +3505,7 @@
     <!-- Kicked Modal -->
     <div class="modal-overlay" id="wp-kicked-overlay">
         <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-circle-minus"></i> Kicked</h3>
+            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-circle-minus"></i> Kicked</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">You have been removed from this watch party room by the host.</p>
             <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
         </div>
@@ -3022,7 +3514,7 @@
     <!-- Party Ended Modal -->
     <div class="modal-overlay" id="wp-ended-overlay">
         <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: #ef4444; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
+            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">This watch party has been ended by the host.</p>
             <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
         </div>
@@ -3042,10 +3534,10 @@
                     <label style="font-size: 0.75rem; color: var(--text-dim);">Audio File</label>
                     <input type="file" id="wp-sound-file" accept=".mp3,.wav,.ogg,.webm" style="font-size: 0.8rem; color: var(--text);">
                 </div>
-                <div id="wp-sound-upload-error" style="display: none; color: #ef4444; font-size: 0.75rem;"></div>
+                <div id="wp-sound-upload-error" style="display: none; color: var(--color-danger); font-size: 0.75rem;"></div>
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
                     <button class="btn" id="btn-wp-sound-cancel" style="background: rgba(255,255,255,0.05); color: var(--text);">Cancel</button>
-                    <button class="btn btn-primary" id="btn-wp-sound-submit" style="background: var(--accent) !important; color: #101013 !important; font-weight: 800;">Upload</button>
+                    <button class="btn btn-primary" id="btn-wp-sound-submit" style="background: var(--accent) !important; color: var(--on-accent) !important; font-weight: 800;">Upload</button>
                 </div>
             </div>
         </div>
@@ -3061,10 +3553,10 @@
                     <input type="text" class="input-field" id="wp-rename-sound-name" style="width: 100%;">
                 </div>
                 <input type="hidden" id="wp-rename-sound-id">
-                <div id="wp-sound-rename-error" style="display: none; color: #ef4444; font-size: 0.75rem;"></div>
+                <div id="wp-sound-rename-error" style="display: none; color: var(--color-danger); font-size: 0.75rem;"></div>
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem;">
                     <button class="btn" id="btn-wp-sound-rename-cancel" style="background: rgba(255,255,255,0.05); color: var(--text);">Cancel</button>
-                    <button class="btn btn-primary" id="btn-wp-sound-rename-submit" style="background: var(--accent) !important; color: #101013 !important; font-weight: 800;">Save</button>
+                    <button class="btn btn-primary" id="btn-wp-sound-rename-submit" style="background: var(--accent) !important; color: var(--on-accent) !important; font-weight: 800;">Save</button>
                 </div>
             </div>
         </div>

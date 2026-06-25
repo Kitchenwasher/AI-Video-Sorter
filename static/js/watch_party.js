@@ -481,16 +481,38 @@ if (!window.safeSessionStorage) {
     
     let localStream = null;
     let localScreenStream = null;
+    let localWebcamStream = null;
+    let webcamEnabled = false;
+    let pendingWebcamStart = false;
     let lastReactionTime = 0;
     let screenSenders = {}; // maps peerId -> array of RTCRtpSender
+    let webcamSenders = {}; // maps peerId -> array of RTCRtpSender
     let allowScreenShare = false;
+    let allowWebcam = true;
     let activeScreenShare = null;
+    let activeWebcams = {};
+    let remoteWebcamStreams = {};
+    let remoteTrackMetadata = {};
+    let focusedWebcamUserId = null;
+    let focusedMediaTileId = null;
     let sseSource = null;
     let currentFilename = null;
     let mediaLoadSequence = 0;
     let mediaStateReleaseTimer = null;
     let mediaFilesList = [];
     let ignorePlayerEvents = false;
+    let isApplyingRemoteState = false;
+    let isChangingMedia = false;
+    let suppressLocalEvents = false;
+    let lastAppliedCommandId = 0;
+    let currentMediaVersion = 0;
+    let authoritativeRoomState = null;
+    let serverClockOffsetSeconds = 0;
+    let playbackRateRestoreTimer = null;
+    const playbackUnlockStorageKey = `wp_playback_unlocked_${window.PARTY_ID}`;
+    let playbackUnlocked = window.safeSessionStorage.getItem(playbackUnlockStorageKey) === 'true';
+    const DRIFT_IGNORE_SECONDS = 0.4;
+    const DRIFT_SOFT_SECONDS = 2.0;
     Object.defineProperty(window, 'ignorePlayerEvents', {
         get: () => ignorePlayerEvents,
         set: (val) => { ignorePlayerEvents = val; },
@@ -510,6 +532,7 @@ if (!window.safeSessionStorage) {
     let soundboardMuted = localStorage.getItem('wp_soundboard_muted') === 'true';
     let lastSoundboardPlayTime = 0;
     let soundboardCache = {};
+    let soundboardPreloadCache = {};
     let activeAudioObjects = new Set();
     let soundboardAudioUnlocked = false;
 
@@ -823,6 +846,33 @@ if (!window.safeSessionStorage) {
         }
     }
 
+    function initWebcamControls() {
+        const btnWebcam = document.getElementById('btn-webcam-toggle');
+        if (btnWebcam) {
+            btnWebcam.disabled = false;
+            btnWebcam.onclick = () => {
+                if (webcamEnabled) {
+                    stopLocalWebcam();
+                } else {
+                    startLocalWebcam();
+                }
+            };
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                clearMediaFocus();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            stopLocalWebcam({ emit: false });
+        });
+
+        renderWebcamGrid();
+        updateWebcamUI();
+    }
+
     function initCustomMedia() {
         const customBtn = document.getElementById('btn-wp-custom-media');
         const overlay = document.getElementById('wp-custom-media-overlay');
@@ -969,6 +1019,7 @@ if (!window.safeSessionStorage) {
         initFolderDropdown();
         initThemeToggle();
         initScreenShareButton();
+        initWebcamControls();
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');
@@ -1139,6 +1190,9 @@ if (!window.safeSessionStorage) {
         window.getClientId = () => clientId;
         window.getClientName = () => clientName;
         window.getIsPlaybackLocked = () => isPlaybackLocked;
+        window.getWatchPartyAuthoritativeState = () => authoritativeRoomState;
+        window.getWatchPartyExpectedPosition = getExpectedPlaybackPosition;
+        window.isWatchPartyPlaybackUnlocked = () => playbackUnlocked;
 
         socket.on('connect', () => {
             addLogEntry('System', 'Connected! Waiting for synchronizations...');
@@ -1212,11 +1266,21 @@ if (!window.safeSessionStorage) {
                 localStorage.setItem('wp_nickname', name);
                 localStorage.setItem('wp_avatar', avatar);
                 sessionStorage.setItem('wp_client_name', name);
+                if (activeWebcams[clientId]) {
+                    activeWebcams[clientId].name = name;
+                    activeWebcams[clientId].avatar = avatar;
+                    renderWebcamGrid();
+                }
                 updateLocalProfileUI();
             } else {
                 if (activePeers[client_id]) {
                     activePeers[client_id].name = name;
                     activePeers[client_id].avatar = avatar;
+                    if (activeWebcams[client_id]) {
+                        activeWebcams[client_id].name = name;
+                        activeWebcams[client_id].avatar = avatar;
+                        renderWebcamGrid();
+                    }
                     updatePeersUI();
                 }
             }
@@ -1247,22 +1311,36 @@ if (!window.safeSessionStorage) {
             updateScreenShareUI();
         });
 
+        socket.on('webcam_permission_changed', (data) => {
+            allowWebcam = data.allowed;
+            const toggleWebcam = document.getElementById('admin-toggle-webcam');
+            if (toggleWebcam) {
+                toggleWebcam.checked = allowWebcam;
+            }
+            updateWebcamUI();
+            if (!allowWebcam && !adminToken && (webcamEnabled || pendingWebcamStart)) {
+                stopLocalWebcam({ emit: false });
+                showToast(data.message || 'Webcam is disabled by admin.', 'warning');
+            }
+        });
+
         socket.on('soundboard_play_broadcast', (data) => {
             const url = soundboardCache[data.sound_id];
             if (url) {
                 playLocalSound(url);
-                addSystemChatMessage(`${data.client_name} played ${data.display_name}`);
+                showSoundboardEvent(data.client_name, data.display_name);
             } else {
                 fetch('/api/watch-party/soundboard/list')
                     .then(res => res.json())
                     .then(listData => {
                         if (listData.status === 'success') {
-                            listData.default_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
-                            listData.custom_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                            cacheSoundboardSounds(listData.default_sounds, listData.custom_sounds);
                             const cachedUrl = soundboardCache[data.sound_id];
                             if (cachedUrl) {
                                 playLocalSound(cachedUrl);
-                                addSystemChatMessage(`${data.client_name} played ${data.display_name}`);
+                                showSoundboardEvent(data.client_name, data.display_name);
+                            } else {
+                                showToast(`Sound file unavailable: ${data.display_name}`, 'error');
                             }
                         }
                     })
@@ -1298,6 +1376,39 @@ if (!window.safeSessionStorage) {
             addLogEntry('System', `Screen sharing stopped.`);
             addSystemChatMessage(`Screen sharing stopped.`);
             updateScreenShareUI();
+        });
+
+        socket.on('webcam_started', (data) => {
+            if (data.client_id === clientId && localWebcamStream && !webcamEnabled) {
+                activateApprovedLocalWebcam();
+            }
+            activeWebcams[data.client_id] = {
+                client_id: data.client_id,
+                name: data.name,
+                avatar: data.avatar || 'cool_kid',
+                is_admin: data.is_admin || false
+            };
+            if (activePeers[data.client_id]) {
+                activePeers[data.client_id].webcam_active = true;
+            }
+            renderWebcamGrid();
+            updateWebcamUI();
+        });
+
+        socket.on('webcam_stopped', (data) => {
+            const stoppedId = data.client_id;
+            delete activeWebcams[stoppedId];
+            if (activePeers[stoppedId]) {
+                activePeers[stoppedId].webcam_active = false;
+            }
+            removeRemoteWebcam(stoppedId);
+            if (stoppedId === clientId && webcamEnabled) {
+                stopLocalWebcam({ emit: false });
+            } else if (stoppedId === clientId && pendingWebcamStart) {
+                stopLocalWebcam({ emit: false });
+            }
+            renderWebcamGrid();
+            updateWebcamUI();
         });
 
         socket.on('folder_changed', (data) => {
@@ -1378,7 +1489,8 @@ if (!window.safeSessionStorage) {
 
         // Bind local player events to broadcast modifications
         player.on('play', () => {
-            if (ignorePlayerEvents) return;
+            markPlaybackUnlocked();
+            if (ignorePlayerEvents || suppressLocalEvents || isApplyingRemoteState || isChangingMedia) return;
             if (isPlaybackLocked && !adminToken) {
                 showToast('Playback is locked by the host.', 'warning');
                 ignorePlayerEvents = true;
@@ -1390,7 +1502,7 @@ if (!window.safeSessionStorage) {
         });
 
         player.on('pause', () => {
-            if (ignorePlayerEvents) return;
+            if (ignorePlayerEvents || suppressLocalEvents || isApplyingRemoteState || isChangingMedia) return;
             if (isPlaybackLocked && !adminToken) {
                 showToast('Playback is locked by the host.', 'warning');
                 return;
@@ -1399,7 +1511,7 @@ if (!window.safeSessionStorage) {
         });
 
         player.on('seeked', () => {
-            if (ignorePlayerEvents) return;
+            if (ignorePlayerEvents || suppressLocalEvents || isApplyingRemoteState || isChangingMedia) return;
             if (isPlaybackLocked && !adminToken) {
                 showToast('Playback is locked by the host.', 'warning');
                 return;
@@ -1565,11 +1677,7 @@ if (!window.safeSessionStorage) {
     }
 
     function selectAndBroadcastMedia(filename) {
-        loadMediaAndApplyState(filename, { position: 0.0, playing: false }).then((loaded) => {
-            if (!loaded) return;
-            // New selection starts paused at 0.0
-            broadcastSync('pause', 0.0);
-        });
+        broadcastSync('change_media', 0.0, filename);
     }
 
     function waitForPlayerReady() {
@@ -1613,7 +1721,20 @@ if (!window.safeSessionStorage) {
         waitForVideoReady(5000).then(resolve);
     }
 
+    function markPlaybackUnlocked() {
+        playbackUnlocked = true;
+        window.safeSessionStorage.setItem(playbackUnlockStorageKey, 'true');
+        hideAutoplayOverlay();
+    }
+
+    function isAutoplayBlockedError(err) {
+        if (!err) return false;
+        return err.name === 'NotAllowedError'
+            || err.code === 0 && /play\(\)|user|gesture|interact|autoplay/i.test(err.message || '');
+    }
+
     function showAutoplayOverlay() {
+        if (playbackUnlocked) return;
         if (document.getElementById('wp-autoplay-overlay')) return;
         
         const wrapper = document.querySelector('.video-wrapper');
@@ -1653,10 +1774,17 @@ if (!window.safeSessionStorage) {
         overlay.onclick = async () => {
             setPlayerEventsIgnored(true);
             try {
+                markPlaybackUnlocked();
+                const expected = getExpectedPlaybackPosition(authoritativeRoomState);
+                if (Number.isFinite(expected)) {
+                    player.currentTime = clampPlaybackPosition(expected);
+                }
                 await player.play();
                 hideAutoplayOverlay();
             } catch (err) {
                 console.warn('Failed to play after click:', err);
+                playbackUnlocked = false;
+                window.safeSessionStorage.removeItem(playbackUnlockStorageKey);
             } finally {
                 releasePlayerEventsAfter(1000);
             }
@@ -1680,16 +1808,20 @@ if (!window.safeSessionStorage) {
         await waitForPlayerReady();
 
         const loadId = ++mediaLoadSequence;
-        const position = Number.isFinite(Number(state.position)) ? Math.max(0, Number(state.position)) : 0;
+        const stateVersion = Number(state.media_version) || currentMediaVersion || 0;
+        currentMediaVersion = Math.max(currentMediaVersion, stateVersion);
+        const position = getExpectedPlaybackPosition(state);
         const shouldPlay = !!state.playing;
         const requestedSpeed = Number.parseFloat(state.speed);
 
+        isChangingMedia = true;
         clearMediaTransitionState();
         setPlayerEventsIgnored(true);
+        suppressLocalEvents = true;
 
         try {
             await loadMediaFile(filename);
-            if (loadId !== mediaLoadSequence) return false;
+            if (loadId !== mediaLoadSequence || stateVersion < currentMediaVersion) return false;
 
             if (window.isImageActive) {
                 try { player.pause(); } catch (e) {}
@@ -1697,7 +1829,7 @@ if (!window.safeSessionStorage) {
             }
 
             await waitForVideoReady(5000);
-            if (loadId !== mediaLoadSequence) return false;
+            if (loadId !== mediaLoadSequence || stateVersion < currentMediaVersion) return false;
 
             if (Number.isFinite(requestedSpeed) && requestedSpeed > 0) {
                 player.speed = requestedSpeed;
@@ -1709,13 +1841,17 @@ if (!window.safeSessionStorage) {
                 player.currentTime = targetTime;
             }
 
-            if (shouldPlay) {
+            if (shouldPlay && playbackUnlocked) {
                 try {
                     await player.play();
                 } catch (err) {
-                    console.warn('Autoplay blocked while applying Watch Party state:', err);
-                    showAutoplayOverlay();
+                    if (isAutoplayBlockedError(err)) {
+                        console.warn('Autoplay blocked while applying Watch Party state:', err);
+                        showAutoplayOverlay();
+                    }
                 }
+            } else if (shouldPlay && !playbackUnlocked) {
+                showAutoplayOverlay();
             } else {
                 player.pause();
                 hideAutoplayOverlay();
@@ -1727,7 +1863,11 @@ if (!window.safeSessionStorage) {
             return false;
         } finally {
             // Keep ignorePlayerEvents active for 1000ms to allow all browser events to settle
-            releasePlayerEventsAfter(1000);
+            if (loadId === mediaLoadSequence) {
+                isChangingMedia = false;
+                suppressLocalEvents = false;
+                releasePlayerEventsAfter(1000);
+            }
         }
     }
 
@@ -1977,11 +2117,129 @@ if (!window.safeSessionStorage) {
         window.watchPartyRoomSpeed = speed;
     }
 
+    function normalizePlaybackState(data) {
+        const source = data && data.playback_state ? data.playback_state : data;
+        if (!source) return null;
+        const state = { ...source };
+        state.current_media = state.current_media || state.filename;
+        state.filename = state.filename || state.current_media;
+        state.media_version = Number(state.media_version) || 1;
+        state.last_command_id = Number(state.last_command_id) || 0;
+        state.speed = Number(state.speed) || 1.0;
+        state.position = Number(state.position) || 0.0;
+        state.updated_at = Number(state.updated_at || state.last_updated || state.server_time || 0);
+        if (state.server_time) {
+            serverClockOffsetSeconds = (Date.now() / 1000) - Number(state.server_time);
+        }
+        return state;
+    }
+
+    function getServerNowSeconds() {
+        return (Date.now() / 1000) - serverClockOffsetSeconds;
+    }
+
+    function getExpectedPlaybackPosition(state = authoritativeRoomState) {
+        if (!state) return 0.0;
+        const base = Number(state.position) || 0.0;
+        const speed = Number(state.speed) || 1.0;
+        if (!state.playing) return base;
+        const updatedAt = Number(state.updated_at || state.last_updated || state.server_time || getServerNowSeconds());
+        const elapsed = Math.max(0, getServerNowSeconds() - updatedAt);
+        return Math.max(0, base + (elapsed * speed));
+    }
+
+    function resetTemporaryPlaybackRate(delayMs = 900) {
+        if (playbackRateRestoreTimer) clearTimeout(playbackRateRestoreTimer);
+        playbackRateRestoreTimer = setTimeout(() => {
+            if (!authoritativeRoomState || !player || player.paused) return;
+            const normalSpeed = Number(authoritativeRoomState.speed) || 1.0;
+            if (Math.abs(player.speed - normalSpeed) > 0.01) {
+                player.speed = normalSpeed;
+            }
+            playbackRateRestoreTimer = null;
+        }, delayMs);
+    }
+
     function getDefaultPlayableFile() {
         return mediaFilesList.find(file => {
             const ext = (file.filename || '').split('.').pop().toLowerCase();
             return ext && ext !== 'srt' && ext !== 'vtt';
         });
+    }
+
+    async function applyAuthoritativeState(rawState, options = {}) {
+        const state = normalizePlaybackState(rawState);
+        if (!state || !state.filename) return;
+
+        if (state.last_command_id && state.last_command_id <= lastAppliedCommandId && !options.forceApply) {
+            return;
+        }
+
+        lastAppliedCommandId = Math.max(lastAppliedCommandId, state.last_command_id || 0);
+        authoritativeRoomState = state;
+        window.watchPartyRoomSpeed = state.speed;
+
+        const needsMediaChange = state.filename !== currentFilename || state.media_version !== currentMediaVersion;
+        currentMediaVersion = Math.max(currentMediaVersion, state.media_version || 1);
+
+        isApplyingRemoteState = true;
+        suppressLocalEvents = true;
+        setPlayerEventsIgnored(true);
+        try {
+            if (needsMediaChange) {
+                await loadMediaAndApplyState(state.filename, state);
+                return;
+            }
+
+            if (window.isImageActive) return;
+            await waitForVideoReady(5000);
+            applySoftPlaybackCorrection(state, options);
+        } finally {
+            isApplyingRemoteState = false;
+            suppressLocalEvents = false;
+            releasePlayerEventsAfter(700);
+        }
+    }
+
+    function applySoftPlaybackCorrection(state = authoritativeRoomState, options = {}) {
+        if (!state || !player || window.isImageActive) return;
+
+        const normalSpeed = Number(state.speed) || 1.0;
+        syncSpeedControl(normalSpeed);
+
+        const expected = clampPlaybackPosition(getExpectedPlaybackPosition(state));
+        const drift = player.currentTime - expected;
+        const absDrift = Math.abs(drift);
+
+        if (absDrift > DRIFT_SOFT_SECONDS || options.forceSeek) {
+            player.currentTime = expected;
+            player.speed = normalSpeed;
+        } else if (state.playing && absDrift >= DRIFT_IGNORE_SECONDS) {
+            player.speed = drift < 0 ? normalSpeed * 1.06 : normalSpeed * 0.94;
+            resetTemporaryPlaybackRate();
+        } else if (Math.abs(player.speed - normalSpeed) > 0.01) {
+            player.speed = normalSpeed;
+        }
+
+        if (state.playing) {
+            if (playbackUnlocked) {
+                const playPromise = player.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(err => {
+                        if (isAutoplayBlockedError(err)) {
+                            playbackUnlocked = false;
+                            window.safeSessionStorage.removeItem(playbackUnlockStorageKey);
+                            showAutoplayOverlay();
+                        }
+                    });
+                }
+            } else {
+                showAutoplayOverlay();
+            }
+        } else {
+            player.pause();
+            hideAutoplayOverlay();
+        }
     }
 
     /**
@@ -1993,7 +2251,9 @@ if (!window.safeSessionStorage) {
                 isPlaybackLocked = data.playback_locked || false;
                 isSlowMode = data.slow_mode || false;
                 allowScreenShare = data.allow_screen_share || false;
+                allowWebcam = (data.allow_webcam !== undefined) ? data.allow_webcam : true;
                 activeScreenShare = data.active_screen_share || null;
+                activeWebcams = data.active_webcams || {};
                 isSoundboardAllowed = (data.allow_soundboard !== undefined) ? data.allow_soundboard : true;
                 
                 const toggleScreenShareInit = document.getElementById('admin-toggle-screen-share');
@@ -2001,6 +2261,13 @@ if (!window.safeSessionStorage) {
                     toggleScreenShareInit.checked = allowScreenShare;
                 }
                 updateScreenShareUI();
+
+                const toggleWebcamInit = document.getElementById('admin-toggle-webcam');
+                if (toggleWebcamInit) {
+                    toggleWebcamInit.checked = allowWebcam;
+                }
+                renderWebcamGrid();
+                updateWebcamUI();
                 
                 const sbRoomToggleInit = document.getElementById('soundboard-room-toggle');
                 if (sbRoomToggleInit) {
@@ -2024,8 +2291,7 @@ if (!window.safeSessionStorage) {
                 }
 
                 if (data.playback_state && data.playback_state.filename) {
-                    const ps = data.playback_state;
-                    loadMediaAndApplyState(ps.filename, ps);
+                    applyAuthoritativeState(data.playback_state, { forceSeek: true, forceApply: true });
                 } else {
                     // Default to first file
                     const defaultFile = getDefaultPlayableFile();
@@ -2037,7 +2303,12 @@ if (!window.safeSessionStorage) {
                 // Register existing peers
                 if (data.peers) {
                     data.peers.forEach(peer => {
-                        activePeers[peer.client_id] = { name: peer.name, avatar: peer.avatar || 'cool_kid', is_admin: peer.is_admin || false };
+                        activePeers[peer.client_id] = {
+                            name: peer.name,
+                            avatar: peer.avatar || 'cool_kid',
+                            is_admin: peer.is_admin || false,
+                            webcam_active: !!activeWebcams[peer.client_id]
+                        };
                     });
                     updatePeersUI();
                 }
@@ -2046,7 +2317,7 @@ if (!window.safeSessionStorage) {
             case 'peer_joined':
                 addLogEntry('System', `${data.name} joined the watch party.`);
                 addSystemChatMessage(`${data.name} joined the room.`);
-                activePeers[data.client_id] = { name: data.name, avatar: data.avatar || 'cool_kid', is_admin: data.is_admin || false };
+                activePeers[data.client_id] = { name: data.name, avatar: data.avatar || 'cool_kid', is_admin: data.is_admin || false, webcam_active: false };
                 updatePeersUI();
 
                 // Existing client initiates connection to the newly joined peer
@@ -2072,13 +2343,21 @@ if (!window.safeSessionStorage) {
                 }
                 // Cleanup remote screen audio node
                 stopRemoteScreenAudio(data.client_id);
+                removeRemoteWebcam(data.client_id);
+                delete activeWebcams[data.client_id];
+                delete remoteTrackMetadata[data.client_id];
+                if (focusedMediaTileId === getWebcamMediaTileId(data.client_id)) {
+                    clearMediaFocus();
+                }
                 delete activePeers[data.client_id];
                 delete iceCandidateQueues[data.client_id];
+                delete screenSenders[data.client_id];
+                delete webcamSenders[data.client_id];
+                renderWebcamGrid();
                 updatePeersUI();
                 break;
 
             case 'sync':
-                if (data.sender_id === clientId) return;
                 const senderName = activePeers[data.sender_id]?.name || 'Someone';
                 
                 if (data.action === 'play') {
@@ -2089,7 +2368,7 @@ if (!window.safeSessionStorage) {
                     addLogEntry(senderName, `Seeked to ${formatTime(data.position)}`);
                 }
                 
-                handleIncomingSync(data.action, data.position, data.filename, data.playing, data);
+                applyAuthoritativeState(data, { forceSeek: data.action === 'seek' });
                 break;
 
             case 'folder_changed':
@@ -2104,9 +2383,12 @@ if (!window.safeSessionStorage) {
                 mediaFilesList = data.files || [];
                 renderPlaylist(mediaFilesList);
                 
-                const targetFilename = data.target_filename || (getDefaultPlayableFile() ? getDefaultPlayableFile().filename : null);
-                if (targetFilename) {
-                    loadMediaAndApplyState(targetFilename, { position: 0.0, playing: false });
+                const folderState = data.playback_state || null;
+                const targetFilename = data.target_filename || folderState?.filename || (getDefaultPlayableFile() ? getDefaultPlayableFile().filename : null);
+                if (folderState && folderState.filename) {
+                    applyAuthoritativeState(folderState, { forceSeek: true });
+                } else if (targetFilename) {
+                    loadMediaAndApplyState(targetFilename, { position: 0.0, playing: false, media_version: currentMediaVersion + 1 });
                 } else {
                     currentFilename = null;
                     const plyrContainer = document.querySelector('.plyr');
@@ -2124,6 +2406,7 @@ if (!window.safeSessionStorage) {
 
             case 'kicked':
                 if (window.socket) window.socket.disconnect();
+                stopLocalWebcam({ emit: false });
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
@@ -2167,9 +2450,42 @@ if (!window.safeSessionStorage) {
                     addSystemChatMessage('Chat history was cleared by the host.');
                 }
                 break;
+
+            case 'webcam_started':
+                if (data.client_id === clientId && localWebcamStream && !webcamEnabled) {
+                    activateApprovedLocalWebcam();
+                }
+                activeWebcams[data.client_id] = {
+                    client_id: data.client_id,
+                    name: data.name,
+                    avatar: data.avatar || 'cool_kid',
+                    is_admin: data.is_admin || false
+                };
+                if (activePeers[data.client_id]) {
+                    activePeers[data.client_id].webcam_active = true;
+                }
+                renderWebcamGrid();
+                updateWebcamUI();
+                break;
+
+            case 'webcam_stopped':
+                delete activeWebcams[data.client_id];
+                if (activePeers[data.client_id]) {
+                    activePeers[data.client_id].webcam_active = false;
+                }
+                removeRemoteWebcam(data.client_id);
+                if (data.client_id === clientId && webcamEnabled) {
+                    stopLocalWebcam({ emit: false });
+                } else if (data.client_id === clientId && pendingWebcamStart) {
+                    stopLocalWebcam({ emit: false });
+                }
+                renderWebcamGrid();
+                updateWebcamUI();
+                break;
                 
             case 'party_ended':
                 if (window.socket) window.socket.disconnect();
+                stopLocalWebcam({ emit: false });
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
@@ -2252,15 +2568,15 @@ if (!window.safeSessionStorage) {
         });
     }
 
-    function broadcastSync(action, position) {
-        if (!currentFilename) return;
+    function broadcastSync(action, position, filename = currentFilename) {
+        if (!filename) return;
         if (window.socket && window.socket.connected) {
             window.socket.emit('sync', {
                 party_id: window.PARTY_ID,
                 client_id: clientId,
                 action: action,
                 position: position,
-                filename: currentFilename
+                filename: filename
             });
         }
     }
@@ -2295,6 +2611,590 @@ if (!window.safeSessionStorage) {
             }
         }
         return lines.join('\r\n');
+    }
+
+    function getDisplayNameForPeer(peerId) {
+        if (peerId === clientId) return clientName || 'You';
+        return activePeers[peerId]?.name || activeWebcams[peerId]?.name || 'Viewer';
+    }
+
+    function getAvatarForPeer(peerId) {
+        if (peerId === clientId) return localAvatar || 'cool_kid';
+        return activePeers[peerId]?.avatar || activeWebcams[peerId]?.avatar || 'cool_kid';
+    }
+
+    function getLocalTrackMetadata() {
+        const metadata = { streams: {}, tracks: {} };
+        const addStream = (stream, kind) => {
+            if (!stream) return;
+            metadata.streams[stream.id] = kind;
+            stream.getTracks().forEach(track => {
+                metadata.tracks[track.id] = kind;
+            });
+        };
+        addStream(localStream, 'mic');
+        addStream(localScreenStream, 'screen');
+        addStream(localWebcamStream, 'webcam');
+        return metadata;
+    }
+
+    function getRemoteTrackKind(peerId, event) {
+        const stream = event.streams && event.streams[0];
+        const metadata = remoteTrackMetadata[peerId] || {};
+        if (event.track && metadata.tracks && metadata.tracks[event.track.id]) {
+            return metadata.tracks[event.track.id];
+        }
+        if (stream && metadata.streams && metadata.streams[stream.id]) {
+            return metadata.streams[stream.id];
+        }
+        if (event.track.kind === 'audio') {
+            return stream && stream.getVideoTracks().length > 0 ? 'screen' : 'mic';
+        }
+        if (event.track.kind === 'video') {
+            if (activeWebcams[peerId] && (!activeScreenShare || activeScreenShare.client_id !== peerId)) {
+                return 'webcam';
+            }
+            return 'screen';
+        }
+        return 'unknown';
+    }
+
+    function renegotiatePeer(peerId, reason = 'media change') {
+        const pc = peerConnections[peerId];
+        if (!pc) return Promise.resolve();
+        return pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
+            .then(offer => {
+                offer.sdp = optimizeAudioSDP(offer.sdp);
+                return pc.setLocalDescription(offer).then(() => offer);
+            })
+            .then(offer => sendSignal(peerId, offer))
+            .catch(err => console.error(`Error negotiating ${reason} with peer ${peerId}:`, err));
+    }
+
+    async function getMediaDeviceSnapshot() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            return { supported: false, devices: [] };
+        }
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            return {
+                supported: true,
+                devices: devices.map(device => ({
+                    kind: device.kind,
+                    label: device.label || '(label hidden)',
+                    deviceId: device.deviceId ? '(present)' : '(missing)',
+                    groupId: device.groupId ? '(present)' : '(missing)'
+                })),
+                videoInputCount: devices.filter(device => device.kind === 'videoinput').length
+            };
+        } catch (error) {
+            return {
+                supported: true,
+                errorName: error && error.name,
+                errorMessage: error && error.message,
+                devices: []
+            };
+        }
+    }
+
+    function getWebcamEnvironmentInfo(constraints) {
+        return {
+            mediaDevicesAvailable: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+            enumerateDevicesAvailable: !!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices),
+            secureContext: !!window.isSecureContext,
+            protocol: window.location.protocol,
+            hostname: window.location.hostname,
+            constraints
+        };
+    }
+
+    function getWebcamStartErrorMessage(error) {
+        const name = error && error.name ? error.name : '';
+        const detail = error && error.message ? ` ${error.message}` : '';
+        const isEdge = /\bEdg\//.test(navigator.userAgent || '');
+
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            return `Camera permission denied (${name}). Allow camera access in browser settings.${detail}`;
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+            if (isEdge) {
+                return `Webcam works best in Chrome. Edge camera initialization failed (${name}).${detail}`;
+            }
+            return `No camera was found by the browser. Check Windows camera privacy settings, camera driver, or try another browser. (${name}).${detail}`;
+        }
+        if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+            return `Camera is busy or already in use (${name}).${detail}`;
+        }
+        if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+            return `Camera constraints are not supported by this device (${name}).${detail}`;
+        }
+        if (name === 'SecurityError') {
+            return `Camera requires HTTPS or localhost (${name}).${detail}`;
+        }
+        if (name === 'NoVideoTrackError') {
+            return `Camera stream started but contained no video track.${detail}`;
+        }
+
+        return name ? `Camera could not start (${name}).${detail}` : `Camera could not start.${detail}`;
+    }
+
+    function isCameraNotFoundError(error) {
+        return error && (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError');
+    }
+
+    function isCameraConstraintError(error) {
+        return error && (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError');
+    }
+
+    function sanitizeCameraConstraints(constraints) {
+        if (!constraints || !constraints.video || typeof constraints.video === 'boolean') {
+            return constraints;
+        }
+
+        const sanitized = {
+            ...constraints,
+            video: { ...constraints.video }
+        };
+        if (sanitized.video.deviceId) {
+            sanitized.video.deviceId = '(present)';
+        }
+        return sanitized;
+    }
+
+    async function getVideoInputDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            return [];
+        }
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            return devices.filter(device => device.kind === 'videoinput' && device.deviceId);
+        } catch (error) {
+            console.warn('Unable to enumerate camera devices for retry:', {
+                name: error && error.name,
+                message: error && error.message
+            });
+            return [];
+        }
+    }
+
+    async function requestWebcamStream(primaryConstraints, fallbackConstraints) {
+        const attempts = [];
+        try {
+            attempts.push({ label: 'safe', constraints: sanitizeCameraConstraints(primaryConstraints) });
+            return await navigator.mediaDevices.getUserMedia(primaryConstraints);
+        } catch (error) {
+            if (isCameraConstraintError(error) || isCameraNotFoundError(error)) {
+                console.warn('Camera start failed; retrying with generic video constraints.', {
+                    name: error.name,
+                    message: error.message,
+                    constraint: error.constraint,
+                    constraints: sanitizeCameraConstraints(primaryConstraints),
+                    fallbackConstraints: sanitizeCameraConstraints(fallbackConstraints)
+                });
+                try {
+                    attempts.push({ label: 'generic', constraints: sanitizeCameraConstraints(fallbackConstraints) });
+                    return await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                } catch (fallbackError) {
+                    if (isCameraNotFoundError(fallbackError)) {
+                        const videoInputDevices = await getVideoInputDevices();
+                        for (const device of videoInputDevices) {
+                            const deviceConstraints = {
+                                video: {
+                                    deviceId: { ideal: device.deviceId }
+                                },
+                                audio: false
+                            };
+                            attempts.push({
+                                label: 'detected-device-ideal',
+                                deviceLabel: device.label || '(label hidden)',
+                                constraints: sanitizeCameraConstraints(deviceConstraints)
+                            });
+                            try {
+                                return await navigator.mediaDevices.getUserMedia(deviceConstraints);
+                            } catch (deviceError) {
+                                attempts[attempts.length - 1].error = {
+                                    name: deviceError && deviceError.name,
+                                    message: deviceError && deviceError.message,
+                                    constraint: deviceError && deviceError.constraint
+                                };
+                            }
+                        }
+                    }
+                    fallbackError.primaryCameraError = {
+                        name: error.name,
+                        message: error.message,
+                        constraint: error.constraint
+                    };
+                    fallbackError.detectedVideoInputCount = attempts.filter(attempt => attempt.label === 'detected-device-ideal').length;
+                    fallbackError.cameraAttempts = attempts;
+                    throw fallbackError;
+                }
+            }
+            error.cameraAttempts = attempts;
+            throw error;
+        }
+    }
+
+    async function startLocalWebcam() {
+        if (webcamEnabled || localWebcamStream || pendingWebcamStart) return;
+        if (!allowWebcam && !adminToken) {
+            showToast('Webcam is disabled by admin.', 'warning');
+            return;
+        }
+        if (!window.socket || !window.socket.connected) {
+            showToast('Connect to the room before starting camera.', 'warning');
+            return;
+        }
+
+        const primaryConstraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 360 },
+                frameRate: { ideal: 24, max: 30 }
+            },
+            audio: false
+        };
+        const fallbackConstraints = { video: true, audio: false };
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.warn('Camera start unavailable:', getWebcamEnvironmentInfo(primaryConstraints));
+            showToast(window.isSecureContext ? 'Camera is not supported by this browser.' : 'Camera requires HTTPS or localhost.', 'error');
+            return;
+        }
+        if (!window.isSecureContext) {
+            console.warn('Camera start blocked by insecure context:', getWebcamEnvironmentInfo(primaryConstraints));
+            showToast('Camera requires HTTPS or localhost.', 'error');
+            return;
+        }
+
+        let stream = null;
+        let devicesBeforeRequest = null;
+        let videoTrackCount = 0;
+        let videoTrackSettings = [];
+        pendingWebcamStart = true;
+        updateWebcamUI();
+
+        try {
+            devicesBeforeRequest = await getMediaDeviceSnapshot();
+            stream = await requestWebcamStream(primaryConstraints, fallbackConstraints);
+            const videoTracks = stream.getVideoTracks();
+            videoTrackCount = videoTracks.length;
+            videoTrackSettings = videoTracks.map(track => {
+                try {
+                    return track.getSettings ? track.getSettings() : {};
+                } catch(e) {
+                    return {};
+                }
+            });
+            if (!videoTracks.length) {
+                const noTrackError = new Error('getUserMedia returned a stream without video tracks.');
+                noTrackError.name = 'NoVideoTrackError';
+                throw noTrackError;
+            }
+
+            localWebcamStream = stream;
+
+            videoTracks.forEach(track => {
+                track.addEventListener('ended', () => stopLocalWebcam());
+            });
+
+            window.socket.emit('webcam_start', {
+                party_id: window.PARTY_ID,
+                client_id: clientId
+            });
+
+            updateWebcamUI();
+        } catch (err) {
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    try { track.stop(); } catch(e) {}
+                });
+            }
+            const devicesAfterRequest = await getMediaDeviceSnapshot();
+            console.warn('Watch Party webcam start failed:', {
+                name: err && err.name,
+                message: err && err.message,
+                constraint: err && err.constraint,
+                primaryCameraError: err && err.primaryCameraError,
+                cameraAttempts: err && err.cameraAttempts,
+                environment: getWebcamEnvironmentInfo(primaryConstraints),
+                fallbackConstraints,
+                devicesBeforeRequest,
+                devicesAfterRequest,
+                videoTrackCount,
+                videoTrackSettings
+            });
+            showToast(getWebcamStartErrorMessage(err), 'error');
+            stopLocalWebcam({ emit: false });
+        }
+    }
+
+    function activateApprovedLocalWebcam() {
+        if (!localWebcamStream || webcamEnabled) return;
+        pendingWebcamStart = false;
+        webcamEnabled = true;
+        activeWebcams[clientId] = {
+            client_id: clientId,
+            name: clientName,
+            avatar: localAvatar,
+            is_admin: !!adminToken
+        };
+
+        for (const peerId in peerConnections) {
+            const pc = peerConnections[peerId];
+            if (!pc) continue;
+            webcamSenders[peerId] = [];
+            localWebcamStream.getVideoTracks().forEach(track => {
+                const sender = pc.addTrack(track, localWebcamStream);
+                webcamSenders[peerId].push(sender);
+            });
+            renegotiatePeer(peerId, 'webcam start');
+        }
+
+        renderWebcamGrid();
+        updateWebcamUI();
+    }
+
+    function stopLocalWebcam(options = {}) {
+        const shouldEmit = options.emit !== false;
+        if (!localWebcamStream && !webcamEnabled && !pendingWebcamStart) return;
+
+        const streamToStop = localWebcamStream;
+        localWebcamStream = null;
+        webcamEnabled = false;
+        pendingWebcamStart = false;
+
+        if (streamToStop) {
+            streamToStop.getTracks().forEach(track => {
+                try { track.stop(); } catch(e) {}
+            });
+        }
+
+        for (const peerId in peerConnections) {
+            const pc = peerConnections[peerId];
+            const senders = webcamSenders[peerId];
+            if (pc && senders) {
+                senders.forEach(sender => {
+                    try { pc.removeTrack(sender); } catch(e) {}
+                });
+                delete webcamSenders[peerId];
+                renegotiatePeer(peerId, 'webcam stop');
+            }
+        }
+
+        delete activeWebcams[clientId];
+        if (focusedMediaTileId === getWebcamMediaTileId(clientId)) {
+            showFocusedCameraOff();
+        }
+
+        if (shouldEmit && window.socket && window.socket.connected) {
+            window.socket.emit('webcam_stop', {
+                party_id: window.PARTY_ID,
+                client_id: clientId
+            });
+        }
+
+        renderWebcamGrid();
+        updateWebcamUI();
+    }
+
+    function updateWebcamUI() {
+        const btnWebcam = document.getElementById('btn-webcam-toggle');
+        const icon = document.getElementById('webcam-icon');
+        if (!btnWebcam) return;
+
+        const disabled = !allowWebcam && !adminToken;
+        btnWebcam.disabled = disabled || pendingWebcamStart;
+        btnWebcam.classList.toggle('disabled', disabled);
+        btnWebcam.classList.toggle('active', webcamEnabled || pendingWebcamStart);
+        btnWebcam.title = disabled ? 'Webcams disabled by host' : (webcamEnabled ? 'Turn Camera Off' : (pendingWebcamStart ? 'Starting Camera...' : 'Turn Camera On'));
+        if (icon) {
+            icon.className = (webcamEnabled || pendingWebcamStart) ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+        }
+    }
+
+    function displayRemoteWebcam(peerId, stream) {
+        remoteWebcamStreams[peerId] = stream;
+        if (!activeWebcams[peerId]) {
+            activeWebcams[peerId] = {
+                client_id: peerId,
+                name: getDisplayNameForPeer(peerId),
+                avatar: getAvatarForPeer(peerId),
+                is_admin: !!activePeers[peerId]?.is_admin
+            };
+        }
+        if (activePeers[peerId]) {
+            activePeers[peerId].webcam_active = true;
+        }
+        renderMediaStage();
+    }
+
+    function removeRemoteWebcam(peerId) {
+        delete remoteWebcamStreams[peerId];
+        const tile = document.getElementById(`webcam-tile-${peerId}`);
+        if (tile) tile.remove();
+        if (focusedMediaTileId === getWebcamMediaTileId(peerId)) {
+            clearMediaFocus();
+        }
+    }
+
+    function getWebcamMediaTileId(peerId) {
+        return `webcam:${peerId}`;
+    }
+
+    function attachMediaTileFocusHandlers(tile, tileId) {
+        if (!tile) return;
+        tile.dataset.mediaTileId = tileId;
+        tile.ondblclick = (event) => {
+            event.preventDefault();
+            toggleMediaFocus(tileId);
+        };
+        tile.onclick = () => {
+            if (focusedMediaTileId && focusedMediaTileId !== tileId) {
+                setFocusedMediaTile(tileId);
+            }
+        };
+
+        let lastTap = 0;
+        tile.ontouchend = (event) => {
+            const now = Date.now();
+            if (now - lastTap < 350) {
+                event.preventDefault();
+                toggleMediaFocus(tileId);
+            }
+            lastTap = now;
+        };
+    }
+
+    function setFocusedMediaTile(tileId) {
+        focusedMediaTileId = tileId;
+        focusedWebcamUserId = tileId && tileId.startsWith('webcam:') ? tileId.slice('webcam:'.length) : null;
+        renderMediaStage();
+    }
+
+    function toggleMediaFocus(tileId) {
+        if (focusedMediaTileId === tileId) {
+            clearMediaFocus();
+        } else {
+            setFocusedMediaTile(tileId);
+        }
+    }
+
+    function clearMediaFocus() {
+        focusedMediaTileId = null;
+        focusedWebcamUserId = null;
+        renderMediaStage();
+    }
+
+    function ensureMediaTileLabel(tile, html) {
+        if (!tile) return;
+        let label = tile.querySelector(':scope > .media-tile-label');
+        if (!label) {
+            label = document.createElement('div');
+            label.className = 'media-tile-label';
+            tile.appendChild(label);
+        }
+        label.innerHTML = html;
+    }
+
+    function createWebcamMediaTile(peerId) {
+        const tile = document.createElement('div');
+        tile.className = 'media-tile webcam-tile generated-media-tile';
+        tile.id = `webcam-tile-${peerId}`;
+        tile.dataset.peerId = peerId;
+        tile.dataset.mediaType = 'webcam';
+
+        const stream = peerId === clientId ? localWebcamStream : remoteWebcamStreams[peerId];
+        if (stream) {
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsInline = true;
+            video.muted = peerId === clientId;
+            video.srcObject = stream;
+            tile.appendChild(video);
+            video.play().catch(() => {});
+        } else {
+            tile.innerHTML = `<div class="webcam-placeholder"><i class="fa-solid fa-video-slash"></i><span>Camera Off</span></div>`;
+        }
+
+        const avatarData = AVATAR_MAP[getAvatarForPeer(peerId)] || AVATAR_MAP.cool_kid;
+        const label = document.createElement('div');
+        label.className = 'webcam-label';
+        label.innerHTML = `
+            <span class="webcam-avatar-mini" style="background: ${avatarData.color};"><i class="fa-solid ${avatarData.icon}"></i></span>
+            <span>${escapeHTML(peerId === clientId ? `${clientName} (You)` : getDisplayNameForPeer(peerId))}</span>
+        `;
+        tile.appendChild(label);
+        attachMediaTileFocusHandlers(tile, getWebcamMediaTileId(peerId));
+        return tile;
+    }
+
+    function renderMediaStage() {
+        const stage = document.getElementById('wp-media-stage');
+        const mainTile = document.getElementById('wp-main-video-tile');
+        const screenTile = document.getElementById('wp-screen-share-container');
+        if (!stage || !mainTile) return;
+
+        stage.querySelectorAll('.generated-media-tile').forEach(tile => tile.remove());
+
+        const mediaTileIds = ['main-video'];
+        ensureMediaTileLabel(mainTile, '<i class="fa-solid fa-film"></i><span>Watch Party</span>');
+        attachMediaTileFocusHandlers(mainTile, 'main-video');
+
+        if (screenTile) {
+            const screenActive = !!activeScreenShare;
+            screenTile.classList.toggle('active', screenActive);
+            screenTile.style.display = screenActive ? 'flex' : 'none';
+            if (screenActive) {
+                mediaTileIds.push('screen-share');
+                attachMediaTileFocusHandlers(screenTile, 'screen-share');
+            }
+        }
+
+        const webcamIds = Object.keys(activeWebcams).filter(id => id === clientId || remoteWebcamStreams[id]);
+        webcamIds.forEach(peerId => {
+            const tile = createWebcamMediaTile(peerId);
+            stage.appendChild(tile);
+            mediaTileIds.push(getWebcamMediaTileId(peerId));
+        });
+
+        if (focusedMediaTileId && !mediaTileIds.includes(focusedMediaTileId)) {
+            focusedMediaTileId = null;
+            focusedWebcamUserId = null;
+        }
+
+        stage.className = 'watch-media-stage';
+        stage.classList.add(`count-${Math.min(mediaTileIds.length, 5)}`);
+        stage.classList.toggle('focus-mode', !!focusedMediaTileId);
+        stage.classList.toggle('grid-mode', !focusedMediaTileId);
+        stage.classList.toggle('has-thumbnails', !!focusedMediaTileId && mediaTileIds.length > 1);
+
+        stage.querySelectorAll('.media-tile').forEach(tile => {
+            const tileId = tile.dataset.mediaTileId;
+            tile.classList.toggle('media-tile-focused', !!focusedMediaTileId && tileId === focusedMediaTileId);
+            tile.classList.toggle('media-tile-thumbnail', !!focusedMediaTileId && tileId !== focusedMediaTileId);
+        });
+    }
+
+    function renderWebcamGrid() {
+        renderMediaStage();
+    }
+
+    function openWebcamFocus(peerId) {
+        toggleMediaFocus(getWebcamMediaTileId(peerId));
+    }
+
+    function closeWebcamFocus() {
+        clearMediaFocus();
+    }
+
+    function showFocusedCameraOff() {
+        if (focusedWebcamUserId) {
+            clearMediaFocus();
+        }
+        renderMediaStage();
     }
 
     function updateScreenShareUI() {
@@ -2338,12 +3238,17 @@ if (!window.safeSessionStorage) {
         
         if (container) {
             if (activeScreenShare) {
+                container.classList.add('active');
                 container.style.display = 'flex';
                 if (bannerText) {
                     const displayName = activeScreenShare.client_id === clientId ? 'You' : activeScreenShare.name;
                     bannerText.innerText = `Screen shared by ${displayName}`;
                 }
             } else {
+                if (focusedMediaTileId === 'screen-share') {
+                    clearMediaFocus();
+                }
+                container.classList.remove('active');
                 container.style.display = 'none';
                 const video = document.getElementById('wp-screen-share-video');
                 if (video && video.srcObject && !isSelfSharing) {
@@ -2351,10 +3256,15 @@ if (!window.safeSessionStorage) {
                 }
             }
         }
+        renderMediaStage();
     }
 
     async function startLocalScreenShare() {
         if (localScreenStream) return;
+        if (!adminToken && !allowScreenShare) {
+            showToast("Screen sharing is disabled by the host.", "warning");
+            return;
+        }
         
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -2397,10 +3307,7 @@ if (!window.safeSessionStorage) {
                         screenSenders[peerId].push(sender);
                     });
                     
-                    pc.createOffer()
-                        .then(offer => pc.setLocalDescription(offer).then(() => offer))
-                        .then(offer => sendSignal(peerId, offer))
-                        .catch(err => console.error(`Error negotiating screen share with peer ${peerId}:`, err));
+                    renegotiatePeer(peerId, 'screen share start');
                 }
             }
             
@@ -2437,10 +3344,7 @@ if (!window.safeSessionStorage) {
                 });
                 delete screenSenders[peerId];
                 
-                pc.createOffer()
-                    .then(offer => pc.setLocalDescription(offer).then(() => offer))
-                    .then(offer => sendSignal(peerId, offer))
-                    .catch(err => console.error(`Error negotiating screen share stop with peer ${peerId}:`, err));
+                renegotiatePeer(peerId, 'screen share stop');
             }
         }
         
@@ -2464,12 +3368,15 @@ if (!window.safeSessionStorage) {
         if (video) {
             video.srcObject = stream;
         }
+        renderMediaStage();
     }
 
     function createPeerConnection(peerId, isInitiator) {
         if (peerConnections[peerId]) {
             try { peerConnections[peerId].close(); } catch(e) {}
             delete peerConnections[peerId];
+            delete screenSenders[peerId];
+            delete webcamSenders[peerId];
         }
 
         console.log(`Setting up RTCPeerConnection for peer ${peerId}, initiator: ${isInitiator}`);
@@ -2491,6 +3398,17 @@ if (!window.safeSessionStorage) {
             localScreenStream.getTracks().forEach(track => {
                 const sender = pc.addTrack(track, localScreenStream);
                 screenSenders[peerId].push(sender);
+            });
+        }
+
+        // Add local webcam tracks if active
+        if (localWebcamStream) {
+            if (!webcamSenders[peerId]) {
+                webcamSenders[peerId] = [];
+            }
+            localWebcamStream.getVideoTracks().forEach(track => {
+                const sender = pc.addTrack(track, localWebcamStream);
+                webcamSenders[peerId].push(sender);
             });
         }
 
@@ -2518,8 +3436,9 @@ if (!window.safeSessionStorage) {
         // Receive remote track
         pc.ontrack = (event) => {
             const stream = event.streams[0];
+            const trackKind = getRemoteTrackKind(peerId, event);
             if (event.track.kind === 'audio') {
-                if (stream && stream.getVideoTracks().length > 0) {
+                if (trackKind === 'screen') {
                     console.log(`Received remote screen share audio track from peer ${peerId}`);
                     playRemoteScreenAudio(peerId, stream);
                 } else {
@@ -2527,14 +3446,24 @@ if (!window.safeSessionStorage) {
                     playRemoteStream(peerId, stream);
                 }
             } else if (event.track.kind === 'video') {
-                console.log(`Received remote video (screen share) track from peer ${peerId}`);
-                displayRemoteScreenShare(peerId, stream);
+                if (trackKind === 'webcam') {
+                    console.log(`Received remote webcam track from peer ${peerId}`);
+                    event.track.addEventListener('ended', () => {
+                        removeRemoteWebcam(peerId);
+                        delete activeWebcams[peerId];
+                        renderWebcamGrid();
+                    });
+                    displayRemoteWebcam(peerId, stream);
+                } else {
+                    console.log(`Received remote video (screen share) track from peer ${peerId}`);
+                    displayRemoteScreenShare(peerId, stream);
+                }
             }
         };
 
         // If initiator, send offer
         if (isInitiator) {
-            pc.createOffer({ offerToReceiveAudio: true })
+            pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
                 .then(offer => {
                     offer.sdp = optimizeAudioSDP(offer.sdp);
                     return pc.setLocalDescription(offer).then(() => offer);
@@ -2557,10 +3486,13 @@ if (!window.safeSessionStorage) {
             if (!pc) {
                 pc = createPeerConnection(senderId, false);
             }
+            if (signal.track_metadata) {
+                remoteTrackMetadata[senderId] = signal.track_metadata;
+            }
             if (signal.sdp) {
                 signal.sdp = optimizeAudioSDP(signal.sdp);
             }
-            pc.setRemoteDescription(new RTCSessionDescription(signal))
+            pc.setRemoteDescription(new RTCSessionDescription({ type: signal.type, sdp: signal.sdp }))
                 .then(() => {
                     processIceQueue(senderId);
                     return pc.createAnswer();
@@ -2576,10 +3508,13 @@ if (!window.safeSessionStorage) {
 
         } else if (signal.type === 'answer') {
             if (pc) {
+                if (signal.track_metadata) {
+                    remoteTrackMetadata[senderId] = signal.track_metadata;
+                }
                 if (signal.sdp) {
                     signal.sdp = optimizeAudioSDP(signal.sdp);
                 }
-                pc.setRemoteDescription(new RTCSessionDescription(signal))
+                pc.setRemoteDescription(new RTCSessionDescription({ type: signal.type, sdp: signal.sdp }))
                     .then(() => {
                         processIceQueue(senderId);
                     })
@@ -2592,11 +3527,21 @@ if (!window.safeSessionStorage) {
 
     function sendSignal(targetId, signalData) {
         if (window.socket && window.socket.connected) {
+            const payload = { type: signalData.type };
+            if (signalData.sdp) {
+                payload.sdp = signalData.sdp;
+            }
+            if (signalData.candidate) {
+                payload.candidate = signalData.candidate;
+            }
+            if (payload.type === 'offer' || payload.type === 'answer') {
+                payload.track_metadata = getLocalTrackMetadata();
+            }
             window.socket.emit('signal', {
                 party_id: window.PARTY_ID,
                 sender_id: clientId,
                 target_id: targetId,
-                signal: signalData
+                signal: payload
             });
         }
     }
@@ -3013,6 +3958,36 @@ if (!window.safeSessionStorage) {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
+    function showSoundboardEvent(clientName, displayName) {
+        const messagesContainer = document.getElementById('wp-chat-messages');
+        if (!messagesContainer) return;
+
+        let stack = document.getElementById('wp-soundboard-events');
+        if (!stack) {
+            stack = document.createElement('div');
+            stack.id = 'wp-soundboard-events';
+            stack.className = 'soundboard-event-stack';
+            messagesContainer.appendChild(stack);
+        }
+
+        const item = document.createElement('div');
+        item.className = 'soundboard-event-pill';
+        item.innerHTML = `
+            <i class="fa-solid fa-volume-high"></i>
+            <span>${escapeHTML(clientName || 'Someone')} played ${escapeHTML(displayName || 'a sound')}</span>
+        `;
+        stack.appendChild(item);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        setTimeout(() => item.classList.add('fade-out'), 1800);
+        setTimeout(() => {
+            item.remove();
+            if (!stack.children.length) {
+                stack.remove();
+            }
+        }, 2400);
+    }
+
     function escapeHTML(str) {
         return str.replace(/[&<>'"]/g, 
             tag => ({
@@ -3084,6 +4059,20 @@ if (!window.safeSessionStorage) {
                         party_id: window.PARTY_ID,
                         client_id: clientId,
                         allowed: toggleScreenShare.checked
+                    });
+                }
+            };
+        }
+
+        const toggleWebcam = document.getElementById('admin-toggle-webcam');
+        if (toggleWebcam) {
+            toggleWebcam.checked = allowWebcam;
+            toggleWebcam.onchange = () => {
+                if (window.socket && window.socket.connected) {
+                    window.socket.emit('toggle_webcam_permission', {
+                        party_id: window.PARTY_ID,
+                        client_id: clientId,
+                        allowed: toggleWebcam.checked
                     });
                 }
             };
@@ -3899,15 +4888,33 @@ if (!window.safeSessionStorage) {
             const res = await fetch('/api/watch-party/soundboard/list');
             const data = await res.json();
             if (data.status === 'success') {
-                // Populate cache
-                data.default_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
-                data.custom_sounds.forEach(s => { soundboardCache[s.sound_id] = s.url; });
+                cacheSoundboardSounds(data.default_sounds, data.custom_sounds);
                 
                 renderSoundboardGrid(data.default_sounds, data.custom_sounds);
             }
         } catch (err) {
             console.error('Error fetching soundboard list:', err);
         }
+    }
+
+    function cacheSoundboardSounds(defaultSounds = [], customSounds = []) {
+        [...defaultSounds, ...customSounds].forEach(sound => {
+            if (!sound || !sound.sound_id || !sound.url) return;
+            soundboardCache[sound.sound_id] = sound.url;
+            preloadSoundboardAudio(sound.url);
+        });
+    }
+
+    function preloadSoundboardAudio(url) {
+        if (!url || soundboardPreloadCache[url]) return soundboardPreloadCache[url];
+
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = url;
+        audio.load();
+
+        soundboardPreloadCache[url] = audio;
+        return audio;
     }
 
     function renderSoundboardGrid(defaultSounds, customSounds) {
@@ -4073,11 +5080,15 @@ if (!window.safeSessionStorage) {
     function playLocalSound(url) {
         if (soundboardMuted) return;
         try {
-            const audio = new Audio(url);
+            const preloadedAudio = preloadSoundboardAudio(url);
+            const audio = preloadedAudio ? preloadedAudio.cloneNode(true) : new Audio(url);
             audio.volume = soundboardVolume;
             activeAudioObjects.add(audio);
             audio.onended = () => activeAudioObjects.delete(audio);
-            audio.onerror = () => activeAudioObjects.delete(audio);
+            audio.onerror = () => {
+                activeAudioObjects.delete(audio);
+                showToast('Sound file is missing or could not be loaded.', 'error');
+            };
             audio.play().catch(err => {
                 console.warn('Autoplay blocked soundboard audio playback:', err);
                 const warning = document.getElementById('soundboard-autoplay-warning');

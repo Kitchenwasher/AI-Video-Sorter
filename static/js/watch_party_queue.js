@@ -542,15 +542,10 @@
             })
             .catch(err => console.error('Error changing folder on playNextInQueue:', err));
         } else {
-            if (window.selectAndBroadcastMedia) {
+            if (window.broadcastSync) {
+                window.broadcastSync('play', 0.0, filename);
+            } else if (window.selectAndBroadcastMedia) {
                 window.selectAndBroadcastMedia(filename);
-                
-                // Wait a moment for media to load, then trigger play synced
-                setTimeout(() => {
-                    if (window.broadcastSync) {
-                        window.broadcastSync('play', 0.0);
-                    }
-                }, 800);
             }
         }
     }
