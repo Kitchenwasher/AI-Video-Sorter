@@ -4015,7 +4015,10 @@
     <!-- Password Prompt Modal -->
     <div class="modal-overlay" id="wp-password-overlay">
         <div class="modal-box">
-            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-lock"></i> Protected Party</h3>
+            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%;">
+                <span><i class="fa-solid fa-lock"></i> Protected Party</span>
+                <button id="btn-wp-password-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">This watch party is password protected. Enter the password below to join.</p>
             <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <input type="password" class="input-field" id="wp-join-password" placeholder="Enter password...">
@@ -4027,7 +4030,10 @@
     <!-- Nickname Prompt Modal -->
     <div class="modal-overlay" id="wp-nickname-overlay">
         <div class="modal-box">
-            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-user-ninja"></i> Choose Nickname</h3>
+            <h3 style="margin-top: 0; color: var(--accent); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%;">
+                <span><i class="fa-solid fa-user-ninja"></i> Choose Nickname</span>
+                <button id="btn-wp-nickname-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">Enter a nickname for your friends to identify you during playback and voice chat.</p>
             <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <input type="text" class="input-field" id="wp-join-nickname" placeholder="Enter your nickname..." value="Viewer">
@@ -4252,7 +4258,10 @@
     <!-- Kicked Modal -->
     <div class="modal-overlay" id="wp-kicked-overlay">
         <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-circle-minus"></i> Kicked</h3>
+            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%;">
+                <span><i class="fa-solid fa-circle-minus"></i> Kicked</span>
+                <button id="btn-wp-kicked-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">You have been removed from this watch party room by the host.</p>
             <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
         </div>
@@ -4261,7 +4270,10 @@
     <!-- Party Ended Modal -->
     <div class="modal-overlay" id="wp-ended-overlay">
         <div class="modal-box" style="text-align: center;">
-            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: center; gap: 0.5rem;"><i class="fa-solid fa-skull"></i> Session Ended</h3>
+            <h3 style="margin-top: 0; color: var(--color-danger); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%;">
+                <span><i class="fa-solid fa-skull"></i> Session Ended</span>
+                <button id="btn-wp-ended-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">This watch party has been ended by the host.</p>
             <button class="btn btn-primary" onclick="window.location.href='/'" style="width: 100%;">Return to Dashboard</button>
         </div>

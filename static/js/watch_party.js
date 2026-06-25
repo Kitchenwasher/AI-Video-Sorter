@@ -647,6 +647,13 @@ if (!window.safeSessionStorage) {
 
         const submitBtn = document.getElementById('btn-wp-auth-submit');
         const passwordInput = document.getElementById('wp-join-password');
+        const closeBtn = document.getElementById('btn-wp-password-close');
+
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                window.location.href = '/';
+            };
+        }
 
         const handleAuthSubmit = async () => {
             const pwd = passwordInput.value.trim();
@@ -1104,6 +1111,13 @@ if (!window.safeSessionStorage) {
 
         const submitBtn = document.getElementById('btn-wp-nickname-submit');
         const nicknameInput = document.getElementById('wp-join-nickname');
+        const closeBtn = document.getElementById('btn-wp-nickname-close');
+
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                window.location.href = '/';
+            };
+        }
 
         // Restore nickname if any
         if (sessionStorage.getItem('wp_client_name')) {
@@ -2435,7 +2449,12 @@ if (!window.safeSessionStorage) {
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
-                document.getElementById('wp-kicked-overlay').classList.add('active');
+                const kickedOverlay = document.getElementById('wp-kicked-overlay');
+                if (kickedOverlay) kickedOverlay.classList.add('active');
+                const kickedClose = document.getElementById('btn-wp-kicked-close');
+                if (kickedClose) {
+                    kickedClose.onclick = () => { window.location.href = '/'; };
+                }
                 break;
                 
             case 'force_mute':
@@ -2514,7 +2533,12 @@ if (!window.safeSessionStorage) {
                 Object.keys(peerConnections).forEach(id => {
                     try { peerConnections[id].close(); } catch(e) {}
                 });
-                document.getElementById('wp-ended-overlay').classList.add('active');
+                const endedOverlay = document.getElementById('wp-ended-overlay');
+                if (endedOverlay) endedOverlay.classList.add('active');
+                const endedClose = document.getElementById('btn-wp-ended-close');
+                if (endedClose) {
+                    endedClose.onclick = () => { window.location.href = '/'; };
+                }
                 break;
                 
             case 'settings_changed':

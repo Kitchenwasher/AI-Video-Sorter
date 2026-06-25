@@ -143,7 +143,7 @@
                 <div class="wp-hotkeys-card" id="wp-hotkeys-card">
                     <div class="wp-hotkeys-header">
                         <span><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</span>
-                        <button class="wp-hotkeys-close-btn" id="wp-hotkeys-close" title="Close Overlay">&times;</button>
+                        <button id="wp-hotkeys-close" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; line-height: 1;" title="Close Overlay"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="wp-hotkeys-content">
                         <!-- Watch Party Group -->
