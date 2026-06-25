@@ -495,6 +495,7 @@ if (!window.safeSessionStorage) {
     let remoteTrackMetadata = {};
     let focusedWebcamUserId = null;
     let focusedMediaTileId = null;
+    let cachedScreenShareTile = null;
     let sseSource = null;
     let currentFilename = null;
     let mediaLoadSequence = 0;
@@ -732,6 +733,12 @@ if (!window.safeSessionStorage) {
         cancelBtn.onclick = () => {
             modal.classList.remove('active');
         };
+        const closeBtn = document.getElementById('btn-wp-profile-close');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                modal.classList.remove('active');
+            };
+        }
 
         modal.onclick = (e) => {
             if (e.target === modal) {
@@ -899,6 +906,8 @@ if (!window.safeSessionStorage) {
         };
 
         if (cancelBtn) cancelBtn.onclick = closeModal;
+        const closeBtn = document.getElementById('btn-wp-custom-media-close');
+        if (closeBtn) closeBtn.onclick = closeModal;
         overlay.onclick = (e) => {
             if (e.target === overlay) closeModal();
         };
@@ -3165,8 +3174,12 @@ if (!window.safeSessionStorage) {
     function renderMediaStage() {
         const stage = document.getElementById('wp-media-stage');
         const mainTile = document.getElementById('wp-main-video-tile');
-        const screenTile = document.getElementById('wp-screen-share-container');
         if (!stage || !mainTile) return;
+
+        if (!cachedScreenShareTile) {
+            cachedScreenShareTile = document.getElementById('wp-screen-share-container');
+        }
+        const screenTile = cachedScreenShareTile;
 
         stage.querySelectorAll('.generated-media-tile').forEach(tile => tile.remove());
 
@@ -3177,10 +3190,15 @@ if (!window.safeSessionStorage) {
         if (screenTile) {
             const screenActive = !!activeScreenShare;
             screenTile.classList.toggle('active', screenActive);
-            screenTile.style.display = screenActive ? 'flex' : 'none';
             if (screenActive) {
+                if (screenTile.parentNode !== stage) {
+                    mainTile.after(screenTile);
+                }
+                screenTile.style.display = 'flex';
                 mediaTileIds.push('screen-share');
                 attachMediaTileFocusHandlers(screenTile, 'screen-share');
+            } else {
+                screenTile.remove();
             }
         }
 
@@ -3257,7 +3275,7 @@ if (!window.safeSessionStorage) {
     function updateScreenShareUI() {
         const btn = document.getElementById('btn-wp-screen-share');
         const text = document.getElementById('wp-screen-share-btn-text');
-        const container = document.getElementById('wp-screen-share-container');
+        const container = cachedScreenShareTile || document.getElementById('wp-screen-share-container');
         const bannerText = document.getElementById('wp-screen-share-text');
         
         if (!btn || !text) return;
@@ -4655,6 +4673,8 @@ if (!window.safeSessionStorage) {
         };
 
         cancelBtn.onclick = closeModal;
+        const closeBtn = document.getElementById('btn-wp-change-folder-close');
+        if (closeBtn) closeBtn.onclick = closeModal;
         
         // Close on clicking overlay background
         overlay.onclick = (e) => {
@@ -4840,6 +4860,8 @@ if (!window.safeSessionStorage) {
             };
 
             cancelAddBtn.onclick = closeAddModal;
+            const closeAddBtn = document.getElementById('btn-wp-sound-close');
+            if (closeAddBtn) closeAddBtn.onclick = closeAddModal;
             addSoundOverlay.onclick = (e) => {
                 if (e.target === addSoundOverlay) closeAddModal();
             };
@@ -4914,6 +4936,8 @@ if (!window.safeSessionStorage) {
             };
 
             cancelRenameBtn.onclick = closeRenameModal;
+            const closeRenameBtn = document.getElementById('btn-wp-sound-rename-close');
+            if (closeRenameBtn) closeRenameBtn.onclick = closeRenameModal;
             renameSoundOverlay.onclick = (e) => {
                 if (e.target === renameSoundOverlay) closeRenameModal();
             };
