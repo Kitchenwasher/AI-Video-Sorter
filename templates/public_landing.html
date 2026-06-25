@@ -10,12 +10,17 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.all.min.css') }}">
     <style>
         :root {
-            --bg: #0F0F11;
-            --bg-raised: #1A1A1E;
-            --text: #F3F3F3;
-            --text-muted: #888890;
-            --accent: #FF8C00;
-            --border: #2C2C30;
+            --bg: #080B10;
+            --bg-raised: #111827;
+            --bg-overlay: #171C26;
+            --text: #F8FAFC;
+            --text-dim: #94A3B8;
+            --text-muted: #64748B;
+            --accent: #8B5CF6; /* Refined Violet Accent */
+            --accent-yellow: #F59E0B; /* Yellow/Orange */
+            --color-danger: #EF4444;
+            --border: #2A3441;
+            --bw: 3px;
         }
 
         body {
@@ -36,113 +41,159 @@
         body::before {
             content: '';
             position: absolute;
-            top: -20%;
-            left: -20%;
-            width: 60%;
-            height: 60%;
-            background: radial-gradient(circle, rgba(255, 140, 0, 0.08) 0%, transparent 70%);
+            top: -15%;
+            left: -15%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
             z-index: 1;
             pointer-events: none;
         }
         body::after {
             content: '';
             position: absolute;
-            bottom: -20%;
-            right: -20%;
-            width: 60%;
-            height: 60%;
-            background: radial-gradient(circle, rgba(239, 68, 68, 0.05) 0%, transparent 70%);
+            bottom: -15%;
+            right: -15%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.06) 0%, transparent 70%);
             z-index: 1;
             pointer-events: none;
         }
 
         .card {
             background: var(--bg-raised);
-            border: 2px solid var(--border);
-            border-radius: 16px;
-            padding: 2.5rem;
-            max-width: 440px;
+            border: var(--bw) solid var(--border);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            max-width: 460px;
             width: calc(100% - 48px);
             text-align: center;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            /* Neo-Brutalist solid shadow + Claymorphic volumetric shadow */
+            box-shadow: 
+                inset 4px 4px 8px rgba(255, 255, 255, 0.03), 
+                inset -4px -4px 8px rgba(0, 0, 0, 0.5), 
+                8px 8px 0px rgba(2, 6, 23, 0.6);
             z-index: 10;
-            backdrop-filter: blur(8px);
             transform: translateY(0);
             animation: floatCard 4s ease-in-out infinite;
         }
 
         @keyframes floatCard {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
+            50% { transform: translateY(-8px); }
         }
 
         .icon-container {
-            font-size: 3rem;
-            color: var(--accent);
-            margin-bottom: 1.5rem;
+            font-size: 2.5rem;
+            color: var(--accent-yellow);
+            margin-bottom: 1.75rem;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 80px;
             height: 80px;
-            background: rgba(255, 140, 0, 0.1);
+            background: rgba(245, 158, 11, 0.10);
             border-radius: 50%;
-            border: 1px solid rgba(255, 140, 0, 0.2);
+            border: 2px solid rgba(245, 158, 11, 0.2);
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.1), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(245, 158, 11, 0.05);
         }
 
         .icon-container.danger {
-            color: #ef4444;
+            color: var(--color-danger);
             background: rgba(239, 68, 68, 0.1);
             border-color: rgba(239, 68, 68, 0.2);
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.1), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.3),
+                0 0 20px rgba(239, 68, 68, 0.05);
         }
 
         h1 {
-            font-size: 1.8rem;
+            font-size: 2rem;
             font-weight: 700;
-            margin: 0 0 0.75rem 0;
+            margin: 0 0 1rem 0;
             letter-spacing: -0.5px;
+            color: var(--text);
         }
 
         p {
             font-size: 0.95rem;
-            color: var(--text-muted);
-            line-height: 1.5;
-            margin: 0 0 2rem 0;
+            color: var(--text-dim);
+            line-height: 1.6;
+            margin: 0 0 2.25rem 0;
         }
 
         .btn {
-            background: var(--accent);
+            background: var(--accent-yellow);
             color: var(--bg);
-            border: none;
-            padding: 0.75rem 1.75rem;
+            border: var(--bw) solid var(--border);
+            padding: 0.8rem 2rem;
+            font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            font-size: 0.95rem;
-            border-radius: 8px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 14px;
             cursor: pointer;
             text-decoration: none;
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.15s ease;
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.4), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.3), 
+                4px 4px 0px rgba(2, 6, 23, 0.6);
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 140, 0, 0.3);
+            transform: translate(-1px, -1px);
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.5), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.2), 
+                5px 5px 0px rgba(2, 6, 23, 0.6);
+            background: #fbbf24;
         }
 
         .btn:active {
-            transform: translateY(0);
+            transform: translate(2px, 2px);
+            box-shadow: 
+                inset 1px 1px 2px rgba(255, 255, 255, 0.2), 
+                inset -1px -1px 2px rgba(0, 0, 0, 0.4), 
+                1px 1px 0px rgba(2, 6, 23, 0.6);
+        }
+
+        .btn.btn-danger-accent {
+            background: var(--color-danger);
+            color: var(--text);
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.3), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.4), 
+                4px 4px 0px rgba(2, 6, 23, 0.6);
+        }
+
+        .btn.btn-danger-accent:hover {
+            background: #f87171;
+            box-shadow: 
+                inset 2px 2px 4px rgba(255, 255, 255, 0.4), 
+                inset -2px -2px 4px rgba(0, 0, 0, 0.3), 
+                5px 5px 0px rgba(2, 6, 23, 0.6);
         }
 
         .logo-footer {
-            margin-top: 2rem;
-            font-size: 0.75rem;
+            margin-top: 2.25rem;
+            font-size: 0.85rem;
             font-weight: 700;
             color: var(--text-muted);
             letter-spacing: 2px;
             text-transform: uppercase;
         }
+
         .logo-footer span {
             color: var(--accent);
         }
@@ -155,7 +206,7 @@
         </div>
         <h1>{{ title }}</h1>
         <p>{{ message }}</p>
-        <a href="https://github.com/Kitchenwasher/AI-Video-Sorter" target="_blank" class="btn">
+        <a href="https://github.com/Kitchenwasher/AI-Video-Sorter" target="_blank" class="btn {{ 'btn-danger-accent' if is_danger else '' }}">
             <i class="fa-brands fa-github"></i> Learn about AuraSort
         </a>
         <div class="logo-footer">
