@@ -533,11 +533,13 @@ if (!window.safeSessionStorage) {
     // WebRTC connection and audio maps
     const peerConnections = {};
     const remoteAudioElements = {};
+    const remoteScreenAudioElements = {};
     const activePeers = {};
     const iceCandidateQueues = {};
 
     // Feature 6: Expose audio maps/peers to window for modular audio controller
     window.getRemoteAudioElements = () => remoteAudioElements;
+    window.getRemoteScreenAudioElements = () => remoteScreenAudioElements;
     window.getActivePeers = () => activePeers;
 
     // Google public STUN servers for WebRTC ICE exchange
@@ -1243,6 +1245,7 @@ if (!window.safeSessionStorage) {
             if (activeScreenShare && activeScreenShare.client_id === data.client_id) {
                 activeScreenShare = null;
             }
+            stopRemoteScreenAudio(data.client_id);
             addLogEntry('System', `Screen sharing stopped.`);
             addSystemChatMessage(`Screen sharing stopped.`);
             updateScreenShareUI();
@@ -2008,6 +2011,8 @@ if (!window.safeSessionStorage) {
                     } catch (e) {}
                     delete remoteAudioElements[data.client_id];
                 }
+                // Cleanup remote screen audio node
+                stopRemoteScreenAudio(data.client_id);
                 delete activePeers[data.client_id];
                 delete iceCandidateQueues[data.client_id];
                 updatePeersUI();
@@ -2299,10 +2304,15 @@ if (!window.safeSessionStorage) {
                     height: { max: 1080 },
                     frameRate: { max: 30 }
                 },
-                audio: false
+                audio: true
             });
             
             localScreenStream = stream;
+            
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                showToast("Screen audio was not shared by the browser.", "warning");
+            }
             
             const video = document.getElementById('wp-screen-share-video');
             if (video) {
@@ -2317,15 +2327,16 @@ if (!window.safeSessionStorage) {
                 });
             }
             
-            const videoTrack = stream.getVideoTracks()[0];
             for (const peerId in peerConnections) {
                 const pc = peerConnections[peerId];
                 if (pc) {
                     if (!screenSenders[peerId]) {
                         screenSenders[peerId] = [];
                     }
-                    const sender = pc.addTrack(videoTrack, stream);
-                    screenSenders[peerId].push(sender);
+                    stream.getTracks().forEach(track => {
+                        const sender = pc.addTrack(track, stream);
+                        screenSenders[peerId].push(sender);
+                    });
                     
                     pc.createOffer()
                         .then(offer => pc.setLocalDescription(offer).then(() => offer))
@@ -2334,10 +2345,13 @@ if (!window.safeSessionStorage) {
                 }
             }
             
-            videoTrack.addEventListener('ended', () => {
-                console.log("Local screen share track ended natively by browser.");
-                stopLocalScreenShare();
-            });
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.addEventListener('ended', () => {
+                    console.log("Local screen share track ended natively by browser.");
+                    stopLocalScreenShare();
+                });
+            }
             
             updateScreenShareUI();
             
@@ -2415,7 +2429,7 @@ if (!window.safeSessionStorage) {
             if (!screenSenders[peerId]) {
                 screenSenders[peerId] = [];
             }
-            localScreenStream.getVideoTracks().forEach(track => {
+            localScreenStream.getTracks().forEach(track => {
                 const sender = pc.addTrack(track, localScreenStream);
                 screenSenders[peerId].push(sender);
             });
@@ -2446,8 +2460,13 @@ if (!window.safeSessionStorage) {
         pc.ontrack = (event) => {
             const stream = event.streams[0];
             if (event.track.kind === 'audio') {
-                console.log(`Received remote audio track from peer ${peerId}`);
-                playRemoteStream(peerId, stream);
+                if (stream && stream.getVideoTracks().length > 0) {
+                    console.log(`Received remote screen share audio track from peer ${peerId}`);
+                    playRemoteScreenAudio(peerId, stream);
+                } else {
+                    console.log(`Received remote mic audio track from peer ${peerId}`);
+                    playRemoteStream(peerId, stream);
+                }
             } else if (event.track.kind === 'video') {
                 console.log(`Received remote video (screen share) track from peer ${peerId}`);
                 displayRemoteScreenShare(peerId, stream);
@@ -2586,6 +2605,52 @@ if (!window.safeSessionStorage) {
 
         // Start Speech Detection for local speaking indicator
         monitorStreamSpeech(stream, peerId);
+    }
+
+    function playRemoteScreenAudio(peerId, stream) {
+        if (remoteScreenAudioElements[peerId]) {
+            try { 
+                remoteScreenAudioElements[peerId].pause();
+                remoteScreenAudioElements[peerId].remove(); 
+            } catch(e) {}
+            delete remoteScreenAudioElements[peerId];
+        }
+
+        const audio = document.createElement('audio');
+        audio.id = `audio-screen-remote-${peerId}`;
+        audio.autoplay = true;
+        audio.controls = false;
+        
+        audio.style.position = 'fixed';
+        audio.style.width = '1px';
+        audio.style.height = '1px';
+        audio.style.opacity = '0';
+        audio.style.pointerEvents = 'none';
+        
+        audio.srcObject = stream;
+
+        document.body.appendChild(audio);
+        remoteScreenAudioElements[peerId] = audio;
+
+        audio.play().catch(err => {
+            console.warn(`Autoplay blocked remote screen audio for peer ${peerId}:`, err);
+            const unmuteOnInteract = () => {
+                audio.play().then(() => {
+                    document.removeEventListener('click', unmuteOnInteract);
+                });
+            };
+            document.addEventListener('click', unmuteOnInteract);
+        });
+    }
+
+    function stopRemoteScreenAudio(peerId) {
+        if (remoteScreenAudioElements[peerId]) {
+            try {
+                remoteScreenAudioElements[peerId].pause();
+                remoteScreenAudioElements[peerId].remove();
+            } catch(e) {}
+            delete remoteScreenAudioElements[peerId];
+        }
     }
 
     /**
