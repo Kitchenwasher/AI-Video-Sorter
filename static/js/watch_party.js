@@ -929,13 +929,15 @@ if (!window.safeSessionStorage) {
 
         function updateToggleUI(theme) {
             if (theme === 'light') {
-                if (themeIcon) themeIcon.className = 'fa-solid fa-sun';
-                if (themeText) themeText.textContent = 'Light';
-                themeBtn.style.setProperty('background', 'var(--accent-yellow)', 'important');
-            } else {
+                // If page is currently Light, show "Dark" option to switch to Dark Mode
                 if (themeIcon) themeIcon.className = 'fa-solid fa-moon';
                 if (themeText) themeText.textContent = 'Dark';
                 themeBtn.style.setProperty('background', 'var(--accent-lime)', 'important');
+            } else {
+                // If page is currently Dark, show "Light" option to switch to Light Mode
+                if (themeIcon) themeIcon.className = 'fa-solid fa-sun';
+                if (themeText) themeText.textContent = 'Light';
+                themeBtn.style.setProperty('background', 'var(--accent-yellow)', 'important');
             }
         }
 

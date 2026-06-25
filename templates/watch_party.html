@@ -489,7 +489,7 @@
             align-items: stretch;
             height: 100%;
             position: relative;
-            background: #111214;
+            background: var(--bg);
         }
 
         .watch-center-column .watch-media-stage,
@@ -2990,7 +2990,7 @@
                 padding: 1.25rem !important;
                 border: var(--bw) solid var(--border) !important;
                 border-radius: 12px !important;
-                background: rgba(30, 31, 34, 0.85) !important;
+                background: var(--bg-raised) !important;
                 backdrop-filter: blur(16px) !important;
                 -webkit-backdrop-filter: blur(16px) !important;
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
@@ -3006,7 +3006,7 @@
                 height: calc(100% - 24px) !important;
                 margin: 12px 12px 12px 0 !important;
                 border: var(--bw) solid var(--border) !important;
-                background: rgba(30, 31, 34, 0.85) !important;
+                background: var(--bg-raised) !important;
                 backdrop-filter: blur(16px) !important;
                 -webkit-backdrop-filter: blur(16px) !important;
                 border-radius: 12px !important;
@@ -3505,6 +3505,7 @@
         .wp-thumbnail-strip .media-tile-thumbnail.screen-share-tile video {
             object-fit: contain !important;
         }
+    }
 
         /* Drawer Styles for Mobile */
         @media (max-width: 900px) {
