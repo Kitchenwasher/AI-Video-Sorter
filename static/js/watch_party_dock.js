@@ -192,13 +192,25 @@
         // Reactions Popover Toggle
         const dockBtnReactions = document.getElementById('dock-btn-reactions');
         const emojiPopover = document.getElementById('dock-emoji-popover');
+        
+        function toggleEmojiPopover(show) {
+            if (!emojiPopover) return;
+            if (show) {
+                // Close soundboard popover first if open
+                closeSoundboardPopover();
+                emojiPopover.style.display = 'flex';
+                if (dockBtnReactions) dockBtnReactions.classList.add('active');
+            } else {
+                emojiPopover.style.display = 'none';
+                if (dockBtnReactions) dockBtnReactions.classList.remove('active');
+            }
+        }
+
         if (dockBtnReactions && emojiPopover) {
             dockBtnReactions.onclick = (e) => {
                 e.stopPropagation();
-                // Close soundboard popover first if open
-                closeSoundboardPopover();
                 const isOpen = emojiPopover.style.display === 'flex';
-                emojiPopover.style.display = isOpen ? 'none' : 'flex';
+                toggleEmojiPopover(!isOpen);
             };
         }
 
@@ -208,7 +220,7 @@
             dockBtnSoundboard.onclick = (e) => {
                 e.stopPropagation();
                 // Close emoji popover first if open
-                if (emojiPopover) emojiPopover.style.display = 'none';
+                toggleEmojiPopover(false);
                 const actualBtn = document.getElementById('btn-soundboard-toggle');
                 if (actualBtn) actualBtn.click();
             };
@@ -223,9 +235,7 @@
                 if (emoji && typeof window.sendEmojiReaction === 'function') {
                     window.sendEmojiReaction(emoji);
                 }
-                if (emojiPopover) {
-                    emojiPopover.style.display = 'none';
-                }
+                toggleEmojiPopover(false);
             };
         });
 
@@ -245,7 +255,7 @@
             // Check if click was outside emoji popover and reactions button
             if (emojiPopover && emojiPopover.style.display === 'flex') {
                 if (!emojiPopover.contains(e.target) && e.target !== dockBtnReactions) {
-                    emojiPopover.style.display = 'none';
+                    toggleEmojiPopover(false);
                 }
             }
 

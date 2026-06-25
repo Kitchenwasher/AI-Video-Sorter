@@ -1123,12 +1123,26 @@ if (!window.safeSessionStorage) {
 
     function updateMicUI(isActive) {
         const btnMic = document.getElementById('btn-mic-toggle');
-        if (isActive) {
-            btnMic.classList.add('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        } else {
-            btnMic.classList.remove('active');
-            btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
+        if (btnMic) {
+            if (isActive) {
+                btnMic.classList.add('active');
+                btnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+            } else {
+                btnMic.classList.remove('active');
+                btnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
+            }
+        }
+        
+        // Sync bottom call control dock mic button
+        const dockBtnMic = document.getElementById('dock-btn-mic');
+        if (dockBtnMic) {
+            if (isActive) {
+                dockBtnMic.classList.add('active');
+                dockBtnMic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+            } else {
+                dockBtnMic.classList.remove('active');
+                dockBtnMic.innerHTML = '<i class="fa-solid fa-microphone-slash"></i>';
+            }
         }
     }
 
@@ -3003,15 +3017,30 @@ if (!window.safeSessionStorage) {
     function updateWebcamUI() {
         const btnWebcam = document.getElementById('btn-webcam-toggle');
         const icon = document.getElementById('webcam-icon');
-        if (!btnWebcam) return;
-
         const disabled = !allowWebcam && !adminToken;
-        btnWebcam.disabled = disabled || pendingWebcamStart;
-        btnWebcam.classList.toggle('disabled', disabled);
-        btnWebcam.classList.toggle('active', webcamEnabled || pendingWebcamStart);
-        btnWebcam.title = disabled ? 'Webcams disabled by host' : (webcamEnabled ? 'Turn Camera Off' : (pendingWebcamStart ? 'Starting Camera...' : 'Turn Camera On'));
-        if (icon) {
-            icon.className = (webcamEnabled || pendingWebcamStart) ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+
+        if (btnWebcam) {
+            btnWebcam.disabled = disabled || pendingWebcamStart;
+            btnWebcam.classList.toggle('disabled', disabled);
+            btnWebcam.classList.toggle('active', webcamEnabled || pendingWebcamStart);
+            btnWebcam.title = disabled ? 'Webcams disabled by host' : (webcamEnabled ? 'Turn Camera Off' : (pendingWebcamStart ? 'Starting Camera...' : 'Turn Camera On'));
+            if (icon) {
+                icon.className = (webcamEnabled || pendingWebcamStart) ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+            }
+        }
+
+        // Sync bottom call control dock camera button
+        const dockBtnCamera = document.getElementById('dock-btn-camera');
+        if (dockBtnCamera) {
+            const isActive = webcamEnabled || pendingWebcamStart;
+            dockBtnCamera.disabled = disabled || pendingWebcamStart;
+            dockBtnCamera.classList.toggle('disabled', disabled);
+            dockBtnCamera.classList.toggle('active', isActive);
+            dockBtnCamera.title = disabled ? 'Webcams disabled by host' : (webcamEnabled ? 'Turn Camera Off' : (pendingWebcamStart ? 'Starting Camera...' : 'Turn Camera On'));
+            const dockIcon = dockBtnCamera.querySelector('i');
+            if (dockIcon) {
+                dockIcon.className = isActive ? 'fa-solid fa-video' : 'fa-solid fa-video-slash';
+            }
         }
     }
 
@@ -3259,6 +3288,25 @@ if (!window.safeSessionStorage) {
                 btn.style.opacity = '0.4';
                 btn.style.pointerEvents = 'none';
                 text.innerText = 'Share Screen (Disabled)';
+            }
+        }
+
+        // Sync bottom call control dock screen share button
+        const dockBtnScreenShare = document.getElementById('dock-btn-screen-share');
+        if (dockBtnScreenShare) {
+            if (isSelfSharing) {
+                dockBtnScreenShare.disabled = false;
+                dockBtnScreenShare.classList.add('active');
+                dockBtnScreenShare.classList.remove('disabled');
+            } else if (activeScreenShare) {
+                dockBtnScreenShare.disabled = true;
+                dockBtnScreenShare.classList.remove('active');
+                dockBtnScreenShare.classList.add('disabled');
+            } else {
+                const isAllowed = !!adminToken || allowScreenShare;
+                dockBtnScreenShare.disabled = !isAllowed;
+                dockBtnScreenShare.classList.remove('active');
+                dockBtnScreenShare.classList.toggle('disabled', !isAllowed);
             }
         }
         
@@ -4703,13 +4751,16 @@ if (!window.safeSessionStorage) {
         // Toggle Soundboard Panel
         if (toggleBtn && panel) {
             toggleBtn.onclick = () => {
+                const dockBtnSoundboard = document.getElementById('dock-btn-soundboard');
                 if (panel.style.display === 'none') {
                     panel.style.display = 'flex';
                     toggleBtn.style.color = 'var(--accent)';
+                    if (dockBtnSoundboard) dockBtnSoundboard.classList.add('active');
                     loadSoundboardList();
                 } else {
                     panel.style.display = 'none';
                     toggleBtn.style.color = 'var(--text-dim)';
+                    if (dockBtnSoundboard) dockBtnSoundboard.classList.remove('active');
                 }
             };
         }
