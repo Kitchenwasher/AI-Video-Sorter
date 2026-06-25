@@ -2855,10 +2855,54 @@
         /* Responsive adjustments */
         @media (max-width: 900px) {
             .watch-main-layout {
-                grid-template-columns: 1fr;
+                display: flex !important;
+                flex-direction: column !important;
+                grid-template-columns: none !important;
+            }
+            .watch-center-column {
+                order: 1 !important;
+                width: 100% !important;
             }
             .cowatch-left-panel {
-                position: static;
+                order: 2 !important;
+                width: 100% !important;
+                position: static !important;
+                height: auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 1rem !important;
+            }
+            .cowatch-left-panel .brutal-playlist-container {
+                margin-top: 1rem !important;
+                max-height: 400px !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            .cowatch-left-panel .horizontal-playlist-row {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+                gap: 12px !important;
+                max-height: 320px !important;
+                overflow-y: auto !important;
+            }
+            .cowatch-left-panel .playlist-thumbnail-card {
+                flex-direction: column !important;
+                min-height: 140px !important;
+                height: auto !important;
+            }
+            .cowatch-left-panel .playlist-thumb-wrapper {
+                width: 100% !important;
+                aspect-ratio: 16/9 !important;
+                flex: none !important;
+                border-right: none !important;
+                border-bottom: var(--bw) solid var(--border) !important;
+            }
+            .cowatch-left-panel .playlist-item-details {
+                padding: 0.5rem !important;
+                flex: 1 1 auto !important;
+                height: auto !important;
+            }
+            .cowatch-left-panel .playlist-item-title {
+                -webkit-line-clamp: 2 !important;
             }
             .wp-playback-settings-bar {
                 flex-direction: column !important;
@@ -2901,6 +2945,465 @@
             max-width: 100% !important;
         }
 
+        /* --- LEFT SIDE PANEL UP NEXT INTEGRATION --- */
+        @media (min-width: 901px) {
+            .watch-main-layout {
+                grid-template-columns: 340px minmax(0, 1100px) !important;
+                gap: 1.25rem !important;
+            }
+            .cowatch-left-panel {
+                position: sticky !important;
+                top: 1.2rem !important;
+                height: calc(100vh - 2.4rem) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 1.25rem !important;
+            }
+            .cowatch-left-panel .brutal-playlist-container {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                flex: 1 1 0% !important;
+                min-height: 0 !important;
+                height: 100% !important;
+                padding: 0.85rem !important;
+                border-radius: 10px !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            .cowatch-left-panel .playlist-title-row {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 0.75rem !important;
+            }
+            .cowatch-left-panel #wp-media-search-container {
+                display: none; /* Managed by JS, but overrides for display:flex are below */
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            .cowatch-left-panel #wp-media-search-container[style*="display: flex"],
+            .cowatch-left-panel #wp-media-search-container[style*="flex"] {
+                display: flex !important;
+            }
+            .cowatch-left-panel #wp-media-search-input {
+                width: 100% !important;
+            }
+            .cowatch-left-panel .horizontal-playlist-row {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+                flex: 1 1 0% !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow-y: auto !important;
+                padding: 0.2rem !important;
+            }
+            .cowatch-left-panel .playlist-thumbnail-card {
+                min-height: auto !important;
+                height: 68px !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                background: rgba(26, 26, 34, 0.6) !important;
+                border-radius: 8px !important;
+                border: 1.5px solid var(--border) !important;
+                transform: none !important;
+            }
+            .cowatch-left-panel .playlist-thumbnail-card:hover {
+                transform: none !important;
+                border-color: var(--accent-pink) !important;
+                background: rgba(255, 0, 127, 0.02) !important;
+            }
+            .cowatch-left-panel .playlist-thumbnail-card.active {
+                border-color: var(--accent-lime) !important;
+                background: rgba(57, 255, 20, 0.05) !important;
+            }
+            .cowatch-left-panel .playlist-thumb-wrapper {
+                width: 96px !important;
+                height: 100% !important;
+                flex: 0 0 96px !important;
+                border-bottom: none !important;
+                border-right: 1.5px solid var(--border) !important;
+                margin: 0 !important;
+            }
+            .cowatch-left-panel .playlist-thumb-wrapper img {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: cover !important;
+            }
+            .cowatch-left-panel .btn-add-to-queue {
+                width: 24px !important;
+                height: 24px !important;
+                font-size: 0.65rem !important;
+                top: 4px !important;
+                right: 4px !important;
+            }
+            .cowatch-left-panel .playlist-media-pill {
+                font-size: 0.45rem !important;
+                padding: 0.1rem 0.25rem !important;
+                bottom: 4px !important;
+                left: 4px !important;
+            }
+            .cowatch-left-panel .playlist-item-title {
+                font-size: 0.72rem !important;
+                font-weight: 700 !important;
+                color: var(--text) !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                display: -webkit-box !important;
+                -webkit-line-clamp: 2 !important;
+                -webkit-box-orient: vertical !important;
+                white-space: normal !important;
+                line-height: 1.35 !important;
+                word-break: break-word !important;
+            }
+        }
+
+        /* --- DISCORD-LIKE WATCH PARTY CALL UI OVERRIDES --- */
+
+        /* Collapsible Left Panel overrides for desktop */
+        @media (min-width: 901px) {
+            .watch-main-layout.left-collapsed {
+                grid-template-columns: minmax(0, 1100px) !important;
+            }
+            .watch-main-layout.left-collapsed .cowatch-left-panel {
+                display: none !important;
+            }
+            /* When right panel is collapsed as well, allow stage to expand to 100% width */
+            .main-container.sidebar-collapsed .watch-center-column .watch-media-stage,
+            .watch-main-layout.left-collapsed .watch-center-column .watch-media-stage {
+                max-width: 100% !important;
+            }
+        }
+
+        /* Floating handles for collapsed panels */
+        .wp-float-handle {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 70px;
+            background: rgba(30, 31, 34, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #dbdee1;
+            cursor: pointer;
+            z-index: 999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: background-color 0.2s, color 0.2s, width 0.15s;
+        }
+        .wp-float-handle:hover {
+            background: rgba(43, 45, 49, 0.95);
+            color: #ffffff;
+            width: 28px;
+        }
+        #wp-left-float-handle {
+            left: 0;
+            border-radius: 0 8px 8px 0;
+            border-left: none;
+        }
+        #wp-right-float-handle {
+            right: 0;
+            border-radius: 8px 0 0 8px;
+            border-right: none;
+        }
+
+        /* Drawer overlay backdrop for mobile view */
+        .wp-drawer-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 998;
+            display: none;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+        .wp-drawer-backdrop.active {
+            display: block;
+        }
+
+        /* Floating Bottom Dock styling */
+        .wp-bottom-dock {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(30, 31, 34, 0.85); /* Discord dark theme */
+            backdrop-filter: blur(16px) saturate(120%);
+            -webkit-backdrop-filter: blur(16px) saturate(120%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 28px;
+            padding: 8px 20px;
+            z-index: 100;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+            margin: 1rem auto;
+            width: max-content;
+            pointer-events: auto;
+            position: relative;
+        }
+        
+        .dock-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: none;
+            color: #dbdee1;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            transition: background-color 0.2s, color 0.2s, transform 0.1s;
+        }
+        
+        .dock-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+        }
+        
+        .dock-btn:active {
+            transform: scale(0.92);
+        }
+        
+        .dock-btn.active {
+            background: #248046; /* Discord success green */
+            color: #ffffff;
+        }
+        
+        .dock-btn.active:hover {
+            background: #1a6535;
+        }
+        
+        .dock-btn-danger {
+            background: #da373c; /* Discord danger red */
+            color: #ffffff;
+        }
+        
+        .dock-btn-danger:hover {
+            background: #a92b2f;
+        }
+
+        .dock-btn.disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        .dock-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.15);
+            margin: 0 6px;
+        }
+        
+        /* Floating Emoji Popover styling */
+        .dock-emoji-popover {
+            position: absolute;
+            bottom: 74px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 0.45rem;
+            background: rgba(30, 31, 34, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            padding: 8px 16px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+            z-index: 101;
+            animation: dockPopIn 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        
+        .dock-emoji-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            transition: background 0.15s, transform 0.1s;
+        }
+        
+        .dock-emoji-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: scale(1.22);
+        }
+        
+        .dock-emoji-btn:active {
+            transform: scale(0.95);
+        }
+        
+        @keyframes dockPopIn {
+            from { opacity: 0; transform: translate(-50%, 12px) scale(0.88); }
+            to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+        }
+
+        /* Soundboard Popover override inside center column */
+        .watch-center-column #soundboard-panel {
+            position: absolute !important;
+            bottom: 74px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            width: 320px !important;
+            max-height: 280px !important;
+            background: rgba(30, 31, 34, 0.96) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+            border-radius: 16px !important;
+            padding: 10px !important;
+            z-index: 101 !important;
+            margin: 0 !important;
+        }
+
+        /* Dynamic Discord Call Grid Layouts */
+        .watch-media-stage {
+            display: grid;
+            gap: 12px;
+            width: 100%;
+            min-height: 480px;
+            background: #111214;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+            margin-bottom: 0.75rem;
+            box-sizing: border-box;
+        }
+        
+        /* Grid count column modifiers */
+        .watch-media-stage.count-1 {
+            grid-template-columns: 1fr;
+        }
+        .watch-media-stage.count-1 .media-tile {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            max-height: calc(100vh - 300px);
+            margin: auto;
+        }
+        
+        .watch-media-stage.count-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .watch-media-stage.count-2 .media-tile {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+        
+        .watch-media-stage.count-3,
+        .watch-media-stage.count-4 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .watch-media-stage.count-3 .media-tile,
+        .watch-media-stage.count-4 .media-tile {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+        
+        .watch-media-stage.count-5 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .watch-media-stage.count-5 .media-tile {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+
+        .media-tile video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .media-tile.main-video-tile video,
+        .media-tile.screen-share-tile video,
+        .media-tile-focused video {
+            object-fit: contain !important;
+        }
+
+        /* Focus mode auto layout grid */
+        .watch-media-stage.focus-mode {
+            display: grid;
+            grid-template-rows: 1fr;
+            grid-template-columns: 1fr;
+            height: calc(100vh - 260px);
+            min-height: 540px;
+            gap: 12px;
+            overflow: hidden;
+            background: #111214;
+        }
+        
+        .watch-media-stage.focus-mode.has-thumbnails {
+            grid-template-rows: 1fr 112px;
+            grid-template-columns: repeat(20, minmax(177px, 1fr));
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        
+        .watch-media-stage.focus-mode .media-tile-focused {
+            grid-row: 1;
+            grid-column: 1;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+        }
+        
+        .watch-media-stage.focus-mode.has-thumbnails .media-tile-focused {
+            grid-column: 1 / span 20;
+        }
+        
+        .watch-media-stage.focus-mode.has-thumbnails .media-tile-thumbnail {
+            grid-row: 2;
+            height: 100px;
+            width: 177px;
+            min-width: 177px;
+            aspect-ratio: 16 / 9;
+        }
+
+        /* Drawer Styles for Mobile */
+        @media (max-width: 900px) {
+            .cowatch-left-panel {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 300px !important;
+                height: 100vh !important;
+                z-index: 1000 !important;
+                background: #1e1f22 !important; /* Discord dark background */
+                box-shadow: 4px 0 16px rgba(0,0,0,0.55) !important;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                padding: 1rem !important;
+                overflow-y: auto !important;
+            }
+            .cowatch-left-panel.drawer-open {
+                transform: translateX(0) !important;
+            }
+            
+            .sidebar-pane {
+                position: fixed !important;
+                top: 0 !important;
+                right: 0 !important;
+                width: 300px !important;
+                height: 100vh !important;
+                z-index: 1000 !important;
+                background: #1e1f22 !important;
+                box-shadow: -4px 0 16px rgba(0,0,0,0.55) !important;
+                transform: translateX(100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                padding: 0 !important;
+                overflow-y: auto !important;
+            }
+            .sidebar-pane.drawer-open {
+                transform: translateX(0) !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2973,6 +3476,15 @@
 
     <!-- Main Section -->
     <div class="main-container">
+        <!-- Floating handles for collapsed panels -->
+        <div class="wp-float-handle" id="wp-left-float-handle" title="Expand Left Panel">
+            <i class="fa-solid fa-chevron-right"></i>
+        </div>
+        <div class="wp-float-handle" id="wp-right-float-handle" title="Expand Chat Panel">
+            <i class="fa-solid fa-chevron-left"></i>
+        </div>
+        <!-- Drawer backdrop for mobile drawers -->
+        <div class="wp-drawer-backdrop" id="wp-drawer-backdrop"></div>
         <!-- Left: Video Panel -->
         <div class="player-pane">
             <div class="watch-main-layout">
@@ -3021,6 +3533,23 @@
                                     </select>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <!-- Horizontal/Vertical UP NEXT Playlist Row -->
+                    <div class="brutal-playlist-container" id="wp-playlist-container">
+                        <div class="playlist-title-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-forward-step"></i> UP NEXT
+                            </span>
+                            <!-- Admin-only Search Pill -->
+                            <div id="wp-media-search-container" style="display: none; align-items: center; background: var(--bg); border: 2px solid var(--border); border-radius: 20px; padding: 0.2rem 0.6rem; gap: 0.4rem; box-shadow: var(--shadow-small);">
+                                <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 0.75rem;"></i>
+                                <input type="text" id="wp-media-search-input" placeholder="Search videos..." style="background: transparent; border: none; color: var(--text); font-size: 0.72rem; outline: none; width: 120px; font-family: inherit; font-weight: 600;" autocomplete="off">
+                                <button id="wp-media-search-clear" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0 0.1rem; display: none; align-items: center; justify-content: center; font-size: 0.75rem;"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                        <div class="horizontal-playlist-row" id="wp-playlist-grid">
+                            <!-- Loaded dynamically -->
                         </div>
                     </div>
                 </aside>
@@ -3107,26 +3636,102 @@
                 </div>
             </div>
 
-            <!-- Horizontal UP NEXT Playlist Row -->
-            <div class="brutal-playlist-container" id="wp-playlist-container">
-                <div class="playlist-title-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
-                    <span style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fa-solid fa-forward-step"></i> UP NEXT
-                    </span>
-                    <!-- Admin-only Search Pill -->
-                    <div id="wp-media-search-container" style="display: none; align-items: center; background: var(--bg); border: 2px solid var(--border); border-radius: 20px; padding: 0.2rem 0.6rem; gap: 0.4rem; box-shadow: var(--shadow-small);">
-                        <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 0.75rem;"></i>
-                        <input type="text" id="wp-media-search-input" placeholder="Search videos..." style="background: transparent; border: none; color: var(--text); font-size: 0.72rem; outline: none; width: 120px; font-family: inherit; font-weight: 600;" autocomplete="off">
-                        <button id="wp-media-search-clear" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0 0.1rem; display: none; align-items: center; justify-content: center; font-size: 0.75rem;"><i class="fa-solid fa-xmark"></i></button>
+            <!-- Soundboard Panel (Relocated from Sidebar) -->
+            <div id="soundboard-panel" class="soundboard-panel" style="display: none; flex-direction: column;">
+                <!-- Controls (Volume, Mute, Host Settings, Upload) -->
+                <div class="soundboard-controls" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.4rem; font-size: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1;">
+                        <button id="soundboard-mute-btn" class="sb-ctrl-btn" title="Mute Soundboard" style="background: transparent; border: none; color: var(--text); cursor: pointer; padding: 0.25rem; font-size: 0.85rem; display: flex; align-items: center; transition: color 0.15s; outline: none;">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <input type="range" id="soundboard-volume-slider" min="0" max="1" step="0.05" value="0.5" style="width: 100%; max-width: 80px; height: 4px; border-radius: 2px; cursor: pointer; accent-color: var(--accent);">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                        <!-- Admin Only: Add Sound -->
+                        <button id="soundboard-add-btn" class="btn sb-btn-add" title="Add Custom Sound" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; background: rgba(255, 140, 0, 0.1); border: 1px solid rgba(255, 140, 0, 0.3); border-radius: 4px; color: var(--accent); cursor: pointer; display: none;">
+                            <i class="fa-solid fa-plus"></i> Sound
+                        </button>
+                        <!-- Admin Only: Toggle Soundboard for Room -->
+                        <label id="soundboard-admin-toggle-label" style="display: none; align-items: center; gap: 0.25rem; cursor: pointer; color: var(--text-muted); font-size: 0.7rem;" title="Toggle Soundboard for Room">
+                            <input type="checkbox" id="soundboard-room-toggle" checked style="cursor: pointer; width: 0.8rem; height: 0.8rem;">
+                            <span>Enable</span>
+                        </label>
                     </div>
                 </div>
-                <div class="horizontal-playlist-row" id="wp-playlist-grid">
-                    <!-- Loaded dynamically -->
+                
+                <!-- Sound Chips Grid -->
+                <div id="soundboard-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; overflow-y: auto; flex: 1; padding-right: 0.15rem;">
+                    <!-- Chips will be generated here -->
+                </div>
+                
+                <!-- Autoplay warning banner -->
+                <div id="soundboard-autoplay-warning" style="display: none; font-size: 0.7rem; color: var(--accent-yellow); text-align: center; padding: 0.2rem; background: rgba(245, 158, 11, 0.1); border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2); cursor: pointer;">
+                    Click once to enable soundboard audio
                 </div>
             </div>
-                </div>
+
+            <!-- Floating Emoji Popover -->
+            <div class="dock-emoji-popover" id="dock-emoji-popover">
+                <button class="dock-emoji-btn" data-emoji="😂" title="Laugh">😂</button>
+                <button class="dock-emoji-btn" data-emoji="🔥" title="Fire">🔥</button>
+                <button class="dock-emoji-btn" data-emoji="❤️" title="Love">❤️</button>
+                <button class="dock-emoji-btn" data-emoji="😮" title="Surprised">😮</button>
+                <button class="dock-emoji-btn" data-emoji="👏" title="Clap">👏</button>
+                <button class="dock-emoji-btn" data-emoji="💀" title="Skull">💀</button>
             </div>
-        </div>
+
+            <!-- Floating Bottom Call Control Dock -->
+            <div class="wp-bottom-dock" id="wp-bottom-dock">
+                <!-- Left Panel Toggle -->
+                <button class="dock-btn active" id="dock-btn-toggle-left" title="Toggle Left Side Panel">
+                    <i class="fa-solid fa-indent"></i>
+                </button>
+                
+                <div class="dock-divider"></div>
+                
+                <!-- Mic Toggle -->
+                <button class="dock-btn" id="dock-btn-mic" title="Toggle Microphone">
+                    <i class="fa-solid fa-microphone-slash"></i>
+                </button>
+                
+                <!-- Camera/Webcam Toggle -->
+                <button class="dock-btn" id="dock-btn-camera" title="Toggle Camera">
+                    <i class="fa-solid fa-video-slash"></i>
+                </button>
+                
+                <!-- Screen Share Toggle -->
+                <button class="dock-btn" id="dock-btn-screen-share" title="Share Screen">
+                    <i class="fa-solid fa-desktop"></i>
+                </button>
+                
+                <!-- Reactions Popover Toggle -->
+                <button class="dock-btn" id="dock-btn-reactions" title="Reactions">
+                    <i class="fa-solid fa-face-smile"></i>
+                </button>
+                
+                <!-- Soundboard Toggle -->
+                <button class="dock-btn" id="dock-btn-soundboard" title="Soundboard">
+                    <i class="fa-solid fa-music"></i>
+                </button>
+                
+                <div class="dock-divider"></div>
+                
+                <!-- Right Panel Toggle -->
+                <button class="dock-btn active" id="dock-btn-toggle-right" title="Toggle Right Panel">
+                    <i class="fa-solid fa-comments"></i>
+                </button>
+                
+                <div class="dock-divider"></div>
+                
+                <!-- Leave / End Call button -->
+                <button class="dock-btn dock-btn-danger" id="dock-btn-leave" title="Leave/End Call">
+                    <i class="fa-solid fa-phone-slash"></i>
+                </button>
+            </div>
+
+        </div> <!-- Closes watch-center-column -->
+    </div> <!-- Closes watch-main-layout -->
+</div> <!-- Closes player-pane -->
         
         <!-- Right: Side Panel (Mic, Chat, Peers) -->
         <div class="sidebar-pane">
@@ -3190,48 +3795,10 @@
                             Welcome to the Watch Party! Type a message below to chat live.
                         </div>
                     </div>
-                    <!-- Soundboard Panel -->
-                    <div id="soundboard-panel" class="soundboard-panel" style="display: none; flex-direction: column; background: rgba(18, 18, 22, 0.95); border-top: 1px solid var(--border); margin: 0 0.75rem 0.25rem 0.75rem; border-radius: 12px; padding: 0.5rem; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); backdrop-filter: blur(8px); max-height: 240px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); z-index: 5;">
-                        <!-- Controls (Volume, Mute, Host Settings, Upload) -->
-                        <div class="soundboard-controls" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.4rem; font-size: 0.75rem;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1;">
-                                <button id="soundboard-mute-btn" class="sb-ctrl-btn" title="Mute Soundboard" style="background: transparent; border: none; color: var(--text); cursor: pointer; padding: 0.25rem; font-size: 0.85rem; display: flex; align-items: center; transition: color 0.15s; outline: none;">
-                                    <i class="fa-solid fa-volume-high"></i>
-                                </button>
-                                <input type="range" id="soundboard-volume-slider" min="0" max="1" step="0.05" value="0.5" style="width: 100%; max-width: 80px; height: 4px; border-radius: 2px; cursor: pointer; accent-color: var(--accent);">
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                <!-- Admin Only: Add Sound -->
-                                <button id="soundboard-add-btn" class="btn sb-btn-add" title="Add Custom Sound" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; background: rgba(255, 140, 0, 0.1); border: 1px solid rgba(255, 140, 0, 0.3); border-radius: 4px; color: var(--accent); cursor: pointer; display: none;">
-                                    <i class="fa-solid fa-plus"></i> Sound
-                                </button>
-                                <!-- Admin Only: Toggle Soundboard for Room -->
-                                <label id="soundboard-admin-toggle-label" style="display: none; align-items: center; gap: 0.25rem; cursor: pointer; color: var(--text-muted); font-size: 0.7rem;" title="Toggle Soundboard for Room">
-                                    <input type="checkbox" id="soundboard-room-toggle" checked style="cursor: pointer; width: 0.8rem; height: 0.8rem;">
-                                    <span>Enable</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Sound Chips Grid -->
-                        <div id="soundboard-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; overflow-y: auto; flex: 1; padding-right: 0.15rem;">
-                            <!-- Chips will be generated here -->
-                        </div>
-                        
-                        <!-- Autoplay warning banner -->
-                        <div id="soundboard-autoplay-warning" style="display: none; font-size: 0.7rem; color: var(--accent-yellow); text-align: center; padding: 0.2rem; background: rgba(245, 158, 11, 0.1); border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2); cursor: pointer;">
-                            Click once to enable soundboard audio
-                        </div>
-                    </div>
-                    <!-- Emoji Reaction Bar -->
-                    <div class="emoji-action-bar-sidebar" id="emoji-action-bar">
-                        <button class="emoji-btn-sidebar" data-emoji="😂" data-key="1">😂</button>
-                        <button class="emoji-btn-sidebar" data-emoji="🔥" data-key="2">🔥</button>
-                        <button class="emoji-btn-sidebar" data-emoji="❤️" data-key="3">❤️</button>
-                        <button class="emoji-btn-sidebar" data-emoji="😮" data-key="4">😮</button>
-                        <button class="emoji-btn-sidebar" data-emoji="👏" data-key="5">👏</button>
-                        <button class="emoji-btn-sidebar" data-emoji="💀" data-key="6">💀</button>
-                        <button class="emoji-btn-sidebar" id="btn-soundboard-toggle" title="Soundboard" style="color: var(--text-dim); font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 0.15rem 0.3rem;"><i class="fa-solid fa-volume-high"></i></button>
+
+                    <!-- Emoji Reaction Bar (Hidden to satisfy JS layout handlers) -->
+                    <div id="emoji-action-bar" style="display: none;">
+                        <button id="btn-soundboard-toggle"></button>
                     </div>
                     <div class="chat-input-container">
                         <input type="text" class="chat-input" id="wp-chat-input" placeholder="Type a message...">
@@ -3589,7 +4156,10 @@
     <script src="{{ url_for('static', filename='js/watch_party_gallery.js') }}?v={{ range(1, 100000) | random }}"></script>
     <!-- Modular High-Fidelity Audio Controls script -->
     <script src="{{ url_for('static', filename='js/watch_party_audio.js') }}?v={{ range(1, 100000) | random }}"></script>
-    <!-- Modular Layout & UX Polish script (Feature 7) -->
     <script src="{{ url_for('static', filename='js/watch_party_layout.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <!-- Modular Bottom Dock controller -->
+    <script src="{{ url_for('static', filename='js/watch_party_dock.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <!-- Modular Cleanup & Leave Party controller -->
+    <script src="{{ url_for('static', filename='js/watch_party_cleanup.js') }}?v={{ range(1, 100000) | random }}"></script>
 </body>
 </html>
