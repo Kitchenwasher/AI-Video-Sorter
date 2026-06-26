@@ -492,6 +492,7 @@ if (!window.safeSessionStorage) {
     let activeScreenShare = null;
     let activeWebcams = {};
     let remoteWebcamStreams = {};
+    let remoteScreenStream = null;
     let remoteTrackMetadata = {};
     let focusedWebcamUserId = null;
     let focusedMediaTileId = null;
@@ -1038,6 +1039,7 @@ if (!window.safeSessionStorage) {
         initThemeToggle();
         initScreenShareButton();
         initWebcamControls();
+        initTileFullscreen();
         // Request microphone permission for P2P voice chat
         try {
             addLogEntry('System', 'Requesting microphone access...');
@@ -1410,6 +1412,7 @@ if (!window.safeSessionStorage) {
         socket.on('screen_share_stopped', (data) => {
             if (activeScreenShare && activeScreenShare.client_id === data.client_id) {
                 activeScreenShare = null;
+                remoteScreenStream = null;
             }
             stopRemoteScreenAudio(data.client_id);
             addLogEntry('System', `Screen sharing stopped.`);
@@ -3163,6 +3166,136 @@ if (!window.safeSessionStorage) {
         label.innerHTML = html;
     }
 
+    function toggleTileFullscreen(tile) {
+        const requestFS = tile.requestFullscreen || tile.webkitRequestFullscreen || tile.mozRequestFullScreen || tile.msRequestFullscreen;
+        const exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        const fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        if (!fsElement) {
+            if (requestFS) {
+                requestFS.call(tile).catch(err => {
+                    console.error("Failed to enter fullscreen:", err);
+                });
+            }
+        } else {
+            if (fsElement === tile) {
+                if (exitFS) {
+                    exitFS.call(document);
+                }
+            } else {
+                if (exitFS) {
+                    Promise.resolve(exitFS.call(document)).then(() => {
+                        if (requestFS) requestFS.call(tile).catch(err => console.error(err));
+                    });
+                }
+            }
+        }
+    }
+
+    function initTileFullscreen() {
+        const fsEvents = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+        fsEvents.forEach(evt => {
+            document.addEventListener(evt, () => {
+                const fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+                document.querySelectorAll('.media-tile').forEach(tile => {
+                    const btn = tile.querySelector('.tile-fullscreen-btn i');
+                    if (btn) {
+                        if (fsElement === tile) {
+                            btn.className = 'fa-solid fa-compress';
+                            tile.classList.add('is-fullscreen');
+                        } else {
+                            btn.className = 'fa-solid fa-expand';
+                            tile.classList.remove('is-fullscreen');
+                        }
+                    }
+                });
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.tile-fullscreen-btn');
+            if (btn) {
+                e.stopPropagation();
+                const tile = btn.closest('.media-tile');
+                if (tile) {
+                    toggleTileFullscreen(tile);
+                }
+            }
+        });
+    }
+
+    // ── Toolbar Auto-Hide Timer ──────────────────────────────────────────
+    // Toolbars (laser & gallery) show on mouse movement and auto-hide after ~2.5s
+    let toolbarAutoHideTimer = null;
+    let toolbarHoverLocked = false; // prevents hiding while user hovers directly on toolbar
+
+    function showToolbarsTemporarily() {
+        const mainTile = document.getElementById('wp-main-video-tile');
+        if (!mainTile || mainTile.classList.contains('media-tile-thumbnail')) return;
+
+        const laserToolbar = document.getElementById('laser-toolbar');
+        const galleryToolbar = document.getElementById('wp-gallery-toolbar');
+
+        if (laserToolbar) laserToolbar.classList.add('toolbar-visible');
+        if (galleryToolbar) galleryToolbar.classList.add('toolbar-visible');
+
+        clearTimeout(toolbarAutoHideTimer);
+        toolbarAutoHideTimer = setTimeout(() => {
+            if (!toolbarHoverLocked) {
+                hideToolbars();
+            }
+        }, 2500);
+    }
+
+    function hideToolbars() {
+        const laserToolbar = document.getElementById('laser-toolbar');
+        const galleryToolbar = document.getElementById('wp-gallery-toolbar');
+        if (laserToolbar) laserToolbar.classList.remove('toolbar-visible');
+        if (galleryToolbar) galleryToolbar.classList.remove('toolbar-visible');
+    }
+
+    function setupToolbarAutoHide() {
+        const mainTile = document.getElementById('wp-main-video-tile');
+        if (!mainTile) return;
+
+        // Show toolbars on mouse movement inside the main video tile
+        mainTile.addEventListener('mousemove', () => {
+            showToolbarsTemporarily();
+        });
+
+        // Also show on mouseenter
+        mainTile.addEventListener('mouseenter', () => {
+            showToolbarsTemporarily();
+        });
+
+        // Hide immediately when mouse leaves the entire tile
+        mainTile.addEventListener('mouseleave', () => {
+            clearTimeout(toolbarAutoHideTimer);
+            toolbarHoverLocked = false;
+            hideToolbars();
+        });
+
+        // Keep toolbars visible while directly hovering on them
+        const lockToolbarHover = (toolbarId) => {
+            const toolbar = document.getElementById(toolbarId);
+            if (!toolbar) return;
+            toolbar.addEventListener('mouseenter', () => {
+                toolbarHoverLocked = true;
+                clearTimeout(toolbarAutoHideTimer);
+            });
+            toolbar.addEventListener('mouseleave', () => {
+                toolbarHoverLocked = false;
+                showToolbarsTemporarily();
+            });
+        };
+
+        lockToolbarHover('laser-toolbar');
+        lockToolbarHover('wp-gallery-toolbar');
+    }
+
+    // Initialize toolbar auto-hide after DOM is ready
+    setTimeout(setupToolbarAutoHide, 500);
+
     function createWebcamMediaTile(peerId) {
         const tile = document.createElement('div');
         tile.className = 'media-tile webcam-tile generated-media-tile';
@@ -3180,8 +3313,21 @@ if (!window.safeSessionStorage) {
             tile.appendChild(video);
             video.play().catch(() => {});
         } else {
-            tile.innerHTML = `<div class="webcam-placeholder"><i class="fa-solid fa-video-slash"></i><span>Camera Off</span></div>`;
+            const placeholder = document.createElement('div');
+            placeholder.className = 'webcam-placeholder';
+            placeholder.innerHTML = `<i class="fa-solid fa-video-slash"></i><span>Camera Off</span>`;
+            tile.appendChild(placeholder);
         }
+
+        // Add Fullscreen Action button (hover controls)
+        const actions = document.createElement('div');
+        actions.className = 'media-tile-actions';
+        actions.innerHTML = `
+            <button class="media-tile-action-btn tile-fullscreen-btn" title="Toggle Fullscreen">
+                <i class="fa-solid fa-expand"></i>
+            </button>
+        `;
+        tile.appendChild(actions);
 
         const avatarData = AVATAR_MAP[getAvatarForPeer(peerId)] || AVATAR_MAP.cool_kid;
         const label = document.createElement('div');
@@ -3215,10 +3361,31 @@ if (!window.safeSessionStorage) {
             const screenActive = !!activeScreenShare;
             screenTile.classList.toggle('active', screenActive);
             if (screenActive) {
+                let moved = false;
                 if (screenTile.parentNode !== stage) {
                     mainTile.after(screenTile);
+                    moved = true;
                 }
                 screenTile.style.display = 'flex';
+                
+                // Re-apply srcObject and play since DOM insertion/movement pauses/resets video elements
+                const video = document.getElementById('wp-screen-share-video');
+                if (video) {
+                    const activeStream = localScreenStream || remoteScreenStream;
+                    if (activeStream) {
+                        const currentParent = screenTile.parentNode;
+                        if (video.srcObject !== activeStream || video._lastParent !== currentParent || moved) {
+                            video.srcObject = activeStream;
+                            video._lastParent = currentParent;
+                        }
+                        video.muted = true;
+                        video.playsInline = true;
+                        video.play().catch((err) => {
+                            console.warn("Screen share video play failed:", err);
+                        });
+                    }
+                }
+                
                 mediaTileIds.push('screen-share');
                 attachMediaTileFocusHandlers(screenTile, 'screen-share');
             } else {
@@ -3248,7 +3415,16 @@ if (!window.safeSessionStorage) {
             const tileId = tile.dataset.mediaTileId;
             tile.classList.toggle('media-tile-focused', !!focusedMediaTileId && tileId === focusedMediaTileId);
             tile.classList.toggle('media-tile-thumbnail', !!focusedMediaTileId && tileId !== focusedMediaTileId);
+            tile.classList.remove('grid-span-centered');
         });
+
+        if (!focusedMediaTileId && mediaTileIds.length === 3) {
+            // In a 3-tile grid, the 3rd tile spans and centers on the bottom row
+            const tiles = stage.querySelectorAll('.media-tile');
+            if (tiles.length >= 3) {
+                tiles[2].classList.add('grid-span-centered');
+            }
+        }
 
         // Group non-focused tiles inside a horizontal scrolling thumbnail strip if focus mode is active
         let strip = document.getElementById('wp-thumbnail-strip');
@@ -3405,6 +3581,7 @@ if (!window.safeSessionStorage) {
             if (video) {
                 video.srcObject = stream;
                 video.muted = true;
+                video.play().catch(() => {});
             }
             
             if (window.socket && window.socket.connected) {
@@ -3482,9 +3659,11 @@ if (!window.safeSessionStorage) {
     }
 
     function displayRemoteScreenShare(peerId, stream) {
+        remoteScreenStream = stream;
         const video = document.getElementById('wp-screen-share-video');
         if (video) {
             video.srcObject = stream;
+            video.play().catch(() => {});
         }
         renderMediaStage();
     }

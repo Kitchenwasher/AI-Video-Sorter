@@ -448,7 +448,9 @@
             max-width: none;
             min-width: 0;
             min-height: 0;
-            flex: 1;
+            height: 0 !important;
+            flex: 1 1 0% !important;
+            overflow: hidden !important;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
             gap: 0.75rem;
@@ -1539,6 +1541,15 @@
         }
         .wp-gallery-toolbar {
             z-index: 1010 !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease !important;
+        }
+        .video-wrapper:hover .wp-gallery-toolbar,
+        .wp-gallery-toolbar:hover,
+        .wp-gallery-toolbar.toolbar-visible {
+            opacity: 1;
+            pointer-events: auto !important;
         }
         
         .laser-toolbar {
@@ -1556,14 +1567,17 @@
             padding: 4px 6px;
             z-index: 1050 !important; /* Higher than Plyr controls and gallery toolbar */
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            opacity: 0.4;
-            transition: opacity 0.25s ease;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
             transform: translateZ(0); /* Force hardware accelerated compositor layer */
-            pointer-events: auto !important;
         }
+        /* Show on hover OR when JS adds toolbar-visible class */
         .video-wrapper:hover .laser-toolbar,
-        .laser-toolbar:hover {
+        .laser-toolbar:hover,
+        .laser-toolbar.toolbar-visible {
             opacity: 1;
+            pointer-events: auto !important;
         }
         
         .laser-toolbar-btn {
@@ -3405,7 +3419,8 @@
             justify-self: center !important;
             align-self: center !important;
         }
-        .watch-media-stage.count-3 .media-tile:nth-child(3) {
+        .watch-media-stage.count-3 .media-tile:nth-child(3),
+        .watch-media-stage.count-3 .grid-span-centered {
             grid-column: 1 / -1 !important;
             width: auto !important;
             max-width: calc(50% - 6px) !important;
@@ -3522,6 +3537,131 @@
         .wp-thumbnail-strip .media-tile-thumbnail.main-video-tile video,
         .wp-thumbnail-strip .media-tile-thumbnail.screen-share-tile video {
             object-fit: contain !important;
+        }
+
+        /* Hide toolbars when main-video-tile is in thumbnail/minimized mode */
+        .media-tile-thumbnail .laser-toolbar,
+        .media-tile-thumbnail .wp-gallery-toolbar,
+        .media-tile-thumbnail .laser-canvas,
+        .media-tile-thumbnail .media-tile-actions {
+            display: none !important;
+        }
+
+        /* Hover controls for media tiles */
+        .media-tile {
+            position: relative;
+        }
+        .media-tile-actions {
+            position: absolute;
+            top: 0.55rem;
+            right: 0.55rem;
+            z-index: 100;
+            display: flex;
+            gap: 0.35rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .media-tile:hover .media-tile-actions {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .media-tile-action-btn {
+            background: rgba(8, 11, 16, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 8px !important;
+            color: #dbdee1 !important;
+            width: 32px !important;
+            height: 32px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            font-size: 0.85rem !important;
+            transition: background 0.15s, color 0.15s, transform 0.1s !important;
+            padding: 0 !important;
+            outline: none !important;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
+        }
+        .media-tile-action-btn:hover {
+            background: var(--accent-blue) !important;
+            color: #000000 !important;
+            border-color: var(--accent-blue) !important;
+            transform: scale(1.08) !important;
+        }
+        .media-tile-action-btn:active {
+            transform: scale(0.92) !important;
+        }
+
+        /* Fullscreen state styling */
+        .media-tile:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            background: #000000 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
+        .media-tile:fullscreen video,
+        .media-tile:fullscreen iframe,
+        .media-tile:fullscreen .plyr,
+        .media-tile:fullscreen .plyr__video-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain !important;
+        }
+        .media-tile:fullscreen .laser-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 10 !important;
+            pointer-events: auto !important;
+        }
+
+        .media-tile:-webkit-full-screen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            background: #000000 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
+        .media-tile:-webkit-full-screen video,
+        .media-tile:-webkit-full-screen iframe,
+        .media-tile:-webkit-full-screen .plyr,
+        .media-tile:-webkit-full-screen .plyr__video-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain !important;
+        }
+        .media-tile:-webkit-full-screen .laser-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 10 !important;
+            pointer-events: auto !important;
         }
 
         /* Drawer Styles for Mobile */
@@ -3721,6 +3861,12 @@
                 <div class="watch-center-column">
             <div class="watch-media-stage count-1" id="wp-media-stage">
             <div class="video-wrapper media-tile main-video-tile" id="wp-main-video-tile" data-media-tile-id="main-video" data-media-type="mainVideo" style="position: relative;">
+                <!-- Hover controls -->
+                <div class="media-tile-actions">
+                    <button class="media-tile-action-btn tile-fullscreen-btn" title="Toggle Fullscreen">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                </div>
                 <div class="player-lock-overlay" id="wp-player-lock-overlay">
                     <i class="fa-solid fa-lock"></i> Playback Locked by Host
                 </div>
@@ -3793,7 +3939,13 @@
                 </div>
             </div>
                 <div id="wp-screen-share-container" class="media-tile screen-share-tile" data-media-tile-id="screen-share" data-media-type="screenShare">
-                    <video id="wp-screen-share-video" autoplay playsinline></video>
+                    <!-- Hover controls -->
+                    <div class="media-tile-actions">
+                        <button class="media-tile-action-btn tile-fullscreen-btn" title="Toggle Fullscreen">
+                            <i class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+                    <video id="wp-screen-share-video" autoplay playsinline muted></video>
                     <div id="wp-screen-share-banner" class="screen-share-banner">
                         <i class="fa-solid fa-desktop" style="color: var(--accent-blue);"></i>
                         <span id="wp-screen-share-text">Screen shared by ...</span>
