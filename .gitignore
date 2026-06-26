@@ -36,3 +36,14 @@ scratch/
 scratch_*
 cloudflared.exe
 
+# Packaging outputs and locally bundled binary resources
+packaging/build/
+packaging/dist/
+packaging/output/
+packaging/resources/ffmpeg/
+packaging/resources/insightface/
+packaging/resources/cloudflared.exe
+!packaging/resources/defaults/
+!packaging/resources/defaults/settings.json
+packaging/resources/**/*.onnx
+packaging/resources/**/*.zip
